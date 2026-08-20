@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>zen</title>
-<meta name="description" content="A minimal zen timer: the current time, large, and a quiet countdown for each study period.">
+<meta name="description" content="A minimal zen timer: the current time large, study sessions with breaks, and alarms.">
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#0e1011" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f3f1ec" media="(prefers-color-scheme: light)">
@@ -36,19 +36,19 @@
       <circle class="ring-progress" id="ringProgress" cx="100" cy="100" r="92"></circle>
     </svg>
     <div class="dial-face">
-      <button class="countdown" id="countdown" type="button" title="Click to set the length">25:00</button>
+      <button class="countdown" id="countdown" type="button" title="Click to set the length">30:00</button>
       <input class="countdown-input" id="durationInput" type="text" inputmode="text" spellcheck="false"
              aria-label="Timer length, for example 25, 50:00 or 1h30" hidden>
       <p class="phase" id="phase" role="status" aria-live="polite">ready</p>
     </div>
   </section>
 
-  <div class="presets" id="presets" role="group" aria-label="Preset lengths">
-    <button type="button" data-min="10">10</button>
+  <div class="presets" id="presets" role="group" aria-label="Session lengths in minutes">
     <button type="button" data-min="15">15</button>
-    <button type="button" data-min="25">25</button>
-    <button type="button" data-min="50">50</button>
+    <button type="button" data-min="30">30</button>
+    <button type="button" data-min="60">60</button>
     <button type="button" data-min="90">90</button>
+    <button type="button" data-min="120">120</button>
   </div>
 
   <div class="controls">
@@ -61,7 +61,14 @@
 
   <p class="stats" id="stats"></p>
 
-  <p class="hint" aria-hidden="true">space begin &nbsp;·&nbsp; r reset &nbsp;·&nbsp; f focus</p>
+  <section class="alarms" aria-label="Alarms">
+    <ul class="alarm-list" id="alarmList"></ul>
+    <button class="alarm-add" id="alarmAdd" type="button" aria-label="Add an alarm">+ alarm</button>
+    <input class="alarm-input" id="alarmInput" type="text" inputmode="text" spellcheck="false" hidden
+           placeholder="16:30" aria-label="Alarm time, for example 16:30, 4:30pm, or 45m from now">
+  </section>
+
+  <p class="hint" aria-hidden="true">space begin &nbsp;·&nbsp; r reset &nbsp;·&nbsp; a alarm &nbsp;·&nbsp; f focus</p>
 
 </main>
 
