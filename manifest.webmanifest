@@ -1,0 +1,14 @@
+{
+  "name": "zen — timer & clock",
+  "short_name": "zen",
+  "description": "A minimal timer with the current local time, large and quiet.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e1011",
+  "theme_color": "#0e1011",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

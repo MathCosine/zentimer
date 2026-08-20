@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>zen</title>
+<meta name="description" content="A minimal zen timer: the current time, large, and a quiet countdown for each study period.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0e1011" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f3f1ec" media="(prefers-color-scheme: light)">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-status="idle">
+<div class="ambient" aria-hidden="true"></div>
+
+<main class="stage">
+
+  <header class="now">
+    <button class="now-time" id="clock" type="button" title="Click to switch 12 / 24 hour">
+      <span id="clockTime">--:--</span><span class="now-secs" id="clockSecs">00</span><span class="now-mer" id="meridiem"></span>
+    </button>
+    <p class="now-meta">
+      <span id="dateLabel">&nbsp;</span>
+      <span class="sep" aria-hidden="true">·</span>
+      <span id="zoneLabel">&nbsp;</span>
+    </p>
+  </header>
+
+  <section class="dial" aria-label="Timer">
+    <div class="breath" aria-hidden="true"></div>
+    <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+      <circle class="ring-track" cx="100" cy="100" r="92"></circle>
+      <circle class="ring-progress" id="ringProgress" cx="100" cy="100" r="92"></circle>
+    </svg>
+    <div class="dial-face">
+      <button class="countdown" id="countdown" type="button" title="Click to set the length">25:00</button>
+      <input class="countdown-input" id="durationInput" type="text" inputmode="text" spellcheck="false"
+             aria-label="Timer length, for example 25, 50:00 or 1h30" hidden>
+      <p class="phase" id="phase" role="status" aria-live="polite">ready</p>
+    </div>
+  </section>
+
+  <div class="presets" id="presets" role="group" aria-label="Preset lengths">
+    <button type="button" data-min="10">10</button>
+    <button type="button" data-min="15">15</button>
+    <button type="button" data-min="25">25</button>
+    <button type="button" data-min="50">50</button>
+    <button type="button" data-min="90">90</button>
+  </div>
+
+  <div class="controls">
+    <button class="nudge" id="minus" type="button" aria-label="Five minutes less">&minus;5</button>
+    <button class="primary" id="startPause" type="button">begin</button>
+    <button class="nudge" id="plus" type="button" aria-label="Five minutes more">+5</button>
+  </div>
+
+  <button class="reset is-gone" id="reset" type="button" tabindex="-1" aria-hidden="true">reset</button>
+
+  <p class="stats" id="stats"></p>
+
+  <p class="hint" aria-hidden="true">space begin &nbsp;·&nbsp; r reset &nbsp;·&nbsp; f focus</p>
+
+</main>
+
+<div class="tools">
+  <button id="soundBtn" type="button" class="tool" aria-pressed="true" title="Chime on / off">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"></path><path class="wave" d="M16 9.2a4 4 0 0 1 0 5.6"></path><path class="wave" d="M18.6 6.6a7.6 7.6 0 0 1 0 10.8"></path><path class="mute" d="M16.5 9.8l5 4.4M21.5 9.8l-5 4.4"></path></svg>
+    <span class="sr">Chime</span>
+  </button>
+  <button id="notifyBtn" type="button" class="tool" aria-pressed="false" title="Browser notification when time is up">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 14 6 10z"></path><path d="M10.2 18.5a2 2 0 0 0 3.6 0"></path></svg>
+    <span class="sr">Notify</span>
+  </button>
+  <button id="themeBtn" type="button" class="tool" title="Light / dark">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 0 1 9.5 4 8.2 8.2 0 1 0 20 14.5z"></path><g class="sun"><circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"></path></g></svg>
+    <span class="sr">Theme</span>
+  </button>
+  <button id="fullBtn" type="button" class="tool" title="Focus (fullscreen)">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
+    <span class="sr">Fullscreen</span>
+  </button>
+</div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
