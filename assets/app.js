@@ -452,6 +452,38 @@
     break: { idle: 'break', running: 'break', paused: 'break paused', done: 'break over' }
   };
 
+  /* the arc, painted every frame while running so it tracks the remaining time exactly */
+  function paintRing(now) {
+    var remaining = timer.status === 'running' ? timer.endAt - now : timer.remaining;
+    var fraction = timer.status === 'done' ? 0
+      : Math.max(0, Math.min(1, remaining / Math.max(1, timer.duration)));
+
+    if (fraction <= 0) {
+      el.ring.style.visibility = 'hidden';       // a round cap would leave a dot at twelve
+      return;
+    }
+    el.ring.style.visibility = '';
+
+    if (fraction > 0.9995) {
+      el.ring.style.strokeDasharray = 'none';    // whole circle, no seam
+      return;
+    }
+    var length = ringLength();
+    el.ring.style.strokeDasharray = length;
+    el.ring.style.strokeDashoffset = length * (1 - fraction);
+  }
+
+  var frame = 0;
+
+  function animateRing() {
+    frame = timer.status === 'running' ? requestAnimationFrame(animateRing) : 0;
+    paintRing(Date.now());
+  }
+
+  function syncRingAnimation() {
+    if (timer.status === 'running' && !frame) frame = requestAnimationFrame(animateRing);
+  }
+
   function renderTimer(now) {
     var remaining = timer.status === 'running' ? timer.endAt - now : timer.remaining;
     var overtime = timer.status === 'done' && timer.endAt ? Math.max(0, now - timer.endAt) : 0;
@@ -460,15 +492,7 @@
       ? (overtime >= 1000 ? '+' + clockFace(overtime) : '0:00')
       : clockFace(Math.max(0, remaining)));
 
-    var fraction = timer.status === 'done' ? 0
-      : Math.max(0, Math.min(1, remaining / Math.max(1, timer.duration)));
-    if (fraction > 0.9995) {
-      el.ring.style.strokeDasharray = 'none';   // whole circle, no seam
-    } else {
-      var length = ringLength();
-      el.ring.style.strokeDasharray = length;
-      el.ring.style.strokeDashoffset = length * (1 - fraction);
-    }
+    paintRing(now);
 
     if (el.body.dataset.status !== timer.status) el.body.dataset.status = timer.status;
     if (el.body.dataset.mode !== timer.mode) el.body.dataset.mode = timer.mode;
@@ -558,6 +582,7 @@
     var now = Date.now();
     renderClock(now);
     renderTimer(now);
+    syncRingAnimation();
     renderStats();
     renderAlarms(now);
   }

@@ -185,8 +185,7 @@ body {
 
 .ring circle {
   fill: none;
-  stroke-width: 1.25;
-  vector-effect: non-scaling-stroke;
+  stroke-width: 1;
 }
 
 .ring-track { stroke: var(--faint); }
@@ -195,7 +194,7 @@ body {
   stroke: var(--accent);
   stroke-linecap: round;
   opacity: .6;
-  transition: stroke-dashoffset 240ms linear, opacity 800ms var(--ease), stroke 800ms var(--ease);
+  transition: opacity 800ms var(--ease), stroke 800ms var(--ease);
 }
 
 .breath {
