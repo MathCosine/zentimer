@@ -4,60 +4,56 @@ window.Pet = (function () {
   'use strict';
 
   var PX = 4;             // one sprite pixel, in CSS pixels (grows on roomy screens)
-  var GW = 18, GH = 10;   // sprite grid
+  var GW = 16, GH = 12;   // sprite grid
   var FPS = 12;           // chunky on purpose
 
   var COLORS = {
-    o: '#c9714c', d: '#a4552f', l: '#e08a63', k: '#2f2622',
-    w: '#fff6ea', s: '#c3c7cf', g: '#8a8f98', b: '#78b6dd',
-    y: '#ffc95c', n: '#6fc4a4', r: '#e4795a', p: '#f2a0b5',
-    c: '#7fc4e8', m: '#8a6249'
+    o: '#c9714c', d: '#a4552f', l: '#e28f68', h: '#e8a086', k: '#2f2622',
+    w: '#fff6ea', s: '#c3c7cf', g: '#8a8f98', b: '#78b6dd', y: '#ffc95c',
+    n: '#6fc4a4', r: '#e4795a', p: '#f2a0b5', c: '#7fc4e8', m: '#a9763f',
+    e: '#63b079', v: '#b58ad6'
   };
 
   /* ---------- the creature ---------- */
 
-  var BODY = [
-    '......llllllll....',
-    '....llllllllllll..',
-    '...oooooooooooooo.',
-    '..ooookkooookkoooo',
-    'd.ooookkooookkoooo',
-    '.doooooooooooooooo',
-    '..oooooooooooooooo',
-    '...dddddddddddddd.'
-  ];
-
-  var BODY_BLINK = [
-    '......llllllll....',
-    '....llllllllllll..',
-    '...oooooooooooooo.',
-    '..oooooooooooooooo',
-    'd.ooookkooookkoooo',
-    '.doooooooooooooooo',
-    '..oooooooooooooooo',
-    '...dddddddddddddd.'
-  ];
-
-  var LEGS_A = ['....dd...dd...dd..', '....kk...kk...kk..'];
-  var LEGS_B = ['...dd...dd...dd...', '...kk...kk...kk...'];
-  var LEGS_SIT = ['..................', '....kkk....kkk....'];
-  var LEGS_TUCK = ['..................', '....kk......kk....'];
-
-  function pose(body, legs) { return body.concat(legs); }
-
-  var BLANK = '..................';
-
-  function seated(body, feet) { return [BLANK].concat(body, [feet]); }
-
-  var SPRITES = {
-    stand:  pose(BODY, LEGS_A),
-    blink:  pose(BODY_BLINK, LEGS_A),
-    walkA:  pose(BODY, LEGS_A),
-    walkB:  pose(BODY, LEGS_B),
-    sit:    seated(BODY, LEGS_SIT[1]),
-    sitB:   seated(BODY_BLINK, LEGS_SIT[1]),
-    sleep:  seated(BODY_BLINK, LEGS_TUCK[1])
+  var EYES = {
+    open:  ['wkk', 'kkk'],   // a glint in the corner of each eye
+    blink: ['ooo', 'kkk'],
+    happy: ['oko', 'kok']    // ^ ^
   };
+
+  function bodyGrid(eyes) {
+    var e = EYES[eyes] || EYES.open;
+    return [
+      '.....oooooo.....',
+      '...llllllllll...',
+      '..llllllllllll..',
+      '.oooooooooooooo.',
+      'oooo' + e[0] + 'ooo' + e[0] + 'ooo',
+      'oooo' + e[1] + 'ooo' + e[1] + 'ooo',
+      'oooohhooooohhooo',
+      'oooooooooooooooo',
+      '.oooooooooooooo.',
+      '..dddddddddddd..'
+    ];
+  }
+
+  var BODIES = { open: bodyGrid('open'), blink: bodyGrid('blink'), happy: bodyGrid('happy') };
+
+  /* six little legs, in the poses they take */
+  var LEGS = {
+    stand:  ['..dd...dd...dd..', '..kk...kk...kk..'],
+    stepA:  ['.dd....dd....dd.', '.kk....kk....kk.'],
+    stepB:  ['...dd...dd...dd.', '...kk...kk...kk.'],
+    tapUp:  ['..dd...dd...dd..', '..kk...kk.......'],   // front foot lifted
+    tapMid: ['..dd...dd...dd..', '..kk........kk..'],
+    kick:   ['..dd...dd...dd..', '..kk...kk.....kk'],
+    sit:    ['................', '..kkk.....kkk...'],
+    tuck:   ['................', '..kk.......kk...'],
+    jump:   ['..dd...dd...dd..', '.kk.....kk....kk']
+  };
+
+  var TAILS = [['d.', '.d'], ['.d', 'd.']];
 
   /* ---------- props ---------- */
 
@@ -70,14 +66,6 @@ window.Pet = (function () {
       '.ssssssss.',
       'gggggggggg'
     ],
-    laptopLit: [
-      '.ssssssss.',
-      '.swwwwwws.',
-      '.sbbbbbbs.',
-      '.sbbwwbbs.',
-      '.ssssssss.',
-      'gggggggggg'
-    ],
     ball: [
       '.kwwk.',
       'kwwwwk',
@@ -87,12 +75,20 @@ window.Pet = (function () {
       '.kwwk.'
     ],
     book: [
-      '..k..k..',
-      '.kwkkwk.',
-      'kwwkkwwk',
-      'kwwkkwwk',
-      'kwwkkwwk',
-      '.kkkkkk.'
+      '..m..m..',
+      '.mwmmwm.',
+      'mwwmmwwm',
+      'mwwmmwwm',
+      'mwwmmwwm',
+      '.mmmmmm.'
+    ],
+    bookOpen: [
+      '..m..m..',
+      '.mwmmwm.',
+      'mwkmmwwm',
+      'mwwmmwkm',
+      'mwkmmwwm',
+      '.mmmmmm.'
     ],
     mug: [
       'wwwww.',
@@ -113,6 +109,90 @@ window.Pet = (function () {
       '..s......s..',
       '..k......k..'
     ],
+    cookie: [
+      '.mmm.',
+      'mmkmm',
+      'mkmmm',
+      'mmmkm',
+      '.mmm.'
+    ],
+    cookieBit: [
+      '.mm..',
+      'mmkm.',
+      'mkmm.',
+      'mmmk.',
+      '.mm..'
+    ],
+    cookieGone: [
+      '.m...',
+      'mmk..',
+      'mkm..',
+      'mmm..',
+      '.m...'
+    ],
+    pot: [
+      '.mmmm.',
+      '.mmmm.',
+      '..mm..'
+    ],
+    sprout0: ['......', '......', '..e...', '..e...'],
+    sprout1: ['......', '..e...', '.eee..', '..e...'],
+    sprout2: ['.e.e..', 'eeeee.', '.eee..', '..e...'],
+    can: [
+      '...ss.',
+      '..ssss',
+      's.ssss',
+      'ssssss',
+      '.ssss.'
+    ],
+    phones: [
+      '..vvvvvvvv..',
+      '.v........v.',
+      'vv........vv',
+      'vv........vv'
+    ],
+    card: [
+      'ssssss',
+      'swwwws',
+      'swkkws',
+      'swwwws',
+      'swkkws',
+      'ssssss'
+    ],
+    cardBack: [
+      'ssssss',
+      'swwwws',
+      'swwkws',
+      'swkkws',
+      'swwwws',
+      'ssssss'
+    ],
+    block: [
+      'yyyy',
+      'ykky',
+      'ykky',
+      'yyyy'
+    ],
+    broom: [
+      '...m..',
+      '...m..',
+      '...m..',
+      '..mm..',
+      '.yyyy.',
+      'yyyyyy',
+      'yyyyyy',
+      'y.y.yy'
+    ],
+    balloon: [
+      '.ppp.',
+      'ppppp',
+      'ppppp',
+      '.ppp.',
+      '..p..',
+      '..k..',
+      '..k..',
+      '..k..'
+    ],
     heart: [
       '.p.p.',
       'ppppp',
@@ -120,34 +200,13 @@ window.Pet = (function () {
       '.ppp.',
       '..p..'
     ],
-    zed: [
-      'kkk',
-      '..k',
-      '.k.',
-      'kkk'
-    ],
-    spark: [
-      '.y.',
-      'yyy',
-      '.y.'
-    ],
-    bang: [
-      'k',
-      'k',
-      'k',
-      '.',
-      'k'
-    ],
-    note: [
-      '..kk',
-      '..kk',
-      '..k.',
-      'kkk.',
-      'kkk.'
-    ]
+    zed: ['kkk', '..k', '.k.', 'kkk'],
+    spark: ['.y.', 'yyy', '.y.'],
+    bang: ['k', 'k', 'k', '.', 'k'],
+    note: ['..kk', '..kk', '..k.', 'kkk.', 'kkk.']
   };
 
-  /* scribbles that appear on the whiteboard one at a time */
+  /* marks that appear on the whiteboard, one at a time */
   var SCRIBBLES = [
     [2, 2], [3, 2], [4, 2], [5, 2], [7, 2], [8, 2],
     [2, 3], [4, 3], [6, 3], [9, 3],
@@ -159,8 +218,8 @@ window.Pet = (function () {
   var canvas, ctx, hit, bubble;
   var pet = {
     x: 60, y: 0, dir: 1, perch: 0,
-    state: 'idle', act: null, until: 0, targetX: null,
-    hop: null, blinkAt: 0, hearts: [], bob: 0
+    state: 'idle', act: null, until: 0, since: 0, targetX: null,
+    hop: null, blinkAt: 0, hearts: [], scribbles: 0
   };
   var mode = 'idle';
   var enabled = true;
@@ -174,16 +233,24 @@ window.Pet = (function () {
   var bubbleUntil = 0;
   var lastChatter = 0;
 
+  /* min/max are seconds — he sticks with a thing for a good while */
   var ACTIVITIES = [
-    { id: 'laptop',  min: 9, max: 24, focus: 42, brk: 4,  idle: 12 },
-    { id: 'board',   min: 8, max: 16, focus: 15, brk: 5,  idle: 10 },
-    { id: 'read',    min: 8, max: 16, focus: 13, brk: 9,  idle: 10 },
-    { id: 'mug',     min: 6, max: 11, focus: 9,  brk: 11, idle: 9  },
-    { id: 'nap',     min: 9, max: 20, focus: 2,  brk: 24, idle: 7  },
-    { id: 'ball',    min: 7, max: 14, focus: 3,  brk: 19, idle: 15 },
-    { id: 'swim',    min: 7, max: 13, focus: 2,  brk: 13, idle: 9  },
-    { id: 'stretch', min: 4, max: 8,  focus: 7,  brk: 12, idle: 11 },
-    { id: 'look',    min: 4, max: 8,  focus: 7,  brk: 9,  idle: 17 }
+    { id: 'laptop',  min: 50, max: 120, focus: 34, brk: 3,  idle: 9 },
+    { id: 'board',   min: 35, max: 70,  focus: 13, brk: 4,  idle: 8 },
+    { id: 'cards',   min: 30, max: 60,  focus: 12, brk: 4,  idle: 8 },
+    { id: 'read',    min: 40, max: 80,  focus: 11, brk: 8,  idle: 9 },
+    { id: 'mug',     min: 25, max: 45,  focus: 8,  brk: 9,  idle: 8 },
+    { id: 'music',   min: 35, max: 70,  focus: 8,  brk: 8,  idle: 8 },
+    { id: 'nap',     min: 45, max: 90,  focus: 1,  brk: 16, idle: 6 },
+    { id: 'ball',    min: 30, max: 55,  focus: 2,  brk: 12, idle: 9 },
+    { id: 'swim',    min: 30, max: 55,  focus: 1,  brk: 9,  idle: 6 },
+    { id: 'snack',   min: 25, max: 45,  focus: 3,  brk: 9,  idle: 7 },
+    { id: 'plant',   min: 30, max: 55,  focus: 2,  brk: 7,  idle: 7 },
+    { id: 'blocks',  min: 30, max: 60,  focus: 1,  brk: 7,  idle: 7 },
+    { id: 'sweep',   min: 25, max: 45,  focus: 1,  brk: 6,  idle: 6 },
+    { id: 'balloon', min: 25, max: 45,  focus: 1,  brk: 6,  idle: 6 },
+    { id: 'stretch', min: 14, max: 24,  focus: 4,  brk: 7,  idle: 6 },
+    { id: 'look',    min: 12, max: 22,  focus: 4,  brk: 5,  idle: 10 }
   ];
 
   var LINES = {
@@ -195,7 +262,7 @@ window.Pet = (function () {
     pet:        ['hi!', 'hello!', 'boop', 'hehe', 'oh! hi'],
     halfway:    ['halfway!', 'keep going', 'doing great'],
     nearly:     ['nearly there', 'last stretch', 'almost!'],
-    idle:       ['still here', 'you got this', 'nice weather in here', 'hi again']
+    idle:       ['still here', 'you got this', 'hi again', '*pootles about*']
   };
 
   /* ---------- drawing ---------- */
@@ -239,6 +306,7 @@ window.Pet = (function () {
       x0: 8,
       x1: Math.max(60, window.innerWidth - 8 - GW * PX)
     }];
+
     if (window.innerWidth < 620) { perchList = list; if (pet.perch >= 1) pet.perch = 0; return; }
 
     var cards = document.querySelectorAll('[data-perch]');
@@ -272,17 +340,14 @@ window.Pet = (function () {
 
   function planNext() {
     var activity = pickActivity();
-    var wander = Math.random() < (reduced ? 0 : 0.55);
+    var wander = Math.random() < (reduced ? 0 : 0.35);
 
     if (wander && perchList.length) {
       var toOther = perchList.length > 1 && Math.random() < 0.4;
       var target = toOther ? Math.floor(Math.random() * perchList.length) : pet.perch;
       var perch = perchList[target] || currentPerch();
       var x = perch.x0 + Math.random() * (perch.x1 - perch.x0);
-      if (target !== pet.perch) {
-        startHop(target, x, activity);
-        return;
-      }
+      if (target !== pet.perch) { startHop(target, x, activity); return; }
       pet.targetX = x;
       pet.state = 'walk';
       pet.act = activity;
@@ -294,6 +359,7 @@ window.Pet = (function () {
   function beginActivity(activity) {
     pet.state = 'act';
     pet.act = activity;
+    pet.since = clock;
     pet.until = clock + activity.min + Math.random() * (activity.max - activity.min);
     pet.scribbles = 0;
   }
@@ -322,9 +388,9 @@ window.Pet = (function () {
       say(pick(LINES.alarm));
     } else if (kind === 'wave') {
       pet.state = 'wave';
-      pet.until = clock + 2.4;
+      pet.until = clock + 2.6;
       for (var i = 0; i < 3; i++) {
-        pet.hearts.push({ x: pet.x + 6 * PX + Math.random() * 6 * PX, y: pet.y - GH * PX, life: 1 + Math.random() });
+        pet.hearts.push({ x: pet.x + 5 * PX + Math.random() * 6 * PX, y: pet.y - GH * PX, life: 1 + Math.random() });
       }
       say(pick(LINES.pet));
     }
@@ -368,13 +434,13 @@ window.Pet = (function () {
       if (pet.x > perch.x1) pet.x = perch.x1;
     }
 
-    if (clock > pet.blinkAt) pet.blinkAt = clock + 2 + Math.random() * 4;
+    if (clock > pet.blinkAt) pet.blinkAt = clock + 3 + Math.random() * 5;
 
     switch (pet.state) {
       case 'walk':
         var delta = pet.targetX - pet.x;
         pet.dir = delta >= 0 ? 1 : -1;
-        var speed = 46 * dt;
+        var speed = 40 * dt;
         if (Math.abs(delta) <= speed) {
           pet.x = pet.targetX;
           beginActivity(pet.act || pickActivity());
@@ -396,8 +462,8 @@ window.Pet = (function () {
         break;
 
       case 'act':
-        if (pet.act && pet.act.id === 'board' && Math.random() < dt * 2.2) {
-          pet.scribbles = Math.min(SCRIBBLES.length, (pet.scribbles || 0) + 1);
+        if (pet.act && pet.act.id === 'board' && Math.random() < dt * 0.9) {
+          pet.scribbles = Math.min(SCRIBBLES.length, pet.scribbles + 1);
         }
         if (clock > pet.until) planNext();
         break;
@@ -411,7 +477,7 @@ window.Pet = (function () {
     }
 
     // idle chatter, rarely
-    if (clock - lastChatter > 70 && Math.random() < dt * 0.05) {
+    if (clock - lastChatter > 90 && Math.random() < dt * 0.04) {
       lastChatter = clock;
       say(pick(LINES.idle));
     }
@@ -437,137 +503,253 @@ window.Pet = (function () {
     }
   }
 
+  /* ---------- pose: body, legs and how he sits in the world ---------- */
+
+  function poseFor(beat) {
+    var id = pet.state === 'act' && pet.act ? pet.act.id : null;
+    var elapsed = clock - pet.since;
+    var pose = {
+      eyes: clock > pet.blinkAt - 0.18 ? 'blink' : 'open',
+      legs: LEGS.stand,
+      dy: 0,
+      lean: 0
+    };
+
+    switch (pet.state) {
+      case 'walk':
+        pose.legs = beat % 2 ? LEGS.stepA : LEGS.stepB;
+        pose.dy = beat % 2 ? -PX / 2 : 0;
+        return pose;
+      case 'hop':
+        pose.legs = LEGS.jump;
+        pose.eyes = 'happy';
+        return pose;
+      case 'cheer':
+        pose.eyes = 'happy';
+        pose.legs = LEGS.jump;
+        pose.dy = -Math.abs(Math.sin(clock * 6)) * 14;
+        return pose;
+      case 'startle':
+        pose.eyes = 'open';
+        pose.legs = beat % 2 ? LEGS.stepA : LEGS.stepB;
+        pose.dy = -Math.abs(Math.sin(clock * 10)) * 6;
+        return pose;
+      case 'wave':
+        pose.eyes = 'happy';
+        pose.legs = beat % 6 < 3 ? LEGS.tapUp : LEGS.stand;
+        return pose;
+    }
+
+    switch (id) {
+      case 'laptop':                                    // tap tap tap
+        pose.legs = beat % 6 < 3 ? LEGS.tapUp : LEGS.stand;
+        break;
+      case 'board':                                     // a slow arm, drawing
+        pose.legs = beat % 16 < 8 ? LEGS.tapUp : LEGS.stand;
+        break;
+      case 'cards':
+        pose.legs = LEGS.sit;
+        break;
+      case 'read':
+        pose.legs = LEGS.sit;
+        pose.dy = Math.sin(elapsed * 0.9) * 1;
+        break;
+      case 'mug':                                       // leans in for a sip now and then
+        pose.legs = LEGS.stand;
+        pose.lean = (elapsed % 6) < 1.2 ? PX : 0;
+        break;
+      case 'music':                                     // head bob
+        pose.legs = beat % 12 < 6 ? LEGS.tapMid : LEGS.stand;
+        pose.dy = Math.sin(clock * 3.4) * 2;
+        break;
+      case 'nap':
+        pose.eyes = 'blink';
+        pose.legs = LEGS.tuck;
+        pose.dy = Math.sin(clock * 1.3) * 1.6;
+        break;
+      case 'ball':                                      // boots it on the way down
+        pose.legs = Math.abs(Math.sin(clock * 3.4)) < 0.25 ? LEGS.kick : LEGS.stand;
+        break;
+      case 'swim':
+        pose.legs = beat % 4 < 2 ? LEGS.stepA : LEGS.stepB;
+        pose.dy = Math.sin(clock * 2.4) * PX * 0.6;
+        break;
+      case 'snack':
+        pose.legs = LEGS.sit;
+        pose.lean = (elapsed % 5) < 0.8 ? PX : 0;
+        break;
+      case 'plant':                                     // tips the can, waits, tips again
+        pose.legs = (elapsed % 7) < 2.5 ? LEGS.tapUp : LEGS.stand;
+        break;
+      case 'blocks':
+        pose.legs = (elapsed % 6) < 1.4 ? LEGS.tapUp : LEGS.stand;
+        break;
+      case 'sweep':                                     // shuffles along with the broom
+        pose.legs = beat % 8 < 4 ? LEGS.stepA : LEGS.stepB;
+        pose.dy = beat % 8 < 4 ? -PX / 2 : 0;
+        break;
+      case 'balloon':
+        pose.eyes = clock > pet.blinkAt - 0.18 ? 'blink' : 'happy';
+        pose.dy = Math.sin(clock * 1.6) * 2;
+        break;
+      case 'stretch':
+        pose.eyes = 'happy';
+        pose.legs = beat % 12 < 6 ? LEGS.stepA : LEGS.stepB;
+        pose.dy = -Math.abs(Math.sin(clock * 1.6)) * 7;
+        break;
+      case 'look':                                      // an occasional shuffle on the spot
+        pose.legs = (elapsed % 5) < 0.5 ? LEGS.stepA : LEGS.stand;
+        break;
+    }
+    return pose;
+  }
+
   /* ---------- the paint ---------- */
-
-  function currentSprite() {
-    var beat = Math.floor(clock * FPS);
-    var blinking = clock > pet.blinkAt - 0.16;
-    var id = pet.act ? pet.act.id : 'look';
-
-    if (pet.state === 'walk') return beat % 2 ? SPRITES.walkB : SPRITES.walkA;
-    if (pet.state === 'hop') return SPRITES.sit;
-    if (pet.state === 'cheer') return SPRITES.blink;
-    if (pet.state === 'startle') return SPRITES.stand;
-    if (pet.state === 'wave') return beat % 4 < 2 ? SPRITES.blink : SPRITES.stand;
-
-    if (pet.state === 'act') {
-      if (id === 'nap') return SPRITES.sleep;
-      if (id === 'laptop' || id === 'read') return beat % 8 < 4 ? SPRITES.sit : SPRITES.sitB;
-      if (id === 'mug' || id === 'swim') return SPRITES.sit;
-      if (id === 'stretch') return beat % 4 < 2 ? SPRITES.stand : SPRITES.blink;
-    }
-    return blinking ? SPRITES.blink : SPRITES.stand;
-  }
-
-  function verticalOffset() {
-    var beat = Math.floor(clock * FPS);
-    if (pet.state === 'walk') return beat % 2 ? -PX : 0;
-    if (pet.state === 'cheer') return -Math.abs(Math.sin(clock * 7)) * 16;
-    if (pet.state === 'startle') return -Math.abs(Math.sin(clock * 11)) * 7;
-    if (pet.state === 'act' && pet.act) {
-      if (pet.act.id === 'swim') return Math.sin(clock * 2.6) * PX;
-      if (pet.act.id === 'nap') return Math.sin(clock * 1.4) * 1.5;
-      if (pet.act.id === 'stretch') return -Math.abs(Math.sin(clock * 3)) * 6;
-    }
-    return 0;
-  }
 
   function paint() {
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     if (!enabled) return;
 
     var beat = Math.floor(clock * FPS);
-    var sprite = currentSprite();
+    var pose = poseFor(beat);
     var x = Math.round(pet.x);
-    var y = Math.round(pet.y + verticalOffset());
+    var y = Math.round(pet.y + pose.dy);
     var top = y - GH * PX;
     var flip = pet.dir < 0;
     var ink = inkColor();
     var id = pet.state === 'act' && pet.act ? pet.act.id : null;
+    var elapsed = clock - pet.since;
+    var lean = flip ? -pose.lean : pose.lean;
 
     if (pet.state !== 'hop' && id !== 'swim') shadow(x, y, GW * PX);
 
-    // props that sit behind the creature
+    // things that stand behind him
     if (id === 'board') {
-      var boardX = x + (flip ? -13 * PX : GW * PX + PX);
+      var boardX = flip ? x - 13 * PX : x + (GW + 1) * PX;
       var boardY = y - PROPS.board.length * PX;
       grid(PROPS.board, boardX, boardY, false);
-      for (var s = 0; s < (pet.scribbles || 0); s++) {
+      for (var s = 0; s < pet.scribbles; s++) {
         ctx.fillStyle = COLORS.k;
         ctx.fillRect(boardX + SCRIBBLES[s][0] * PX, boardY + SCRIBBLES[s][1] * PX, PX, PX);
       }
     }
+    if (id === 'balloon') {
+      var bx = flip ? x - 3 * PX : x + (GW - 2) * PX;
+      grid(PROPS.balloon, bx, top - 7 * PX + Math.sin(clock * 1.6) * 3, flip);
+    }
 
-    grid(sprite, x, top, flip);
+    // the creature
+    grid(BODIES[pose.eyes], x + lean, top, flip);
+    grid(pose.legs, x, top + 10 * PX, flip);
+    grid(TAILS[beat % 8 < 4 ? 0 : 1], flip ? x + GW * PX : x - 2 * PX, top + 5 * PX, flip);
 
-    // props in front
+    if (id === 'music') {
+      grid(PROPS.phones, x + 2 * PX + lean, top - PX, flip, ink);
+      if (beat % 10 < 5) grid(PROPS.note, flip ? x - 4 * PX : x + GW * PX, top - 2 * PX, false, ink);
+    }
+
+    // things he holds or uses
     if (id === 'laptop') {
-      var lit = beat % 6 < 3 ? PROPS.laptopLit : PROPS.laptop;
-      grid(lit, beside(PROPS.laptop, flip, -1), y - PROPS.laptop.length * PX, flip);
+      grid(PROPS.laptop, beside(PROPS.laptop, flip, -1), y - PROPS.laptop.length * PX, flip);
     }
     if (id === 'read') {
-      grid(PROPS.book, beside(PROPS.book, flip, -2), y - 8 * PX, flip);
+      var page = (elapsed % 4) < 0.5 ? PROPS.bookOpen : PROPS.book;
+      grid(page, beside(PROPS.book, flip, -2), y - 8 * PX, flip);
+    }
+    if (id === 'cards') {
+      var card = (elapsed % 5) < 2.5 ? PROPS.card : PROPS.cardBack;
+      grid(card, beside(PROPS.card, flip, -2), y - 8 * PX, flip);
     }
     if (id === 'mug') {
       grid(PROPS.mug, beside(PROPS.mug, flip, -1), y - 6 * PX, flip);
-      if (beat % 4 < 2) {
+      if (beat % 8 < 4) {
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
         ctx.fillRect(beside(PROPS.mug, flip, -1) + 2 * PX, y - 8 * PX, PX, PX);
       }
+    }
+    if (id === 'snack') {
+      var bites = elapsed % 15;
+      var cookie = bites < 5 ? PROPS.cookie : bites < 10 ? PROPS.cookieBit : PROPS.cookieGone;
+      grid(cookie, beside(PROPS.cookie, flip, -2), y - 7 * PX, flip);
     }
     if (id === 'ball') {
       var bounce = Math.abs(Math.sin(clock * 3.4)) * 30;
       grid(PROPS.ball, beside(PROPS.ball, flip, 0), y - 6 * PX - bounce, flip);
     }
+    if (id === 'plant') {
+      var potX = beside(PROPS.pot, flip, 0);
+      var grown = elapsed % 18;
+      var sprout = grown < 6 ? PROPS.sprout0 : grown < 12 ? PROPS.sprout1 : PROPS.sprout2;
+      grid(sprout, potX, y - 7 * PX, flip);
+      grid(PROPS.pot, potX, y - 3 * PX, flip);
+      var pouring = (elapsed % 7) < 2.5;
+      var canX = potX + (flip ? -2 : 2) * PX;
+      grid(PROPS.can, canX, y - (pouring ? 11 : 10) * PX, flip);
+      if (pouring && beat % 4 < 2) {
+        ctx.fillStyle = COLORS.c;
+        ctx.fillRect(potX + (flip ? 1 : 4) * PX, y - 9 * PX, PX, PX * 2);
+      }
+    }
+    if (id === 'blocks') {
+      var stack = 1 + Math.floor((elapsed % 24) / 6);   // builds to four, then starts again
+      for (var t = 0; t < stack; t++) {
+        var tint = ['y', 'n', 'c', 'p'][t % 4];
+        var block = PROPS.block.map(function (row) { return row.replace(/y/g, tint); });
+        grid(block, beside(PROPS.block, flip, -1), y - (t + 1) * 4 * PX, flip);
+      }
+    }
+    if (id === 'sweep') {
+      var swing = Math.sin(clock * 2.2) * 2 * PX;
+      grid(PROPS.broom, beside(PROPS.broom, flip, -2) + (flip ? -swing : swing), y - PROPS.broom.length * PX, flip);
+      if (beat % 6 < 3) {
+        ctx.fillStyle = 'rgba(47,38,34,0.18)';
+        ctx.fillRect(beside(PROPS.broom, flip, -3) + (flip ? -swing : swing), y - PX, PX, PX);
+      }
+    }
     if (id === 'swim') {
-      var surface = y - 4 * PX;
+      var surface = y - 5 * PX;
       for (var w = -4; w < GW + 5; w++) {
         var wave = Math.sin(clock * 2.6 + w * 0.6) > 0 ? 0 : PX;
         ctx.fillStyle = '#a8ddf3';
         ctx.fillRect(x + w * PX, surface + wave, PX, PX);
         ctx.fillStyle = COLORS.c;
-        ctx.fillRect(x + w * PX, surface + wave + PX, PX, PX * 3);
+        ctx.fillRect(x + w * PX, surface + wave + PX, PX, PX * 4);
       }
     }
     if (id === 'nap') {
       for (var z = 0; z < 3; z++) {
-        var phase = (clock * 0.5 + z * 0.33) % 1;
+        var phase = (clock * 0.35 + z * 0.33) % 1;
         ctx.globalAlpha = 1 - phase;
-        grid(PROPS.zed, x + GW * PX - PX + phase * 14, top - 4 * PX - phase * 22, false, ink);
+        grid(PROPS.zed, x + GW * PX - PX + phase * 14, top - 3 * PX - phase * 22, false, ink);
         ctx.globalAlpha = 1;
       }
     }
-    if (pet.state === 'startle') {
-      grid(PROPS.bang, x + GW * PX / 2, top - 7 * PX, false, ink);
-    }
+    if (pet.state === 'startle') grid(PROPS.bang, x + GW * PX / 2, top - 7 * PX, false, ink);
     if (pet.state === 'cheer') {
       for (var k = 0; k < 3; k++) {
-        var sx = x + (k - 1) * 8 * PX + GW * PX / 2;
-        grid(PROPS.spark, sx, top - 4 * PX - (k % 2) * PX, false);
+        grid(PROPS.spark, x + (k - 1) * 7 * PX + GW * PX / 2, top - 4 * PX - (k % 2) * PX, false);
       }
     }
-    if (id === 'stretch' && beat % 6 < 3) {
-      grid(PROPS.note, x + GW * PX, top - 3 * PX, false, ink);
-    }
+    if (id === 'stretch' && beat % 12 < 6) grid(PROPS.note, x + GW * PX, top - 3 * PX, false, ink);
 
-    for (var h = 0; h < pet.hearts.length; h++) {
-      ctx.globalAlpha = Math.min(1, pet.hearts[h].life);
-      grid(PROPS.heart, pet.hearts[h].x, pet.hearts[h].y, false);
+    for (var hh = 0; hh < pet.hearts.length; hh++) {
+      ctx.globalAlpha = Math.min(1, pet.hearts[hh].life);
+      grid(PROPS.heart, pet.hearts[hh].x, pet.hearts[hh].y, false);
       ctx.globalAlpha = 1;
     }
 
-    for (var c = 0; c < confetti.length; c++) {
-      ctx.globalAlpha = Math.min(1, confetti[c].life);
-      ctx.fillStyle = confetti[c].color;
-      ctx.fillRect(Math.round(confetti[c].x), Math.round(confetti[c].y), PX, PX);
+    for (var cc = 0; cc < confetti.length; cc++) {
+      ctx.globalAlpha = Math.min(1, confetti[cc].life);
+      ctx.fillStyle = confetti[cc].color;
+      ctx.fillRect(Math.round(confetti[cc].x), Math.round(confetti[cc].y), PX, PX);
       ctx.globalAlpha = 1;
     }
 
-    // the hit area and any speech follow the creature
+    // the hit area and any speech follow him about
     hit.style.transform = 'translate(' + x + 'px,' + top + 'px)';
     if (bubbleUntil) {
-      var bx = Math.min(window.innerWidth - bubble.offsetWidth - 8, Math.max(8, x - 10));
-      bubble.style.transform = 'translate(' + bx + 'px,' + (top - bubble.offsetHeight - 12) + 'px)';
+      var bubX = Math.min(window.innerWidth - bubble.offsetWidth - 8, Math.max(8, x - 10));
+      bubble.style.transform = 'translate(' + bubX + 'px,' + (top - bubble.offsetHeight - 12) + 'px)';
     }
   }
 
@@ -605,8 +787,6 @@ window.Pet = (function () {
     if (!canvas || !hit) return;
 
     reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    hit.style.width = GW * PX + 'px';
-    hit.style.height = GH * PX + 'px';
     hit.addEventListener('pointerdown', function (event) {
       event.preventDefault();
       react('wave');
@@ -635,13 +815,12 @@ window.Pet = (function () {
       if (next === mode) return;
       mode = next;
       if (mode === 'focus' && Math.random() < 0.8) {
-        var laptop = ACTIVITIES[0];
-        pet.act = laptop;
-        pet.targetX = Math.max(currentPerch() ? currentPerch().x0 : 20,
-                               Math.min(currentPerch() ? currentPerch().x1 : 200, pet.x + (Math.random() - 0.5) * 160));
+        pet.act = ACTIVITIES[0];                       // settles down at the laptop
+        var perch = currentPerch();
+        pet.targetX = perch ? Math.max(perch.x0, Math.min(perch.x1, pet.x + (Math.random() - 0.5) * 150)) : pet.x;
         pet.state = 'walk';
       } else if (pet.state === 'act') {
-        pet.until = Math.min(pet.until, clock + 1.5);
+        pet.until = Math.min(pet.until, clock + 4);    // finishes up, then finds something fitting
       }
     },
     event: function (kind) {

@@ -10,19 +10,26 @@ sessions) lives in `localStorage` on your own device.
 
 Pip is drawn from character grids in `assets/pet.js` — no image files, no sprite sheets, no
 libraries. He wanders the page on his own, walking along the bottom of the window and hopping up
-onto the top edge of the cards, and picks something to do every few seconds:
+onto the top edge of the cards, and settles into one of sixteen things to do:
 
-| | |
-|---|---|
-| 💻 works at a laptop | 📋 scribbles on a whiteboard |
-| 📖 reads a book | ☕ has a drink |
-| ⚽ juggles a football | 🏊 takes a dip in a puddle |
-| 😴 naps, with Zzz | 🎵 stretches and hums |
+| | | |
+|---|---|---|
+| 💻 taps away at a laptop | 📋 draws on a whiteboard | 🗂 flips through flashcards |
+| 📖 turns the pages of a book | ☕ leans in for a sip | 🎧 bobs along to music |
+| 🍪 nibbles a biscuit | 🪴 waters a plant, which grows | 🧱 stacks a tower of blocks |
+| 🧹 sweeps up | 🎈 holds a balloon | ⚽ boots a football about |
+| 🏊 paddles in a puddle | 😴 naps, with Zzz | 🤸 stretches and hums |
+| 👀 has a look around | | |
 
-What he picks is weighted by what *you're* doing. While a session runs he mostly works at the
-laptop; on a break he naps, swims and plays; when nothing's running he just mooches. He cheers
-with confetti when a session lands, jumps when an alarm goes off, and says hello if you click
-him. He has no needs, no hunger and nothing to grind — he's company, not a chore.
+Every one of them animates — his six legs tap while he types, shuffle while he sweeps, lift while
+he draws — and he sticks with a thing for anywhere from twenty seconds to two minutes rather than
+flitting about.
+
+What he picks is weighted by what *you're* doing. While a session runs he's mostly at the laptop,
+the whiteboard or the flashcards; on a break he naps, swims and plays; when nothing's running he
+just mooches. He cheers with confetti when a session lands, jumps when an alarm goes off, and says
+hello if you click him. He has no needs, no hunger and nothing to grind — he's company, not a
+chore.
 
 Press `p` (or the creature button, top right) to send him away if you need a clear screen.
 
@@ -30,7 +37,7 @@ Press `p` (or the creature button, top right) to send him away if you need a cle
 
 ### Sessions and breaks
 
-- **Pick a length** — 15 / 30 / 60 / 90 / 120 minutes, nudge with −5 / +5, or click the countdown
+- **Pick a length** — 15 / 30 / 45 / 60 / 90 / 120 minutes, nudge with −5 / +5, or click the countdown
   and type: `45`, `50:00`, `1h30`, `90m`, `25s`.
 - **Run it** — `start` / `pause` / `resume`.
 - **A session rolls straight into a 10-minute break.** When focus time is up a chime sounds, the
