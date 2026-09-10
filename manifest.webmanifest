@@ -1,14 +1,19 @@
 {
-  "name": "zen — timer & clock",
-  "short_name": "zen",
-  "description": "A minimal timer with the current local time, large and quiet.",
+  "name": "pip — study timer",
+  "short_name": "pip",
+  "description": "A cutesy study timer with a little pixel creature who works alongside you.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0e1011",
-  "theme_color": "#0e1011",
+  "background_color": "#ffefd9",
+  "theme_color": "#ffefd9",
   "icons": [
-    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ]
 }

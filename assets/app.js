@@ -1,4 +1,4 @@
-/* zen — a quiet clock, timer and alarms. No accounts, no network, nothing but localStorage. */
+/* pip — clock, timer, breaks and alarms. No accounts, no network, nothing but localStorage. */
 (function () {
   'use strict';
 
@@ -7,22 +7,24 @@
     body: document.body,
     clock: $('clock'), clockTime: $('clockTime'), clockSecs: $('clockSecs'), meridiem: $('meridiem'),
     dateLabel: $('dateLabel'), zoneLabel: $('zoneLabel'),
-    dial: document.querySelector('.dial'), ring: $('ringProgress'),
-    countdown: $('countdown'), input: $('durationInput'), phase: $('phase'),
+    task: $('task'),
+    ring: $('ringProgress'), countdown: $('countdown'), input: $('durationInput'), phase: $('phase'),
     presets: $('presets'), startPause: $('startPause'), reset: $('reset'),
-    minus: $('minus'), plus: $('plus'), stats: $('stats'),
+    minus: $('minus'), plus: $('plus'),
+    pips: $('pips'), stats: $('stats'),
     alarmList: $('alarmList'), alarmAdd: $('alarmAdd'), alarmInput: $('alarmInput'),
-    soundBtn: $('soundBtn'), notifyBtn: $('notifyBtn'),
+    soundBtn: $('soundBtn'), notifyBtn: $('notifyBtn'), petBtn: $('petBtn'),
     themeBtn: $('themeBtn'), fullBtn: $('fullBtn')
   };
 
   var MIN = 60000, HOUR = 3600000, DAY = 86400000;
   var MIN_DURATION = 5000, MAX_DURATION = 12 * HOUR;
-  var KEY_STATE = 'zen.state.v1', KEY_STATS = 'zen.stats.v1', KEY_ALARMS = 'zen.alarms.v1';
+  var KEY_STATE = 'pip.state.v1', KEY_STATS = 'pip.stats.v1', KEY_ALARMS = 'pip.alarms.v1';
+  var OLD_KEYS = { state: 'zen.state.v1', stats: 'zen.stats.v1', alarms: 'zen.alarms.v1' };
 
   var settings = {
-    hour12: false, sound: true, notify: false, theme: 'auto',
-    focusMs: 30 * MIN, breakMs: 10 * MIN
+    hour12: false, sound: true, notify: false, theme: 'auto', pet: true,
+    focusMs: 30 * MIN, breakMs: 10 * MIN, task: ''
   };
   var timer = { mode: 'focus', duration: settings.focusMs, remaining: settings.focusMs, endAt: null, status: 'idle' };
   var stats = { day: dayKey(), sessions: 0, focused: 0 };
@@ -33,11 +35,16 @@
   var wakeLock = null;
   var audio = null;
   var painted = {};
+  var said = {};
 
   /* ---------- storage ---------- */
 
-  function read(key) {
-    try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
+  function read(key, fallbackKey) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (raw === null && fallbackKey) raw = localStorage.getItem(fallbackKey);
+      return JSON.parse(raw || 'null');
+    } catch (e) { return null; }
   }
 
   function write(key, value) {
@@ -114,7 +121,7 @@
     return null;
   }
 
-  /* a moment: 16:30, 4:30pm, 930, 16 — or a length ("45m"), meaning that far from now */
+  /* a moment: 16:30, 4:30pm, 930, 18 — or a length ("45m"), meaning that far from now */
   function parseMoment(raw) {
     var text = String(raw || '').trim().toLowerCase().replace(/[\s.]/g, '');
     if (!text) return null;
@@ -165,7 +172,7 @@
   }
 
   function accrue(now) {
-    // only time spent in focus counts; breaks are not study
+    // only time spent focusing counts; breaks are not study
     if (timer.status !== 'running' || timer.mode !== 'focus' || !timer.endAt) { lastAccrual = now; return; }
     var upTo = Math.min(now, timer.endAt);
     if (upTo > lastAccrual) { rollDay(); stats.focused += upTo - lastAccrual; }
@@ -173,8 +180,6 @@
   }
 
   /* ---------- timer ---------- */
-
-  function storedLength() { return timer.mode === 'break' ? settings.breakMs : settings.focusMs; }
 
   function rememberLength(ms) {
     if (timer.mode === 'break') settings.breakMs = ms; else settings.focusMs = ms;
@@ -218,8 +223,10 @@
     timer.endAt = now + timer.remaining;
     timer.status = 'running';
     lastAccrual = now;
+    said = {};
     unlockAudio();
     requestWakeLock();
+    if (timer.mode === 'focus') Pet.event('start');
     save(); render();
   }
 
@@ -237,7 +244,7 @@
     if (timer.status === 'running') pause(); else start();
   }
 
-  /* back to a fresh focus session; during a break this ends the break early */
+  /* back to a fresh session; during a break this ends the break early */
   function reset() {
     accrue(Date.now());
     timer.mode = 'focus';
@@ -245,12 +252,14 @@
     timer.remaining = settings.focusMs;
     timer.endAt = null;
     timer.status = 'idle';
+    said = {};
     releaseWakeLock();
     save(); render();
   }
 
   function complete(quiet) {
     var finished = timer.mode;
+    said = {};
     if (finished === 'focus') {
       rollDay();
       stats.sessions += 1;
@@ -272,18 +281,15 @@
     if (!quiet) {
       chime(finished === 'focus' ? 'focus' : 'break');
       notify(finished === 'focus' ? 'session complete' : 'break over',
-             finished === 'focus' ? humanSpan(settings.breakMs) + ' break' : 'ready when you are');
-      bloom();
+             finished === 'focus' ? humanSpan(settings.breakMs) + ' break now' : 'ready when you are');
+      if (finished === 'focus') {
+        Pet.event('complete');
+        setTimeout(function () { Pet.event('breakStart'); }, 3600);
+      } else {
+        Pet.event('breakEnd');
+      }
     }
     save(); render();
-  }
-
-  function bloom() {
-    if (!el.dial) return;
-    el.dial.classList.remove('bloom');
-    void el.dial.offsetWidth;
-    el.dial.classList.add('bloom');
-    setTimeout(function () { el.dial.classList.remove('bloom'); }, 2800);
   }
 
   /* ---------- alarms ---------- */
@@ -316,6 +322,7 @@
         changed = true;
         chime('alarm');
         notify('alarm', timeOfDay(alarm.at));
+        Pet.event('alarm');
       } else if ((alarm.calls || 1) < RECALLS && now - (alarm.lastCall || now) >= RECALL_EVERY) {
         alarm.calls = (alarm.calls || 1) + 1;
         alarm.lastCall = now;
@@ -342,9 +349,10 @@
   }
 
   var CHIMES = {
-    focus: { notes: [528, 660, 792], gap: 0.85, decay: 3 },
-    break: { notes: [660, 528, 396], gap: 0.7, decay: 2.6 },
-    alarm: { notes: [660, 880, 660, 880], gap: 0.42, decay: 1.6 }
+    focus: { notes: [660, 880, 1046], gap: 0.13, decay: 1.1 },
+    break: { notes: [880, 660, 587], gap: 0.15, decay: 1.2 },
+    alarm: { notes: [784, 1046, 784, 1046], gap: 0.16, decay: 0.7 },
+    blip:  { notes: [880], gap: 0.1, decay: 0.35 }
   };
 
   function chime(kind) {
@@ -352,28 +360,26 @@
     var ctx = unlockAudio();
     if (!ctx) return;
     var shape = CHIMES[kind] || CHIMES.focus;
-    var begin = ctx.currentTime + 0.05;
+    var begin = ctx.currentTime + 0.04;
     shape.notes.forEach(function (freq, i) {
       var at = begin + i * shape.gap;
-      [[freq, 0.16], [freq * 2, 0.03]].forEach(function (voice) {
-        var osc = ctx.createOscillator();
-        var gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = voice[0];
-        gain.gain.setValueAtTime(0.0001, at);
-        gain.gain.exponentialRampToValueAtTime(voice[1], at + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.0001, at + shape.decay);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(at);
-        osc.stop(at + shape.decay + 0.1);
-      });
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.14, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + shape.decay);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + shape.decay + 0.05);
     });
   }
 
   function notify(title, body) {
     if (!settings.notify) return;
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    try { new Notification('zen — ' + title, { body: body, silent: true }); }
+    try { new Notification('pip — ' + title, { body: body, silent: true }); }
     catch (e) { /* some browsers require a service worker */ }
   }
 
@@ -419,7 +425,7 @@
         dateFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
       } catch (e) { dateFormatter = { format: function (x) { return x.toDateString(); } }; }
     }
-    paint(el.dateLabel, 'textContent', dateFormatter.format(d));
+    paint(el.dateLabel, 'textContent', dateFormatter.format(d).toLowerCase());
     renderZone(d);
   }
 
@@ -435,22 +441,18 @@
       var rest = Math.abs(mins) % 60;
       offset = 'GMT' + (mins < 0 ? '-' : '+') + Math.floor(Math.abs(mins) / 60) + (rest ? ':' + pad(rest) : '');
     }
-    paint(el.zoneLabel, 'textContent', zone ? zone.replace(/_/g, ' ') + ' (' + offset + ')' : offset);
+    var label = zone ? zone.split('/').pop().replace(/_/g, ' ').toLowerCase() + ' · ' + offset.toLowerCase() : offset;
+    paint(el.zoneLabel, 'textContent', label);
   }
 
   var measuredRing = 0;
   function ringLength() {
     if (!measuredRing) {
       try { measuredRing = el.ring.getTotalLength(); } catch (e) {}
-      if (!measuredRing) measuredRing = 2 * Math.PI * 92;
+      if (!measuredRing) measuredRing = 2 * Math.PI * 88;
     }
     return measuredRing;
   }
-
-  var PHASES = {
-    focus: { idle: 'ready', running: 'focus', paused: 'paused', done: 'complete' },
-    break: { idle: 'break', running: 'break', paused: 'break paused', done: 'break over' }
-  };
 
   /* the arc, painted every frame while running so it tracks the remaining time exactly */
   function paintRing(now) {
@@ -484,6 +486,11 @@
     if (timer.status === 'running' && !frame) frame = requestAnimationFrame(animateRing);
   }
 
+  var PHASES = {
+    focus: { idle: 'ready', running: 'focusing', paused: 'paused', done: 'done' },
+    break: { idle: 'break', running: 'break time', paused: 'break paused', done: 'break over' }
+  };
+
   function renderTimer(now) {
     var remaining = timer.status === 'running' ? timer.endAt - now : timer.remaining;
     var overtime = timer.status === 'done' && timer.endAt ? Math.max(0, now - timer.endAt) : 0;
@@ -499,7 +506,7 @@
 
     paint(el.phase, 'textContent', PHASES[timer.mode][timer.status]);
 
-    var labels = { idle: 'begin', running: 'pause', paused: 'resume', done: 'again' };
+    var labels = { idle: 'start', running: 'pause', paused: 'resume', done: 'again' };
     paint(el.startPause, 'textContent', labels[timer.status]);
 
     paint(el.reset, 'textContent', timer.mode === 'break' ? 'end break' : 'reset');
@@ -508,27 +515,48 @@
     el.reset.setAttribute('aria-hidden', resettable ? 'false' : 'true');
     el.reset.tabIndex = resettable ? 0 : -1;
 
-    var title = anyRinging() ? 'alarm · zen'
+    var title = anyRinging() ? 'alarm · pip'
       : timer.status === 'running'
-      ? clockFace(Math.max(0, remaining)) + (timer.mode === 'break' ? ' break · zen' : ' · zen')
-      : timer.status === 'paused' ? 'paused · zen'
-      : timer.status === 'done' ? 'complete · zen' : 'zen';
+      ? clockFace(Math.max(0, remaining)) + (timer.mode === 'break' ? ' break · pip' : ' · pip')
+      : timer.status === 'paused' ? 'paused · pip' : 'pip';
     if (document.title !== title) document.title = title;
 
     Array.prototype.forEach.call(el.presets.children, function (button) {
       var active = Math.round(settings.focusMs / MIN) === +button.dataset.min;
       button.setAttribute('aria-current', active ? 'true' : 'false');
     });
+
+    Pet.setMode(timer.status === 'running' ? timer.mode : 'idle');
+
+    // pip pipes up at the halfway mark and near the end
+    if (timer.status === 'running' && timer.mode === 'focus' && timer.duration > 4 * MIN) {
+      if (!said.half && remaining <= timer.duration / 2) { said.half = true; Pet.event('halfway'); }
+      if (!said.nearly && remaining <= MIN) { said.nearly = true; Pet.event('nearly'); }
+    }
   }
+
+  var pipKey = '';
 
   function renderStats() {
     rollDay();
     var sessions = stats.sessions + (stats.sessions === 1 ? ' session' : ' sessions');
     var text;
-    if (stats.sessions === 0 && stats.focused < MIN) text = 'a clear day';
-    else if (stats.focused < MIN) text = sessions + ' today';
-    else text = sessions + ' · ' + humanSpan(stats.focused) + ' focused today';
+    if (stats.sessions === 0 && stats.focused < MIN) text = 'no sessions yet — soon!';
+    else if (stats.focused < MIN) text = sessions + ' done';
+    else text = sessions + ' · ' + humanSpan(stats.focused) + ' focused';
     paint(el.stats, 'textContent', text);
+
+    var running = timer.status === 'running' && timer.mode === 'focus' ? 1 : 0;
+    var total = Math.min(14, stats.sessions) + running;
+    var key = total + ':' + running;    // finishing a session keeps the count but fills the last pip
+    if (key === pipKey) return;
+    pipKey = key;
+    el.pips.textContent = '';
+    for (var i = 0; i < total; i++) {
+      var pip = document.createElement('span');
+      pip.className = 'pip' + (running && i === total - 1 ? ' is-half' : '');
+      el.pips.appendChild(pip);
+    }
   }
 
   var alarmSignature = '';
@@ -552,12 +580,12 @@
       face.title = alarm.ringing ? 'Dismiss' : 'Alarm at ' + timeOfDay(alarm.at);
 
       var when = document.createElement('span');
-      when.className = 'alarm-time';
+      when.className = 'alarm-when';
       when.textContent = timeOfDay(alarm.at);
 
       var note = document.createElement('span');
       note.className = 'alarm-in';
-      note.textContent = alarm.ringing ? 'ringing' : untilLabel(alarm.at - now);
+      note.textContent = alarm.ringing ? 'ringing!' : untilLabel(alarm.at - now);
 
       face.appendChild(when);
       face.appendChild(note);
@@ -575,7 +603,6 @@
     });
 
     el.alarmAdd.textContent = alarms.length ? '+' : '+ alarm';
-    el.alarmAdd.title = 'Add an alarm (a)';
   }
 
   function render() {
@@ -674,12 +701,17 @@
     if (!button) return;
     var length = +button.dataset.min * MIN;
     if (timer.mode === 'break') {
-      // choose the next focus length without cutting the break short
+      // choose the next session length without cutting the break short
       settings.focusMs = clampDuration(length);
       save(); render();
     } else {
       setDuration(length, true);
     }
+  });
+
+  el.task.addEventListener('input', function () {
+    settings.task = el.task.value.slice(0, 42);
+    save();
   });
 
   el.clock.addEventListener('click', function () {
@@ -692,7 +724,7 @@
   el.soundBtn.addEventListener('click', function () {
     settings.sound = !settings.sound;
     el.soundBtn.setAttribute('aria-pressed', String(settings.sound));
-    if (settings.sound) { unlockAudio(); chime('focus'); }
+    if (settings.sound) { unlockAudio(); chime('blip'); }
     save();
   });
 
@@ -709,6 +741,13 @@
       el.notifyBtn.setAttribute('aria-pressed', String(settings.notify));
       save();
     });
+  });
+
+  el.petBtn.addEventListener('click', function () {
+    settings.pet = !settings.pet;
+    el.petBtn.setAttribute('aria-pressed', String(settings.pet));
+    Pet.setEnabled(settings.pet);
+    save();
   });
 
   function effectiveTheme() {
@@ -746,6 +785,7 @@
       case 'r': case 'R': reset(); break;
       case 'a': case 'A': event.preventDefault(); beginAlarm(); break;
       case 'e': case 'E': event.preventDefault(); beginEdit(); break;
+      case 'p': case 'P': el.petBtn.click(); break;
       case 'f': case 'F': el.fullBtn.click(); break;
       case 's': case 'S': el.soundBtn.click(); break;
       case 't': case 'T': el.themeBtn.click(); break;
@@ -764,13 +804,13 @@
   /* ---------- restore ---------- */
 
   (function restore() {
-    var storedStats = read(KEY_STATS);
+    var storedStats = read(KEY_STATS, OLD_KEYS.stats);
     if (storedStats && storedStats.day) {
       stats = { day: storedStats.day, sessions: storedStats.sessions || 0, focused: storedStats.focused || 0 };
       rollDay();
     }
 
-    var storedAlarms = read(KEY_ALARMS);
+    var storedAlarms = read(KEY_ALARMS, OLD_KEYS.alarms);
     if (storedAlarms && storedAlarms.length) {
       var cutoff = Date.now() - HOUR;   // anything older than an hour has had its moment
       alarms = storedAlarms.filter(function (a) { return a && a.at > cutoff; })
@@ -778,18 +818,20 @@
         .sort(function (a, b) { return a.at - b.at; });
     }
 
-    var stored = read(KEY_STATE);
+    var stored = read(KEY_STATE, OLD_KEYS.state);
     if (stored) {
       if (stored.settings) {
         settings.hour12 = !!stored.settings.hour12;
         settings.sound = stored.settings.sound !== false;
         settings.notify = !!stored.settings.notify;
+        settings.pet = stored.settings.pet !== false;
         settings.theme = stored.settings.theme || 'auto';
+        settings.task = String(stored.settings.task || '').slice(0, 42);
         settings.focusMs = clampDuration(stored.settings.focusMs || stored.duration || settings.focusMs);
         settings.breakMs = clampDuration(stored.settings.breakMs || settings.breakMs);
       }
       timer.mode = stored.mode === 'break' ? 'break' : 'focus';
-      timer.duration = clampDuration(stored.duration || storedLength());
+      timer.duration = clampDuration(stored.duration || settings.focusMs);
       timer.remaining = typeof stored.remaining === 'number' ? stored.remaining : timer.duration;
       timer.endAt = stored.endAt || null;
       timer.status = stored.status || 'idle';
@@ -814,9 +856,14 @@
     }
 
     applyTheme();
+    el.task.value = settings.task;
     el.soundBtn.setAttribute('aria-pressed', String(settings.sound));
     el.notifyBtn.setAttribute('aria-pressed', String(settings.notify));
+    el.petBtn.setAttribute('aria-pressed', String(settings.pet));
     if (timer.status === 'running') requestWakeLock();
     render();
+
+    Pet.init();
+    Pet.setEnabled(settings.pet);
   })();
 })();
