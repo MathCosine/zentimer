@@ -64,6 +64,10 @@
 
 * { box-sizing: border-box; }
 
+/* a display rule on a panel would otherwise beat the hidden attribute,
+   leaving an invisible overlay swallowing clicks */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
@@ -585,13 +589,13 @@ body[data-mode="break"] .go { background: var(--mint); }
 #petCanvas {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 46;              /* above the alarm curtain, so they hop about in front of it */
   pointer-events: none;
 }
 
-#petHit {
+.pet-hit {
   position: fixed;
-  z-index: 41;
+  z-index: 47;
   left: 0;
   top: 0;
   width: 0;
@@ -600,11 +604,11 @@ body[data-mode="break"] .go { background: var(--mint); }
   border-radius: 10px;
 }
 
-#petHit:focus-visible { outline: 2px solid var(--terra); outline-offset: 2px; }
+body.is-ringing .pet-hit { pointer-events: none; }
 
 .bubble {
   position: fixed;
-  z-index: 42;
+  z-index: 48;
   left: 0;
   top: 0;
   max-width: 190px;
@@ -674,6 +678,203 @@ body[data-mode="break"] .go { background: var(--mint); }
   .go { padding: 9px 28px; }
 }
 
+/* ---------- an alarm you cannot miss ---------- */
+
+.ring-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(47, 38, 34, 0.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: curtain 2.2s ease-in-out infinite;
+}
+
+@keyframes curtain {
+  0%, 100% { background: rgba(47, 38, 34, 0.42); }
+  50%      { background: rgba(150, 68, 44, 0.5); }
+}
+
+.ring-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 22px 34px 24px;
+  text-align: center;
+  background: var(--card);
+  border: 3px solid var(--outline);
+  border-radius: 26px;
+  box-shadow: 0 8px 0 var(--card-edge);
+  animation: ring-in 520ms var(--bounce) both, ring-glow 1.1s ease-in-out 520ms infinite;
+}
+
+@keyframes ring-in {
+  from { transform: scale(.6) translateY(20px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+@keyframes ring-glow {
+  0%, 100% { box-shadow: 0 8px 0 var(--card-edge), 0 0 0 0 rgba(228, 121, 90, 0.55); }
+  50%      { box-shadow: 0 8px 0 var(--card-edge), 0 0 0 16px rgba(228, 121, 90, 0); }
+}
+
+.ring-clock {
+  width: clamp(64px, 16vw, 88px);
+  height: auto;
+  color: var(--terra);
+  animation: clock-ring 320ms ease-in-out infinite;
+  transform-origin: 50% 80%;
+}
+
+@keyframes clock-ring {
+  0%, 100% { transform: rotate(-7deg); }
+  50%      { transform: rotate(7deg); }
+}
+
+.ring-heading {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--terra);
+}
+
+.ring-time {
+  font-size: clamp(2.4rem, 11vw, 3.4rem);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ring-card .go { margin-top: 10px; }
+
+/* ---------- study ambience ---------- */
+
+.music-pop {
+  position: fixed;
+  z-index: 61;
+  top: calc(max(10px, env(safe-area-inset-top)) + 42px);
+  right: max(10px, env(safe-area-inset-right));
+  width: 218px;
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  background: var(--card);
+  border: 2.5px solid var(--outline);
+  border-radius: 18px;
+  box-shadow: 0 5px 0 var(--card-edge);
+  animation: pop-panel 300ms var(--bounce) both;
+}
+
+@keyframes pop-panel {
+  from { opacity: 0; transform: translateY(-8px) scale(.94); }
+  to   { opacity: 1; transform: none; }
+}
+
+.music-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.music-play {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  background: var(--terra);
+  color: #fff8f2;
+  border: 2.5px solid var(--outline);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--outline);
+  transition: transform 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+
+.music-play:active { transform: translateY(3px); box-shadow: 0 0 0 var(--outline); }
+.music-play svg { width: 17px; height: 17px; fill: currentColor; stroke: none; }
+.music-play .pause-icon { display: none; }
+body.music-on .music-play .pause-icon { display: block; }
+body.music-on .music-play .play-icon { display: none; }
+
+.music-now {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  text-align: left;
+  line-height: 1.15;
+}
+
+.music-now strong { font-size: 0.86rem; font-weight: 600; }
+.music-now span { font-size: 0.68rem; color: var(--muted); }
+
+.music-skip {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--ink);
+  background: none;
+  border: 2px solid var(--card-edge);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 200ms var(--ease), transform 200ms var(--bounce);
+}
+
+.music-skip:hover { border-color: var(--terra); transform: translateY(-2px); }
+
+.music-tracks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.music-tracks button {
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--ink);
+  background: var(--card);
+  border: 2px solid var(--card-edge);
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: background 200ms var(--ease), border-color 200ms var(--ease);
+}
+
+.music-tracks button[aria-current="true"] {
+  background: var(--terra);
+  border-color: var(--outline);
+  color: #fff8f2;
+}
+
+.music-vol { display: block; }
+
+.music-vol input {
+  width: 100%;
+  accent-color: var(--terra);
+  cursor: pointer;
+}
+
+#musicBtn[aria-pressed="true"] {
+  color: var(--terra);
+  border-color: var(--terra);
+  opacity: 1;
+  animation: music-pulse 2.4s var(--ease) infinite;
+}
+
+@keyframes music-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--terra-soft); }
+  50%      { box-shadow: 0 0 0 5px transparent; }
+}
+
 /* shorter windows: trim the rhythm so the whole thing still fits at a glance */
 @media (max-height: 840px) and (min-width: 561px) {
   .stage { gap: 8px; padding-block: 12px 46px; }
@@ -702,6 +903,7 @@ body[data-mode="break"] .go { background: var(--mint); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stage, .pip, .alarm, .alarm.is-ringing, .alarm.is-ringing .alarm-when { animation: none !important; }
+  .stage, .pip, .alarm, .alarm.is-ringing, .alarm.is-ringing .alarm-when,
+  .ring-overlay, .ring-card, .ring-clock, #musicBtn[aria-pressed="true"] { animation: none !important; }
   * { transition-duration: 1ms !important; }
 }

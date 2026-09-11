@@ -1,16 +1,17 @@
 # pip
 
-A cutesy study timer with a little pixel creature who potters about the page while you work.
+A cutesy study timer with two little pixel creatures who potter about the page while you work.
 
 No accounts, no tracking, no build step, no third-party requests — a handful of static files that
 run entirely in the browser. Everything it remembers (your lengths, alarms, theme, today's
 sessions) lives in `localStorage` on your own device.
 
-## Pip
+## Pip and pop
 
-Pip is drawn from character grids in `assets/pet.js` — no image files, no sprite sheets, no
-libraries. He wanders the page on his own, walking along the bottom of the window and hopping up
-onto the top edge of the cards, and settles into one of sixteen things to do:
+Pip is terracotta. Pop is mint, with a little sprig on his head. Both are drawn from character
+grids in `assets/pet.js` — no image files, no sprite sheets, no libraries. They wander the page on
+their own, walking along the bottom of the window and hopping up onto the top edge of the cards,
+keeping out of each other's way, and each settles into one of sixteen things to do:
 
 | | | |
 |---|---|---|
@@ -25,13 +26,14 @@ Every one of them animates — his six legs tap while he types, shuffle while he
 he draws — and he sticks with a thing for anywhere from twenty seconds to two minutes rather than
 flitting about.
 
-What he picks is weighted by what *you're* doing. While a session runs he's mostly at the laptop,
-the whiteboard or the flashcards; on a break he naps, swims and plays; when nothing's running he
-just mooches. He cheers with confetti when a session lands, jumps when an alarm goes off, and says
-hello if you click him. He has no needs, no hunger and nothing to grind — he's company, not a
-chore.
+What they pick is weighted by what *you're* doing. While a session runs they're mostly at the
+laptop, the whiteboard or the flashcards; on a break they nap, swim and play; when nothing's
+running they just mooch. Every minute or two they wander over to each other for a natter. They
+cheer with confetti when a session lands, both come running when an alarm goes off, and either
+will say hello if you click him. They have no needs, no hunger and nothing to grind — they're
+company, not a chore.
 
-Press `p` (or the creature button, top right) to send him away if you need a clear screen.
+Press `p` (or the creature button, top right) to send them away if you need a clear screen.
 
 ## Using it
 
@@ -55,8 +57,21 @@ Clock-time alarms, independent of the timer — useful for "leave at 16:30" whil
 - `+ alarm` (or the `a` key), then type a time: `16:30`, `4:30pm`, `930`, `18` — or a distance
   from now, like `45m` or `2h`. A time that has already passed is set for tomorrow.
 - Every armed alarm is listed with its countdown, so you can see what's still coming.
-- When one goes off its row lights up, the tab title reads `alarm · pip`, and it chimes up to
-  three times over a minute and a half in case you stepped away. Tap it to dismiss.
+- When one goes off you get the full performance: the screen dims and pulses, a card drops in with
+  a ringing pixel clock and the time on it, both creatures drop what they're doing and come
+  hurrying to the middle of the screen to jump about, and the tab title reads `alarm · pip`. If
+  sound is on it also rings a two-tone alarm every six seconds for two minutes; muted, you get the
+  animation only. Dismiss with the button, `esc`, `enter` or space.
+
+### Study ambience
+
+The headphone button opens a small panel with four calm tracks — **drift** (warm chords), **rain**
+(a soft shower), **bells** (far away) and **hush** (deep and low) — plus a volume slider. `m`
+plays and pauses.
+
+None of it is a recording. Each track is a small machine built out of Web Audio oscillators and
+filtered noise that plays itself, so nothing loops and nothing is downloaded. It ducks down on its
+own while an alarm rings or a session lands, then comes back up.
 
 ### The clock
 
@@ -72,7 +87,8 @@ from the device.
 | `a` | add an alarm |
 | `e` | edit the length |
 | `↑` `↓` | ± 1 minute |
-| `p` | hide / show pip |
+| `m` | ambience on / off |
+| `p` | hide / show the pets |
 | `f` | fullscreen |
 | `s` | sound on / off |
 | `t` | day / night |
@@ -85,7 +101,9 @@ from the device.
 - While a timer runs it asks for a screen wake lock, so the phone or laptop shouldn't dim.
 - The bell icon turns on browser notifications for session, break and alarm endings.
 - Day/night follows the system by default; the moon/sun button overrides it.
-- Pip animates at 12fps and stops entirely when the tab is in the background.
+- The pets animate at 12fps and stop entirely when the tab is in the background.
+- Ambience needs a click to start — browsers don't allow audio before you interact with a page —
+  so it never resumes by itself on a reload, though it remembers the track and volume.
 
 ## Publishing it on GitHub Pages
 
@@ -104,7 +122,8 @@ It appears at `https://<user>.github.io/zentimer/` within a minute or so. On a p
 index.html                    markup
 assets/style.css              theme tokens, layout, animations
 assets/app.js                 clock, timer, breaks, alarms, storage, chimes
-assets/pet.js                 pip: sprites, behaviour, canvas
+assets/pet.js                 pip and pop: sprites, behaviour, canvas
+assets/music.js               the ambience, generated with Web Audio
 assets/fonts/fredoka-*.woff2  the typeface, self-hosted (SIL OFL, see OFL.txt)
 manifest.webmanifest          add-to-home-screen
 ```

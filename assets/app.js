@@ -14,7 +14,12 @@
     pips: $('pips'), stats: $('stats'),
     alarmList: $('alarmList'), alarmAdd: $('alarmAdd'), alarmInput: $('alarmInput'),
     soundBtn: $('soundBtn'), notifyBtn: $('notifyBtn'), petBtn: $('petBtn'),
-    themeBtn: $('themeBtn'), fullBtn: $('fullBtn')
+    themeBtn: $('themeBtn'), fullBtn: $('fullBtn'),
+    musicBtn: $('musicBtn'), musicPop: $('musicPop'), musicPlay: $('musicPlay'),
+    musicNext: $('musicNext'), musicTracks: $('musicTracks'), musicTrack: $('musicTrack'),
+    musicNote: $('musicNote'), musicVol: $('musicVol'),
+    ringOverlay: $('ringOverlay'), ringTime: $('ringTime'), ringHeading: $('ringHeading'),
+    ringDismiss: $('ringDismiss')
   };
 
   var MIN = 60000, HOUR = 3600000, DAY = 86400000;
@@ -24,7 +29,8 @@
 
   var settings = {
     hour12: false, sound: true, notify: false, theme: 'auto', pet: true,
-    focusMs: 30 * MIN, breakMs: 10 * MIN, task: ''
+    focusMs: 30 * MIN, breakMs: 10 * MIN, task: '',
+    music: { track: 0, volume: 0.35 }
   };
   var timer = { mode: 'focus', duration: settings.focusMs, remaining: settings.focusMs, endAt: null, status: 'idle' };
   var stats = { day: dayKey(), sessions: 0, focused: 0 };
@@ -282,6 +288,8 @@
       chime(finished === 'focus' ? 'focus' : 'break');
       notify(finished === 'focus' ? 'session complete' : 'break over',
              finished === 'focus' ? humanSpan(settings.breakMs) + ' break now' : 'ready when you are');
+      Music.duck(true);
+      setTimeout(function () { if (!anyRinging()) Music.duck(false); }, 3200);
       if (finished === 'focus') {
         Pet.event('complete');
         setTimeout(function () { Pet.event('breakStart'); }, 3600);
@@ -309,7 +317,7 @@
     save(); renderAlarms(Date.now(), true);
   }
 
-  var RECALL_EVERY = 30000, RECALLS = 3;
+  var RECALL_EVERY = 6000, RECALLS = 20;    // keeps ringing for two minutes unless dismissed
 
   function checkAlarms(now) {
     var changed = false;
@@ -322,7 +330,8 @@
         changed = true;
         chime('alarm');
         notify('alarm', timeOfDay(alarm.at));
-        Pet.event('alarm');
+        Music.duck(true);
+        Pet.alarm(true);
       } else if ((alarm.calls || 1) < RECALLS && now - (alarm.lastCall || now) >= RECALL_EVERY) {
         alarm.calls = (alarm.calls || 1) + 1;
         alarm.lastCall = now;
@@ -334,6 +343,28 @@
 
   function anyRinging() {
     return alarms.some(function (a) { return a.ringing; });
+  }
+
+  function dismissRinging() {
+    alarms = alarms.filter(function (a) { return !a.ringing; });
+    Music.duck(false);
+    Pet.alarm(false);
+    save();
+    renderAlarms(Date.now(), true);
+    render();
+  }
+
+  function syncRingOverlay() {
+    var ringing = alarms.filter(function (a) { return a.ringing; });
+    var on = ringing.length > 0;
+    if (el.ringOverlay.hidden === !on) return;          // already in the right state
+    el.ringOverlay.hidden = !on;
+    el.body.classList.toggle('is-ringing', on);
+    if (on) {
+      paint(el.ringTime, 'textContent', timeOfDay(ringing[0].at));
+      paint(el.ringHeading, 'textContent', ringing.length > 1 ? ringing.length + ' alarms!' : 'alarm!');
+      el.ringDismiss.focus();
+    }
   }
 
   /* ---------- sound ---------- */
@@ -349,10 +380,11 @@
   }
 
   var CHIMES = {
-    focus: { notes: [660, 880, 1046], gap: 0.13, decay: 1.1 },
-    break: { notes: [880, 660, 587], gap: 0.15, decay: 1.2 },
-    alarm: { notes: [784, 1046, 784, 1046], gap: 0.16, decay: 0.7 },
-    blip:  { notes: [880], gap: 0.1, decay: 0.35 }
+    focus: { notes: [660, 880, 1046], gap: 0.13, decay: 1.1, level: 0.14, voices: 1 },
+    break: { notes: [880, 660, 587], gap: 0.15, decay: 1.2, level: 0.14, voices: 1 },
+    blip:  { notes: [880], gap: 0.1, decay: 0.35, level: 0.12, voices: 1 },
+    // two tones, back and forth, doubled and detuned so it carries across a room
+    alarm: { notes: [988, 1319, 988, 1319, 988, 1319], gap: 0.16, decay: 0.4, level: 0.3, voices: 2 }
   };
 
   function chime(kind) {
@@ -363,16 +395,18 @@
     var begin = ctx.currentTime + 0.04;
     shape.notes.forEach(function (freq, i) {
       var at = begin + i * shape.gap;
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(0.14, at + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + shape.decay);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(at);
-      osc.stop(at + shape.decay + 0.05);
+      for (var v = 0; v < shape.voices; v++) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq * (v ? 1.006 : 1);
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(shape.level / shape.voices, at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + shape.decay);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(at);
+        osc.stop(at + shape.decay + 0.05);
+      }
     });
   }
 
@@ -612,6 +646,7 @@
     syncRingAnimation();
     renderStats();
     renderAlarms(now);
+    syncRingOverlay();
   }
 
   /* ---------- loop ---------- */
@@ -684,9 +719,18 @@
 
   el.alarmList.addEventListener('click', function (event) {
     var remove = event.target.closest('[data-remove]');
-    if (remove) { removeAlarm(remove.dataset.remove); return; }
     var face = event.target.closest('.alarm-face');
-    if (face) removeAlarm(face.dataset.id);   // tapping an alarm dismisses it
+    var id = remove ? remove.dataset.remove : face ? face.dataset.id : null;
+    if (!id) return;
+    var target = alarms.filter(function (a) { return a.id === id; })[0];
+    removeAlarm(id);                          // tapping an alarm dismisses it
+    if (target && target.ringing && !anyRinging()) { Music.duck(false); Pet.alarm(false); }
+    render();
+  });
+
+  el.ringDismiss.addEventListener('click', dismissRinging);
+  el.ringOverlay.addEventListener('click', function (event) {
+    if (event.target === el.ringOverlay) dismissRinging();
   });
 
   /* ---------- controls ---------- */
@@ -750,6 +794,71 @@
     save();
   });
 
+  function paintMusic() {
+    var track = Music.tracks()[Music.current()];
+    paint(el.musicTrack, 'textContent', track.name);
+    paint(el.musicNote, 'textContent', track.note);
+    el.body.classList.toggle('music-on', Music.isPlaying());
+    el.musicBtn.setAttribute('aria-pressed', String(Music.isPlaying()));
+    el.musicPlay.setAttribute('aria-label', Music.isPlaying() ? 'Pause ambience' : 'Play ambience');
+    Array.prototype.forEach.call(el.musicTracks.children, function (chip, i) {
+      chip.setAttribute('aria-current', String(i === Music.current()));
+    });
+  }
+
+  function buildMusicPanel() {
+    Music.restore(settings.music);
+    el.musicVol.value = Math.round(Music.volume() * 100);
+    Music.tracks().forEach(function (track, i) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.textContent = track.name;
+      chip.addEventListener('click', function () {
+        Music.select(i);
+        if (!Music.isPlaying()) Music.play();
+        settings.music.track = i;
+        save();
+        paintMusic();
+      });
+      el.musicTracks.appendChild(chip);
+    });
+    paintMusic();
+  }
+
+  function toggleMusicPanel(force) {
+    var open = typeof force === 'boolean' ? force : el.musicPop.hidden;
+    el.musicPop.hidden = !open;
+    el.musicBtn.setAttribute('aria-expanded', String(open));
+  }
+
+  el.musicBtn.addEventListener('click', function (event) {
+    event.stopPropagation();
+    toggleMusicPanel();
+  });
+
+  el.musicPop.addEventListener('click', function (event) { event.stopPropagation(); });
+
+  document.addEventListener('click', function () {
+    if (!el.musicPop.hidden) toggleMusicPanel(false);
+  });
+
+  el.musicPlay.addEventListener('click', function () {
+    Music.toggle();
+    paintMusic();
+  });
+
+  el.musicNext.addEventListener('click', function () {
+    settings.music.track = Music.select(Music.current() + 1);
+    if (!Music.isPlaying()) Music.play();
+    save();
+    paintMusic();
+  });
+
+  el.musicVol.addEventListener('input', function () {
+    settings.music.volume = Music.setVolume(+el.musicVol.value / 100);
+    save();
+  });
+
   function effectiveTheme() {
     if (settings.theme !== 'auto') return settings.theme;
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -776,6 +885,13 @@
     var tag = (event.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea') return;
 
+    if (anyRinging() && (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      dismissRinging();
+      return;
+    }
+    if (event.key === 'Escape' && !el.musicPop.hidden) { toggleMusicPanel(false); return; }
+
     switch (event.key) {
       case ' ': case 'Spacebar':
         event.preventDefault(); toggle(); break;
@@ -785,6 +901,7 @@
       case 'r': case 'R': reset(); break;
       case 'a': case 'A': event.preventDefault(); beginAlarm(); break;
       case 'e': case 'E': event.preventDefault(); beginEdit(); break;
+      case 'm': case 'M': Music.toggle(); paintMusic(); break;
       case 'p': case 'P': el.petBtn.click(); break;
       case 'f': case 'F': el.fullBtn.click(); break;
       case 's': case 'S': el.soundBtn.click(); break;
@@ -827,6 +944,12 @@
         settings.pet = stored.settings.pet !== false;
         settings.theme = stored.settings.theme || 'auto';
         settings.task = String(stored.settings.task || '').slice(0, 42);
+        if (stored.settings.music) {
+          settings.music = {
+            track: stored.settings.music.track || 0,
+            volume: typeof stored.settings.music.volume === 'number' ? stored.settings.music.volume : 0.35
+          };
+        }
         settings.focusMs = clampDuration(stored.settings.focusMs || stored.duration || settings.focusMs);
         settings.breakMs = clampDuration(stored.settings.breakMs || settings.breakMs);
       }
@@ -863,7 +986,9 @@
     if (timer.status === 'running') requestWakeLock();
     render();
 
+    buildMusicPanel();
     Pet.init();
     Pet.setEnabled(settings.pet);
+    if (anyRinging()) Pet.alarm(true);
   })();
 })();

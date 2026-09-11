@@ -55,6 +55,13 @@ window.Pet = (function () {
 
   var TAILS = [['d.', '.d'], ['.d', 'd.']];
 
+  var CREST = ['..e.', '.ee.', 'e..e'];          // pop's little sprig
+
+  var SKINS = {
+    pip: { o: '#c9714c', d: '#a4552f', l: '#e28f68', h: '#e8a086' },
+    pop: { o: '#5aa79a', d: '#3d7f74', l: '#7ac6b5', h: '#93d6c4' }
+  };
+
   /* ---------- props ---------- */
 
   var PROPS = {
@@ -213,27 +220,25 @@ window.Pet = (function () {
     [3, 4], [4, 4], [5, 4], [6, 4], [8, 4]
   ];
 
+
   /* ---------- state ---------- */
 
-  var canvas, ctx, hit, bubble;
-  var pet = {
-    x: 60, y: 0, dir: 1, perch: 0,
-    state: 'idle', act: null, until: 0, since: 0, targetX: null,
-    hop: null, blinkAt: 0, hearts: [], scribbles: 0
-  };
+  var canvas, ctx;
+  var cast = [];
   var mode = 'idle';
   var enabled = true;
   var reduced = false;
+  var alarming = false;
   var confetti = [];
   var perchList = [];
   var lastPerchScan = 0;
   var lastFrame = 0;
   var clock = 0;
   var running = false;
-  var bubbleUntil = 0;
   var lastChatter = 0;
+  var meetAt = 40;
 
-  /* min/max are seconds — he sticks with a thing for a good while */
+  /* min/max are seconds — they stick with a thing for a good while */
   var ACTIVITIES = [
     { id: 'laptop',  min: 50, max: 120, focus: 34, brk: 3,  idle: 9 },
     { id: 'board',   min: 35, max: 70,  focus: 13, brk: 4,  idle: 8 },
@@ -262,19 +267,30 @@ window.Pet = (function () {
     pet:        ['hi!', 'hello!', 'boop', 'hehe', 'oh! hi'],
     halfway:    ['halfway!', 'keep going', 'doing great'],
     nearly:     ['nearly there', 'last stretch', 'almost!'],
-    idle:       ['still here', 'you got this', 'hi again', '*pootles about*']
+    idle:       ['still here', 'you got this', 'hi again', '*pootles about*'],
+    chat:       ['hi pop!', 'hi pip!', 'hehe', '*chats*', 'how goes it?']
   };
+
+  function make(name, skin, crest) {
+    return {
+      name: name, skin: SKINS[skin], crest: crest,
+      x: 60, y: 0, dir: 1, perch: 0,
+      state: 'idle', act: null, until: 0, since: 0, targetX: null,
+      hop: null, blinkAt: 0, hearts: [], scribbles: 0,
+      hit: null, bubble: null, bubbleUntil: 0
+    };
+  }
 
   /* ---------- drawing ---------- */
 
-  function grid(sprite, x, y, flip, tint) {
+  function grid(sprite, x, y, flip, tint, skin) {
     var w = sprite[0].length;
     for (var row = 0; row < sprite.length; row++) {
       var line = sprite[row];
       for (var col = 0; col < line.length; col++) {
         var ch = line[col];
         if (ch === '.' || ch === ' ') continue;
-        var color = tint && ch === 'k' ? tint : COLORS[ch];
+        var color = tint && ch === 'k' ? tint : (skin && skin[ch]) || COLORS[ch];
         if (!color) continue;
         var px = flip ? x + (w - 1 - col) * PX : x + col * PX;
         ctx.fillStyle = color;
@@ -283,10 +299,10 @@ window.Pet = (function () {
     }
   }
 
-  /* a spot just past the creature's side, so props never cross his face */
-  function beside(prop, flip, gap) {
+  /* a spot just past a creature's side, so props never cross his face */
+  function beside(c, prop, flip, gap) {
     var width = prop[0].length;
-    return flip ? Math.round(pet.x) - (width + gap) * PX : Math.round(pet.x) + (GW + gap) * PX;
+    return flip ? Math.round(c.x) - (width + gap) * PX : Math.round(c.x) + (GW + gap) * PX;
   }
 
   function shadow(x, y, width) {
@@ -307,7 +323,11 @@ window.Pet = (function () {
       x1: Math.max(60, window.innerWidth - 8 - GW * PX)
     }];
 
-    if (window.innerWidth < 620) { perchList = list; if (pet.perch >= 1) pet.perch = 0; return; }
+    if (window.innerWidth < 620) {
+      perchList = list;
+      for (var n = 0; n < cast.length; n++) if (cast[n].perch >= 1) cast[n].perch = 0;
+      return;
+    }
 
     var cards = document.querySelectorAll('[data-perch]');
     for (var i = 0; i < cards.length; i++) {
@@ -316,10 +336,10 @@ window.Pet = (function () {
       list.push({ y: Math.round(r.top) + 3, x0: Math.round(r.left) + 6, x1: Math.round(r.right) - 6 - GW * PX });
     }
     perchList = list.filter(function (p) { return p.x1 > p.x0 + 10; });
-    if (pet.perch >= perchList.length) pet.perch = 0;
+    for (var m = 0; m < cast.length; m++) if (cast[m].perch >= perchList.length) cast[m].perch = 0;
   }
 
-  function currentPerch() { return perchList[pet.perch] || perchList[0]; }
+  function perchOf(c) { return perchList[c.perch] || perchList[0]; }
 
   /* ---------- choosing what to do next ---------- */
 
@@ -338,70 +358,84 @@ window.Pet = (function () {
     return ACTIVITIES[0];
   }
 
-  function planNext() {
+  /* keep a little distance from the other one */
+  function clearOf(c, x) {
+    for (var i = 0; i < cast.length; i++) {
+      var other = cast[i];
+      if (other === c || other.perch !== c.perch) continue;
+      if (Math.abs(other.x - x) < GW * PX + 20) {
+        return other.x > x ? x - (GW * PX + 30) : x + (GW * PX + 30);
+      }
+    }
+    return x;
+  }
+
+  function planNext(c) {
     var activity = pickActivity();
     var wander = Math.random() < (reduced ? 0 : 0.35);
 
     if (wander && perchList.length) {
       var toOther = perchList.length > 1 && Math.random() < 0.4;
-      var target = toOther ? Math.floor(Math.random() * perchList.length) : pet.perch;
-      var perch = perchList[target] || currentPerch();
+      var target = toOther ? Math.floor(Math.random() * perchList.length) : c.perch;
+      var perch = perchList[target] || perchOf(c);
       var x = perch.x0 + Math.random() * (perch.x1 - perch.x0);
-      if (target !== pet.perch) { startHop(target, x, activity); return; }
-      pet.targetX = x;
-      pet.state = 'walk';
-      pet.act = activity;
+      if (target !== c.perch) { startHop(c, target, x, activity); return; }
+      c.targetX = clamp(clearOf(c, x), perch.x0, perch.x1);
+      c.state = 'walk';
+      c.act = activity;
       return;
     }
-    beginActivity(activity);
+    beginActivity(c, activity);
   }
 
-  function beginActivity(activity) {
-    pet.state = 'act';
-    pet.act = activity;
-    pet.since = clock;
-    pet.until = clock + activity.min + Math.random() * (activity.max - activity.min);
-    pet.scribbles = 0;
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function beginActivity(c, activity) {
+    c.state = 'act';
+    c.act = activity;
+    c.since = clock;
+    c.until = clock + activity.min + Math.random() * (activity.max - activity.min);
+    c.scribbles = 0;
   }
 
-  function startHop(perchIndex, x, activity) {
-    var from = currentPerch(), to = perchList[perchIndex];
-    if (!from || !to) { beginActivity(activity); return; }
-    pet.hop = { fromX: pet.x, fromY: from.y, toX: x, toY: to.y, t: 0, perch: perchIndex };
-    pet.state = 'hop';
-    pet.act = activity;
-    pet.dir = x >= pet.x ? 1 : -1;
+  function startHop(c, perchIndex, x, activity) {
+    var from = perchOf(c), to = perchList[perchIndex];
+    if (!from || !to) { beginActivity(c, activity); return; }
+    c.hop = { fromX: c.x, fromY: from.y, toX: x, toY: to.y, t: 0, perch: perchIndex };
+    c.state = 'hop';
+    c.act = activity;
+    c.dir = x >= c.x ? 1 : -1;
   }
 
   /* ---------- reactions ---------- */
 
-  function react(kind) {
+  function react(c, kind) {
     if (!enabled) return;
     if (kind === 'cheer') {
-      pet.state = 'cheer';
-      pet.until = clock + 3.2;
-      burstConfetti();
-      say(pick(LINES.complete));
+      c.state = 'cheer';
+      c.until = clock + 3.2;
+      burstConfetti(c);
+      say(c, pick(LINES.complete));
     } else if (kind === 'startle') {
-      pet.state = 'startle';
-      pet.until = clock + 2.4;
-      say(pick(LINES.alarm));
+      c.state = 'startle';
+      c.until = clock + 2.4;
+      say(c, pick(LINES.alarm));
     } else if (kind === 'wave') {
-      pet.state = 'wave';
-      pet.until = clock + 2.6;
+      c.state = 'wave';
+      c.until = clock + 2.6;
       for (var i = 0; i < 3; i++) {
-        pet.hearts.push({ x: pet.x + 5 * PX + Math.random() * 6 * PX, y: pet.y - GH * PX, life: 1 + Math.random() });
+        c.hearts.push({ x: c.x + 5 * PX + Math.random() * 6 * PX, y: c.y - GH * PX, life: 1 + Math.random() });
       }
-      say(pick(LINES.pet));
+      say(c, pick(LINES.pet));
     }
   }
 
-  function burstConfetti() {
+  function burstConfetti(c) {
     var palette = ['y', 'n', 'p', 'r', 'c'];
-    for (var i = 0; i < 26; i++) {
+    for (var i = 0; i < 22; i++) {
       confetti.push({
-        x: pet.x + GW * PX / 2,
-        y: pet.y - GH * PX,
+        x: c.x + GW * PX / 2,
+        y: c.y - GH * PX,
         vx: (Math.random() - 0.5) * 170,
         vy: -90 - Math.random() * 130,
         life: 1.4 + Math.random() * 0.9,
@@ -412,110 +446,144 @@ window.Pet = (function () {
 
   function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
 
-  function say(text) {
-    if (!bubble || !enabled || !text) return;
-    bubble.textContent = text;
-    bubble.classList.add('is-on');
-    bubbleUntil = clock + 3.4;
+  function say(c, text) {
+    if (!c.bubble || !enabled || !text) return;
+    c.bubble.textContent = text;
+    c.bubble.classList.add('is-on');
+    c.bubbleUntil = clock + 3.4;
+  }
+
+  /* the two of them wander over for a natter now and then */
+  function meetUp() {
+    if (cast.length < 2 || alarming) return;
+    var a = cast[0], b = cast[1];
+    if (a.state !== 'act' || b.state !== 'act') return;
+    var perch = perchList[a.perch];
+    if (!perch) return;
+    var middle = clamp((a.x + b.x) / 2, perch.x0 + GW * PX, perch.x1 - GW * PX);
+    b.perch = a.perch;
+    a.targetX = middle - GW * PX * 0.75;
+    b.targetX = middle + GW * PX * 0.75;
+    a.state = b.state = 'walk';
+    a.act = b.act = { id: 'chat', min: 9, max: 15 };
   }
 
   /* ---------- the step ---------- */
+
+  function stepOne(c, dt) {
+    var perch = perchOf(c);
+    if (!perch) return;
+
+    if (c.state !== 'hop') {
+      c.y = perch.y;
+      c.x = clamp(c.x, perch.x0, perch.x1);
+    }
+
+    if (clock > c.blinkAt) c.blinkAt = clock + 3 + Math.random() * 5;
+
+    switch (c.state) {
+      case 'walk':
+        var delta = c.targetX - c.x;
+        c.dir = delta >= 0 ? 1 : -1;
+        var speed = (alarming ? 95 : 40) * dt;
+        if (Math.abs(delta) <= speed) {
+          c.x = c.targetX;
+          if (alarming) { c.state = 'alarming'; c.since = clock; }
+          else beginActivity(c, c.act || pickActivity());
+        } else {
+          c.x += c.dir * speed;
+        }
+        break;
+
+      case 'hop':
+        c.hop.t += dt / 0.75;
+        var t = Math.min(1, c.hop.t);
+        c.x = c.hop.fromX + (c.hop.toX - c.hop.fromX) * t;
+        c.y = c.hop.fromY + (c.hop.toY - c.hop.fromY) * t - Math.sin(t * Math.PI) * 46;
+        if (t >= 1) {
+          c.perch = c.hop.perch;
+          c.hop = null;
+          beginActivity(c, c.act || pickActivity());
+        }
+        break;
+
+      case 'act':
+        if (c.act && c.act.id === 'board' && Math.random() < dt * 0.9) {
+          c.scribbles = Math.min(SCRIBBLES.length, c.scribbles + 1);
+        }
+        if (c.act && c.act.id === 'chat') {
+          c.dir = (cast[0] === c ? 1 : -1);
+          if (Math.random() < dt * 0.12) say(c, pick(LINES.chat));
+        }
+        if (clock > c.until) planNext(c);
+        break;
+
+      case 'alarming':
+        break;
+
+      case 'cheer': case 'startle': case 'wave':
+        if (clock > c.until) planNext(c);
+        break;
+
+      default:
+        planNext(c);
+    }
+
+    if (c.bubbleUntil && clock > c.bubbleUntil) {
+      c.bubbleUntil = 0;
+      c.bubble.classList.remove('is-on');
+    }
+  }
 
   function step(dt) {
     clock += dt;
 
     if (clock - lastPerchScan > 0.6) { lastPerchScan = clock; scanPerches(); }
-    var perch = currentPerch();
-    if (!perch) return;
 
-    if (pet.state !== 'hop') {
-      pet.y = perch.y;
-      if (pet.x < perch.x0) pet.x = perch.x0;
-      if (pet.x > perch.x1) pet.x = perch.x1;
+    for (var i = 0; i < cast.length; i++) stepOne(cast[i], dt);
+
+    if (!alarming && clock > meetAt) {
+      meetAt = clock + 90 + Math.random() * 120;
+      if (Math.random() < 0.6) meetUp();
     }
 
-    if (clock > pet.blinkAt) pet.blinkAt = clock + 3 + Math.random() * 5;
-
-    switch (pet.state) {
-      case 'walk':
-        var delta = pet.targetX - pet.x;
-        pet.dir = delta >= 0 ? 1 : -1;
-        var speed = 40 * dt;
-        if (Math.abs(delta) <= speed) {
-          pet.x = pet.targetX;
-          beginActivity(pet.act || pickActivity());
-        } else {
-          pet.x += pet.dir * speed;
-        }
-        break;
-
-      case 'hop':
-        pet.hop.t += dt / 0.75;
-        var t = Math.min(1, pet.hop.t);
-        pet.x = pet.hop.fromX + (pet.hop.toX - pet.hop.fromX) * t;
-        pet.y = pet.hop.fromY + (pet.hop.toY - pet.hop.fromY) * t - Math.sin(t * Math.PI) * 46;
-        if (t >= 1) {
-          pet.perch = pet.hop.perch;
-          pet.hop = null;
-          beginActivity(pet.act || pickActivity());
-        }
-        break;
-
-      case 'act':
-        if (pet.act && pet.act.id === 'board' && Math.random() < dt * 0.9) {
-          pet.scribbles = Math.min(SCRIBBLES.length, pet.scribbles + 1);
-        }
-        if (clock > pet.until) planNext();
-        break;
-
-      case 'cheer': case 'startle': case 'wave':
-        if (clock > pet.until) planNext();
-        break;
-
-      default:
-        planNext();
-    }
-
-    // idle chatter, rarely
     if (clock - lastChatter > 90 && Math.random() < dt * 0.04) {
       lastChatter = clock;
-      say(pick(LINES.idle));
+      say(cast[Math.floor(Math.random() * cast.length)], pick(LINES.idle));
     }
 
-    for (var i = confetti.length - 1; i >= 0; i--) {
-      var c = confetti[i];
-      c.life -= dt;
-      c.vy += 420 * dt;
-      c.x += c.vx * dt;
-      c.y += c.vy * dt;
-      if (c.life <= 0) confetti.splice(i, 1);
+    for (var f = confetti.length - 1; f >= 0; f--) {
+      var particle = confetti[f];
+      particle.life -= dt;
+      particle.vy += 420 * dt;
+      particle.x += particle.vx * dt;
+      particle.y += particle.vy * dt;
+      if (particle.life <= 0) confetti.splice(f, 1);
     }
 
-    for (var h = pet.hearts.length - 1; h >= 0; h--) {
-      pet.hearts[h].life -= dt;
-      pet.hearts[h].y -= 22 * dt;
-      if (pet.hearts[h].life <= 0) pet.hearts.splice(h, 1);
-    }
-
-    if (bubbleUntil && clock > bubbleUntil) {
-      bubbleUntil = 0;
-      bubble.classList.remove('is-on');
+    for (var n = 0; n < cast.length; n++) {
+      var hearts = cast[n].hearts;
+      for (var h = hearts.length - 1; h >= 0; h--) {
+        hearts[h].life -= dt;
+        hearts[h].y -= 22 * dt;
+        if (hearts[h].life <= 0) hearts.splice(h, 1);
+      }
     }
   }
 
   /* ---------- pose: body, legs and how he sits in the world ---------- */
 
-  function poseFor(beat) {
-    var id = pet.state === 'act' && pet.act ? pet.act.id : null;
-    var elapsed = clock - pet.since;
+  function poseFor(c, beat) {
+    var id = c.state === 'act' && c.act ? c.act.id : null;
+    var elapsed = clock - c.since;
     var pose = {
-      eyes: clock > pet.blinkAt - 0.18 ? 'blink' : 'open',
+      eyes: clock > c.blinkAt - 0.18 ? 'blink' : 'open',
       legs: LEGS.stand,
       dy: 0,
       lean: 0
     };
 
-    switch (pet.state) {
+    switch (c.state) {
       case 'walk':
         pose.legs = beat % 2 ? LEGS.stepA : LEGS.stepB;
         pose.dy = beat % 2 ? -PX / 2 : 0;
@@ -524,13 +592,17 @@ window.Pet = (function () {
         pose.legs = LEGS.jump;
         pose.eyes = 'happy';
         return pose;
+      case 'alarming':                                  // hopping on the spot, eyes wide
+        pose.eyes = 'open';
+        pose.legs = LEGS.jump;
+        pose.dy = -Math.abs(Math.sin(clock * 7)) * 20;
+        return pose;
       case 'cheer':
         pose.eyes = 'happy';
         pose.legs = LEGS.jump;
         pose.dy = -Math.abs(Math.sin(clock * 6)) * 14;
         return pose;
       case 'startle':
-        pose.eyes = 'open';
         pose.legs = beat % 2 ? LEGS.stepA : LEGS.stepB;
         pose.dy = -Math.abs(Math.sin(clock * 10)) * 6;
         return pose;
@@ -555,7 +627,6 @@ window.Pet = (function () {
         pose.dy = Math.sin(elapsed * 0.9) * 1;
         break;
       case 'mug':                                       // leans in for a sip now and then
-        pose.legs = LEGS.stand;
         pose.lean = (elapsed % 6) < 1.2 ? PX : 0;
         break;
       case 'music':                                     // head bob
@@ -589,13 +660,18 @@ window.Pet = (function () {
         pose.dy = beat % 8 < 4 ? -PX / 2 : 0;
         break;
       case 'balloon':
-        pose.eyes = clock > pet.blinkAt - 0.18 ? 'blink' : 'happy';
+        pose.eyes = clock > c.blinkAt - 0.18 ? 'blink' : 'happy';
         pose.dy = Math.sin(clock * 1.6) * 2;
         break;
       case 'stretch':
         pose.eyes = 'happy';
         pose.legs = beat % 12 < 6 ? LEGS.stepA : LEGS.stepB;
         pose.dy = -Math.abs(Math.sin(clock * 1.6)) * 7;
+        break;
+      case 'chat':                                      // nattering away
+        pose.eyes = (beat % 24 < 12) ? 'happy' : pose.eyes;
+        pose.legs = beat % 10 < 5 ? LEGS.tapMid : LEGS.stand;
+        pose.dy = Math.sin(clock * 2.2) * 1.5;
         break;
       case 'look':                                      // an occasional shuffle on the spot
         pose.legs = (elapsed % 5) < 0.5 ? LEGS.stepA : LEGS.stand;
@@ -606,29 +682,27 @@ window.Pet = (function () {
 
   /* ---------- the paint ---------- */
 
-  function paint() {
-    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-    if (!enabled) return;
-
+  function paintOne(c) {
     var beat = Math.floor(clock * FPS);
-    var pose = poseFor(beat);
-    var x = Math.round(pet.x);
-    var y = Math.round(pet.y + pose.dy);
+    var pose = poseFor(c, beat);
+    var x = Math.round(c.x);
+    var y = Math.round(c.y + pose.dy);
     var top = y - GH * PX;
-    var flip = pet.dir < 0;
+    var flip = c.dir < 0;
     var ink = inkColor();
-    var id = pet.state === 'act' && pet.act ? pet.act.id : null;
-    var elapsed = clock - pet.since;
+    var id = c.state === 'act' && c.act ? c.act.id : null;
+    var elapsed = clock - c.since;
     var lean = flip ? -pose.lean : pose.lean;
+    var skin = c.skin;
 
-    if (pet.state !== 'hop' && id !== 'swim') shadow(x, y, GW * PX);
+    if (c.state !== 'hop' && c.state !== 'alarming' && id !== 'swim') shadow(x, y, GW * PX);
 
     // things that stand behind him
     if (id === 'board') {
       var boardX = flip ? x - 13 * PX : x + (GW + 1) * PX;
       var boardY = y - PROPS.board.length * PX;
       grid(PROPS.board, boardX, boardY, false);
-      for (var s = 0; s < pet.scribbles; s++) {
+      for (var s = 0; s < c.scribbles; s++) {
         ctx.fillStyle = COLORS.k;
         ctx.fillRect(boardX + SCRIBBLES[s][0] * PX, boardY + SCRIBBLES[s][1] * PX, PX, PX);
       }
@@ -639,9 +713,10 @@ window.Pet = (function () {
     }
 
     // the creature
-    grid(BODIES[pose.eyes], x + lean, top, flip);
-    grid(pose.legs, x, top + 10 * PX, flip);
-    grid(TAILS[beat % 8 < 4 ? 0 : 1], flip ? x + GW * PX : x - 2 * PX, top + 5 * PX, flip);
+    grid(BODIES[pose.eyes], x + lean, top, flip, null, skin);
+    grid(pose.legs, x, top + 10 * PX, flip, null, skin);
+    grid(TAILS[beat % 8 < 4 ? 0 : 1], flip ? x + GW * PX : x - 2 * PX, top + 5 * PX, flip, null, skin);
+    if (c.crest) grid(CREST, x + 6 * PX + lean, top - 2 * PX, flip);
 
     if (id === 'music') {
       grid(PROPS.phones, x + 2 * PX + lean, top - PX, flip, ink);
@@ -650,41 +725,36 @@ window.Pet = (function () {
 
     // things he holds or uses
     if (id === 'laptop') {
-      grid(PROPS.laptop, beside(PROPS.laptop, flip, -1), y - PROPS.laptop.length * PX, flip);
+      grid(PROPS.laptop, beside(c, PROPS.laptop, flip, -1), y - PROPS.laptop.length * PX, flip);
     }
     if (id === 'read') {
-      var page = (elapsed % 4) < 0.5 ? PROPS.bookOpen : PROPS.book;
-      grid(page, beside(PROPS.book, flip, -2), y - 8 * PX, flip);
+      grid((elapsed % 4) < 0.5 ? PROPS.bookOpen : PROPS.book, beside(c, PROPS.book, flip, -2), y - 8 * PX, flip);
     }
     if (id === 'cards') {
-      var card = (elapsed % 5) < 2.5 ? PROPS.card : PROPS.cardBack;
-      grid(card, beside(PROPS.card, flip, -2), y - 8 * PX, flip);
+      grid((elapsed % 5) < 2.5 ? PROPS.card : PROPS.cardBack, beside(c, PROPS.card, flip, -2), y - 8 * PX, flip);
     }
     if (id === 'mug') {
-      grid(PROPS.mug, beside(PROPS.mug, flip, -1), y - 6 * PX, flip);
+      grid(PROPS.mug, beside(c, PROPS.mug, flip, -1), y - 6 * PX, flip);
       if (beat % 8 < 4) {
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.fillRect(beside(PROPS.mug, flip, -1) + 2 * PX, y - 8 * PX, PX, PX);
+        ctx.fillRect(beside(c, PROPS.mug, flip, -1) + 2 * PX, y - 8 * PX, PX, PX);
       }
     }
     if (id === 'snack') {
       var bites = elapsed % 15;
-      var cookie = bites < 5 ? PROPS.cookie : bites < 10 ? PROPS.cookieBit : PROPS.cookieGone;
-      grid(cookie, beside(PROPS.cookie, flip, -2), y - 7 * PX, flip);
+      grid(bites < 5 ? PROPS.cookie : bites < 10 ? PROPS.cookieBit : PROPS.cookieGone,
+           beside(c, PROPS.cookie, flip, -2), y - 7 * PX, flip);
     }
     if (id === 'ball') {
-      var bounce = Math.abs(Math.sin(clock * 3.4)) * 30;
-      grid(PROPS.ball, beside(PROPS.ball, flip, 0), y - 6 * PX - bounce, flip);
+      grid(PROPS.ball, beside(c, PROPS.ball, flip, 0), y - 6 * PX - Math.abs(Math.sin(clock * 3.4)) * 30, flip);
     }
     if (id === 'plant') {
-      var potX = beside(PROPS.pot, flip, 0);
+      var potX = beside(c, PROPS.pot, flip, 0);
       var grown = elapsed % 18;
-      var sprout = grown < 6 ? PROPS.sprout0 : grown < 12 ? PROPS.sprout1 : PROPS.sprout2;
-      grid(sprout, potX, y - 7 * PX, flip);
+      grid(grown < 6 ? PROPS.sprout0 : grown < 12 ? PROPS.sprout1 : PROPS.sprout2, potX, y - 7 * PX, flip);
       grid(PROPS.pot, potX, y - 3 * PX, flip);
       var pouring = (elapsed % 7) < 2.5;
-      var canX = potX + (flip ? -2 : 2) * PX;
-      grid(PROPS.can, canX, y - (pouring ? 11 : 10) * PX, flip);
+      grid(PROPS.can, potX + (flip ? -2 : 2) * PX, y - (pouring ? 11 : 10) * PX, flip);
       if (pouring && beat % 4 < 2) {
         ctx.fillStyle = COLORS.c;
         ctx.fillRect(potX + (flip ? 1 : 4) * PX, y - 9 * PX, PX, PX * 2);
@@ -694,16 +764,16 @@ window.Pet = (function () {
       var stack = 1 + Math.floor((elapsed % 24) / 6);   // builds to four, then starts again
       for (var t = 0; t < stack; t++) {
         var tint = ['y', 'n', 'c', 'p'][t % 4];
-        var block = PROPS.block.map(function (row) { return row.replace(/y/g, tint); });
-        grid(block, beside(PROPS.block, flip, -1), y - (t + 1) * 4 * PX, flip);
+        grid(PROPS.block.map(function (row) { return row.replace(/y/g, tint); }),
+             beside(c, PROPS.block, flip, -1), y - (t + 1) * 4 * PX, flip);
       }
     }
     if (id === 'sweep') {
       var swing = Math.sin(clock * 2.2) * 2 * PX;
-      grid(PROPS.broom, beside(PROPS.broom, flip, -2) + (flip ? -swing : swing), y - PROPS.broom.length * PX, flip);
+      grid(PROPS.broom, beside(c, PROPS.broom, flip, -2) + (flip ? -swing : swing), y - PROPS.broom.length * PX, flip);
       if (beat % 6 < 3) {
         ctx.fillStyle = 'rgba(47,38,34,0.18)';
-        ctx.fillRect(beside(PROPS.broom, flip, -3) + (flip ? -swing : swing), y - PX, PX, PX);
+        ctx.fillRect(beside(c, PROPS.broom, flip, -3) + (flip ? -swing : swing), y - PX, PX, PX);
       }
     }
     if (id === 'swim') {
@@ -724,32 +794,43 @@ window.Pet = (function () {
         ctx.globalAlpha = 1;
       }
     }
-    if (pet.state === 'startle') grid(PROPS.bang, x + GW * PX / 2, top - 7 * PX, false, ink);
-    if (pet.state === 'cheer') {
+    if (c.state === 'startle' || c.state === 'alarming') {
+      grid(PROPS.bang, x + GW * PX / 2, top - 7 * PX, false, COLORS.r);
+      if (c.state === 'alarming') grid(PROPS.bang, x + GW * PX / 2 - 4 * PX, top - 6 * PX, false, COLORS.r);
+    }
+    if (c.state === 'cheer') {
       for (var k = 0; k < 3; k++) {
         grid(PROPS.spark, x + (k - 1) * 7 * PX + GW * PX / 2, top - 4 * PX - (k % 2) * PX, false);
       }
     }
     if (id === 'stretch' && beat % 12 < 6) grid(PROPS.note, x + GW * PX, top - 3 * PX, false, ink);
+    if (id === 'chat' && beat % 20 < 4) grid(PROPS.heart, x + GW * PX / 2, top - 4 * PX, false);
 
-    for (var hh = 0; hh < pet.hearts.length; hh++) {
-      ctx.globalAlpha = Math.min(1, pet.hearts[hh].life);
-      grid(PROPS.heart, pet.hearts[hh].x, pet.hearts[hh].y, false);
+    for (var hh = 0; hh < c.hearts.length; hh++) {
+      ctx.globalAlpha = Math.min(1, c.hearts[hh].life);
+      grid(PROPS.heart, c.hearts[hh].x, c.hearts[hh].y, false);
       ctx.globalAlpha = 1;
     }
+
+    // the hit area and any speech follow him about
+    c.hit.style.transform = 'translate(' + x + 'px,' + top + 'px)';
+    if (c.bubbleUntil) {
+      var bubX = Math.min(window.innerWidth - c.bubble.offsetWidth - 8, Math.max(8, x - 10));
+      c.bubble.style.transform = 'translate(' + bubX + 'px,' + (top - c.bubble.offsetHeight - 12) + 'px)';
+    }
+  }
+
+  function paint() {
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    if (!enabled) return;
+
+    for (var i = 0; i < cast.length; i++) paintOne(cast[i]);
 
     for (var cc = 0; cc < confetti.length; cc++) {
       ctx.globalAlpha = Math.min(1, confetti[cc].life);
       ctx.fillStyle = confetti[cc].color;
       ctx.fillRect(Math.round(confetti[cc].x), Math.round(confetti[cc].y), PX, PX);
       ctx.globalAlpha = 1;
-    }
-
-    // the hit area and any speech follow him about
-    hit.style.transform = 'translate(' + x + 'px,' + top + 'px)';
-    if (bubbleUntil) {
-      var bubX = Math.min(window.innerWidth - bubble.offsetWidth - 8, Math.max(8, x - 10));
-      bubble.style.transform = 'translate(' + bubX + 'px,' + (top - bubble.offsetHeight - 12) + 'px)';
     }
   }
 
@@ -766,7 +847,11 @@ window.Pet = (function () {
 
   function resize() {
     PX = window.innerWidth < 620 ? 4 : 5;
-    if (hit) { hit.style.width = GW * PX + 'px'; hit.style.height = GH * PX + 'px'; }
+    for (var i = 0; i < cast.length; i++) {
+      if (!cast[i].hit) continue;
+      cast[i].hit.style.width = GW * PX + 'px';
+      cast[i].hit.style.height = GH * PX + 'px';
+    }
     var dpr = Math.min(3, window.devicePixelRatio || 1);
     canvas.width = Math.round(window.innerWidth * dpr);
     canvas.height = Math.round(window.innerHeight * dpr);
@@ -780,25 +865,45 @@ window.Pet = (function () {
 
   /* ---------- api ---------- */
 
-  function init() {
-    canvas = document.getElementById('petCanvas');
-    hit = document.getElementById('petHit');
-    bubble = document.getElementById('petBubble');
-    if (!canvas || !hit) return;
-
-    reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function attach(c) {
+    var hit = document.createElement('div');
+    hit.className = 'pet-hit';
+    hit.setAttribute('aria-hidden', 'true');
+    hit.title = 'say hi to ' + c.name;
     hit.addEventListener('pointerdown', function (event) {
       event.preventDefault();
-      react('wave');
+      react(c, 'wave');
     });
+    document.body.appendChild(hit);
+
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    document.body.appendChild(bubble);
+
+    c.hit = hit;
+    c.bubble = bubble;
+  }
+
+  function init() {
+    canvas = document.getElementById('petCanvas');
+    if (!canvas) return;
+
+    reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    cast = [make('pip', 'pip', false), make('pop', 'pop', true)];
+    cast.forEach(attach);
 
     resize();
     window.addEventListener('resize', resize);
     window.addEventListener('scroll', scanPerches, { passive: true });
 
-    var perch = currentPerch();
-    if (perch) { pet.x = perch.x0 + (perch.x1 - perch.x0) * 0.35; pet.y = perch.y; }
-    planNext();
+    var perch = perchList[0];
+    if (perch) {
+      cast[0].x = perch.x0 + (perch.x1 - perch.x0) * 0.3;
+      cast[1].x = perch.x0 + (perch.x1 - perch.x0) * 0.62;
+      cast[0].y = cast[1].y = perch.y;
+    }
+    cast.forEach(function (c) { planNext(c); });
 
     running = true;
     lastFrame = performance.now();
@@ -811,42 +916,86 @@ window.Pet = (function () {
 
   return {
     init: init,
+
     setMode: function (next) {
       if (next === mode) return;
       mode = next;
-      if (mode === 'focus' && Math.random() < 0.8) {
-        pet.act = ACTIVITIES[0];                       // settles down at the laptop
-        var perch = currentPerch();
-        pet.targetX = perch ? Math.max(perch.x0, Math.min(perch.x1, pet.x + (Math.random() - 0.5) * 150)) : pet.x;
-        pet.state = 'walk';
-      } else if (pet.state === 'act') {
-        pet.until = Math.min(pet.until, clock + 4);    // finishes up, then finds something fitting
+      if (alarming) return;
+      cast.forEach(function (c) {
+        if (mode === 'focus' && Math.random() < 0.75) {
+          c.act = ACTIVITIES[0];                       // settles down at the laptop
+          var perch = perchOf(c);
+          c.targetX = perch ? clamp(c.x + (Math.random() - 0.5) * 150, perch.x0, perch.x1) : c.x;
+          c.state = 'walk';
+        } else if (c.state === 'act') {
+          c.until = Math.min(c.until, clock + 4);      // finishes up, then finds something fitting
+        }
+      });
+    },
+
+    event: function (kind) {
+      if (kind === 'complete') cast.forEach(function (c) { react(c, 'cheer'); });
+      else if (kind === 'alarm') cast.forEach(function (c) { react(c, 'startle'); });
+      else if (LINES[kind]) say(cast[Math.floor(Math.random() * cast.length)], pick(LINES[kind]));
+    },
+
+    /* an alarm brings them both hurrying to the middle to jump about */
+    alarm: function (on) {
+      alarming = !!on;
+      if (!enabled) return;
+      if (alarming) {
+        var floor = perchList[0];
+        if (!floor) return;
+        var middle = (floor.x0 + floor.x1) / 2;
+        cast.forEach(function (c, i) {
+          c.perch = 0;
+          c.y = floor.y;
+          c.targetX = clamp(middle + (i ? 1 : -1) * (GW * PX * 0.8), floor.x0, floor.x1);
+          c.state = 'walk';
+          c.dir = c.targetX >= c.x ? 1 : -1;
+          c.hop = null;
+          say(c, pick(LINES.alarm));
+        });
+      } else {
+        cast.forEach(function (c) { planNext(c); });
       }
     },
-    event: function (kind) {
-      if (kind === 'complete') react('cheer');
-      else if (kind === 'alarm') react('startle');
-      else if (LINES[kind]) say(pick(LINES[kind]));
-    },
+
     setEnabled: function (on) {
       enabled = on;
       canvas.style.display = on ? '' : 'none';
-      hit.style.display = on ? '' : 'none';
-      if (!on) bubble.classList.remove('is-on');
+      cast.forEach(function (c) {
+        c.hit.style.display = on ? '' : 'none';
+        if (!on) c.bubble.classList.remove('is-on');
+      });
     },
+
     isEnabled: function () { return enabled; },
+
     look: function () {
-      return { state: pet.state, act: pet.act ? pet.act.id : null, mode: mode,
-               x: Math.round(pet.x), y: Math.round(pet.y), perch: pet.perch, perches: perchList.length };
+      var c = cast[0] || {};
+      return { state: c.state, act: c.act ? c.act.id : null, mode: mode,
+               x: Math.round(c.x), y: Math.round(c.y), perch: c.perch, perches: perchList.length };
     },
-    perchOn: function (index) {
-      if (!perchList[index]) return false;
-      startHop(index, perchList[index].x0 + (perchList[index].x1 - perchList[index].x0) * 0.5, pickActivity());
+
+    lookAll: function () {
+      return cast.map(function (c) {
+        return { name: c.name, state: c.state, act: c.act ? c.act.id : null,
+                 x: Math.round(c.x), y: Math.round(c.y), perch: c.perch };
+      });
+    },
+
+    perchOn: function (index, who) {
+      var c = cast[who || 0];
+      if (!perchList[index] || !c) return false;
+      startHop(c, index, perchList[index].x0 + (perchList[index].x1 - perchList[index].x0) * 0.5, pickActivity());
       return true;
     },
-    force: function (id) {
+
+    force: function (id, who) {
+      var c = cast[who || 0];
       for (var i = 0; i < ACTIVITIES.length; i++) {
-        if (ACTIVITIES[i].id === id) { beginActivity(ACTIVITIES[i]); pet.until = clock + 600; return true; }
+        if (ACTIVITIES[i].id === id) { beginActivity(c, ACTIVITIES[i]); c.until = clock + 600; return true; }
       }
       return false;
     }

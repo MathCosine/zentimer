@@ -82,18 +82,21 @@
     </section>
   </div>
 
-  <p class="hint" aria-hidden="true">space start · r reset · a alarm · p hide pip · f fullscreen</p>
+  <p class="hint" aria-hidden="true">space start · r reset · a alarm · m music · p hide pets</p>
 
 </main>
 
 <canvas id="petCanvas" aria-hidden="true"></canvas>
-<div id="petHit" aria-hidden="true" title="say hi to pip"></div>
-<div id="petBubble" class="bubble" aria-live="polite"></div>
+
 
 <div class="tools">
   <button id="soundBtn" type="button" class="tool" aria-pressed="true" title="Sound on / off">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"></path><path class="wave" d="M16 9.2a4 4 0 0 1 0 5.6"></path><path class="wave" d="M18.6 6.6a7.6 7.6 0 0 1 0 10.8"></path><path class="mute" d="M16.5 9.8l5 4.4M21.5 9.8l-5 4.4"></path></svg>
     <span class="sr">Sound</span>
+  </button>
+  <button id="musicBtn" type="button" class="tool" aria-pressed="false" aria-expanded="false" title="Study ambience">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 15v-3a7.5 7.5 0 0 1 15 0v3"></path><rect x="2.8" y="14" width="4" height="6" rx="1.6"></rect><rect x="17.2" y="14" width="4" height="6" rx="1.6"></rect></svg>
+    <span class="sr">Music</span>
   </button>
   <button id="notifyBtn" type="button" class="tool" aria-pressed="false" title="Notify me when time is up">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 14 6 10z"></path><path d="M10.2 18.5a2 2 0 0 0 3.6 0"></path></svg>
@@ -113,6 +116,34 @@
   </button>
 </div>
 
+<div class="music-pop" id="musicPop" hidden>
+  <div class="music-row">
+    <button class="music-play" id="musicPlay" type="button" aria-label="Play ambience">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="play-icon" d="M8 5.5l11 6.5-11 6.5z"></path><g class="pause-icon"><rect x="7.5" y="5.5" width="3.5" height="13" rx="1"></rect><rect x="13" y="5.5" width="3.5" height="13" rx="1"></rect></g></svg>
+    </button>
+    <div class="music-now">
+      <strong id="musicTrack">drift</strong>
+      <span id="musicNote">warm chords</span>
+    </div>
+    <button class="music-skip" id="musicNext" type="button" aria-label="Next track">›</button>
+  </div>
+  <div class="music-tracks" id="musicTracks" role="group" aria-label="Tracks"></div>
+  <label class="music-vol">
+    <span class="sr">Volume</span>
+    <input type="range" id="musicVol" min="0" max="100" step="1" value="35">
+  </label>
+</div>
+
+<div class="ring-overlay" id="ringOverlay" hidden>
+  <div class="ring-card" role="alertdialog" aria-labelledby="ringHeading">
+    <svg class="ring-clock" viewBox="0 0 11 12" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="0" width="1" height="1" fill="currentColor"/><rect x="8" y="0" width="1" height="1" fill="currentColor"/><rect x="1" y="1" width="1" height="1" fill="currentColor"/><rect x="2" y="1" width="1" height="1" fill="currentColor"/><rect x="3" y="1" width="1" height="1" fill="currentColor"/><rect x="7" y="1" width="1" height="1" fill="currentColor"/><rect x="8" y="1" width="1" height="1" fill="currentColor"/><rect x="9" y="1" width="1" height="1" fill="currentColor"/><rect x="2" y="2" width="1" height="1" fill="currentColor"/><rect x="3" y="2" width="1" height="1" fill="currentColor"/><rect x="4" y="2" width="1" height="1" fill="currentColor"/><rect x="5" y="2" width="1" height="1" fill="currentColor"/><rect x="6" y="2" width="1" height="1" fill="currentColor"/><rect x="7" y="2" width="1" height="1" fill="currentColor"/><rect x="8" y="2" width="1" height="1" fill="currentColor"/><rect x="1" y="3" width="1" height="1" fill="currentColor"/><rect x="2" y="3" width="1" height="1" fill="var(--card)"/><rect x="3" y="3" width="1" height="1" fill="var(--card)"/><rect x="4" y="3" width="1" height="1" fill="var(--card)"/><rect x="5" y="3" width="1" height="1" fill="var(--card)"/><rect x="6" y="3" width="1" height="1" fill="var(--card)"/><rect x="7" y="3" width="1" height="1" fill="var(--card)"/><rect x="8" y="3" width="1" height="1" fill="var(--card)"/><rect x="9" y="3" width="1" height="1" fill="currentColor"/><rect x="0" y="4" width="1" height="1" fill="currentColor"/><rect x="1" y="4" width="1" height="1" fill="var(--card)"/><rect x="2" y="4" width="1" height="1" fill="var(--card)"/><rect x="3" y="4" width="1" height="1" fill="var(--card)"/><rect x="4" y="4" width="1" height="1" fill="currentColor"/><rect x="5" y="4" width="1" height="1" fill="var(--card)"/><rect x="6" y="4" width="1" height="1" fill="var(--card)"/><rect x="7" y="4" width="1" height="1" fill="var(--card)"/><rect x="8" y="4" width="1" height="1" fill="var(--card)"/><rect x="9" y="4" width="1" height="1" fill="var(--card)"/><rect x="10" y="4" width="1" height="1" fill="currentColor"/><rect x="0" y="5" width="1" height="1" fill="currentColor"/><rect x="1" y="5" width="1" height="1" fill="var(--card)"/><rect x="2" y="5" width="1" height="1" fill="var(--card)"/><rect x="3" y="5" width="1" height="1" fill="var(--card)"/><rect x="4" y="5" width="1" height="1" fill="currentColor"/><rect x="5" y="5" width="1" height="1" fill="var(--card)"/><rect x="6" y="5" width="1" height="1" fill="var(--card)"/><rect x="7" y="5" width="1" height="1" fill="var(--card)"/><rect x="8" y="5" width="1" height="1" fill="var(--card)"/><rect x="9" y="5" width="1" height="1" fill="var(--card)"/><rect x="10" y="5" width="1" height="1" fill="currentColor"/><rect x="0" y="6" width="1" height="1" fill="currentColor"/><rect x="1" y="6" width="1" height="1" fill="var(--card)"/><rect x="2" y="6" width="1" height="1" fill="var(--card)"/><rect x="3" y="6" width="1" height="1" fill="var(--card)"/><rect x="4" y="6" width="1" height="1" fill="currentColor"/><rect x="5" y="6" width="1" height="1" fill="currentColor"/><rect x="6" y="6" width="1" height="1" fill="currentColor"/><rect x="7" y="6" width="1" height="1" fill="var(--card)"/><rect x="8" y="6" width="1" height="1" fill="var(--card)"/><rect x="9" y="6" width="1" height="1" fill="var(--card)"/><rect x="10" y="6" width="1" height="1" fill="currentColor"/><rect x="0" y="7" width="1" height="1" fill="currentColor"/><rect x="1" y="7" width="1" height="1" fill="var(--card)"/><rect x="2" y="7" width="1" height="1" fill="var(--card)"/><rect x="3" y="7" width="1" height="1" fill="var(--card)"/><rect x="4" y="7" width="1" height="1" fill="var(--card)"/><rect x="5" y="7" width="1" height="1" fill="var(--card)"/><rect x="6" y="7" width="1" height="1" fill="var(--card)"/><rect x="7" y="7" width="1" height="1" fill="var(--card)"/><rect x="8" y="7" width="1" height="1" fill="var(--card)"/><rect x="9" y="7" width="1" height="1" fill="var(--card)"/><rect x="10" y="7" width="1" height="1" fill="currentColor"/><rect x="0" y="8" width="1" height="1" fill="currentColor"/><rect x="1" y="8" width="1" height="1" fill="var(--card)"/><rect x="2" y="8" width="1" height="1" fill="var(--card)"/><rect x="3" y="8" width="1" height="1" fill="var(--card)"/><rect x="4" y="8" width="1" height="1" fill="var(--card)"/><rect x="5" y="8" width="1" height="1" fill="var(--card)"/><rect x="6" y="8" width="1" height="1" fill="var(--card)"/><rect x="7" y="8" width="1" height="1" fill="var(--card)"/><rect x="8" y="8" width="1" height="1" fill="var(--card)"/><rect x="9" y="8" width="1" height="1" fill="var(--card)"/><rect x="10" y="8" width="1" height="1" fill="currentColor"/><rect x="1" y="9" width="1" height="1" fill="currentColor"/><rect x="2" y="9" width="1" height="1" fill="var(--card)"/><rect x="3" y="9" width="1" height="1" fill="var(--card)"/><rect x="4" y="9" width="1" height="1" fill="var(--card)"/><rect x="5" y="9" width="1" height="1" fill="var(--card)"/><rect x="6" y="9" width="1" height="1" fill="var(--card)"/><rect x="7" y="9" width="1" height="1" fill="var(--card)"/><rect x="8" y="9" width="1" height="1" fill="var(--card)"/><rect x="9" y="9" width="1" height="1" fill="currentColor"/><rect x="2" y="10" width="1" height="1" fill="currentColor"/><rect x="3" y="10" width="1" height="1" fill="currentColor"/><rect x="4" y="10" width="1" height="1" fill="currentColor"/><rect x="5" y="10" width="1" height="1" fill="currentColor"/><rect x="6" y="10" width="1" height="1" fill="currentColor"/><rect x="7" y="10" width="1" height="1" fill="currentColor"/><rect x="8" y="10" width="1" height="1" fill="currentColor"/><rect x="1" y="11" width="1" height="1" fill="currentColor"/><rect x="9" y="11" width="1" height="1" fill="currentColor"/></svg>
+    <p class="ring-heading" id="ringHeading">alarm!</p>
+    <div class="ring-time" id="ringTime">16:30</div>
+    <button class="go" id="ringDismiss" type="button">dismiss</button>
+  </div>
+</div>
+
+<script src="assets/music.js"></script>
 <script src="assets/pet.js"></script>
 <script src="assets/app.js"></script>
 </body>
