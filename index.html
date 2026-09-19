@@ -94,6 +94,7 @@
       <div class="task-tools">
         <button id="listBtn" type="button" title="New list">+ list</button>
         <button id="bulkBtn" type="button" title="Paste many tasks">paste</button>
+        <button id="splitBtn" type="button" aria-pressed="false" title="Two panes, split by tag">split</button>
         <button id="doneBtn" type="button" aria-pressed="false" title="Show finished">done</button>
       </div>
     </div>
@@ -103,7 +104,10 @@
       <input id="taskInput" type="text" autocomplete="off" placeholder="add a task…  try: PHY Reading" aria-label="Add a task">
       <button type="submit" aria-label="Add">+</button>
     </form>
+    <p class="pane-head" id="paneHeadA" hidden></p>
     <ul class="task-list" id="taskList"></ul>
+    <p class="pane-head" id="paneHeadB" hidden></p>
+    <ul class="task-list" id="taskListB" hidden></ul>
     <p class="task-foot"><span id="taskCount">0 open</span></p>
   </section>
 

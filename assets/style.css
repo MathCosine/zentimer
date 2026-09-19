@@ -1410,3 +1410,59 @@ body.is-ringing .pet-hit { pointer-events: none; }
 @media (max-width: 899px) {
   body.planning .app { padding-top: 34px; }
 }
+
+/* ---------- two panes, split by tag ---------- */
+
+.pane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 7px 2px 2px;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+.pane-head:first-of-type { margin-top: 0; }
+
+/* two panes bring two more headings with them, so the card tightens up */
+body.split .tasks-card { gap: 4px; }
+body.split .pane-head { margin: 1px 2px 0; }
+.pane-head b { font-weight: 700; letter-spacing: 0.05em; color: var(--ink); }
+.pane-head .pane-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--well);
+  border: 1px solid var(--hair);
+  letter-spacing: 0;
+}
+
+/* Two panes share the room the one list used to have, but a short pane only
+   takes what it needs -- a pane with two tasks should not hold back a pane
+   with eight. They shrink, and scroll, only once there is genuinely no room. */
+body.split .task-list { flex: 0 1 auto; min-height: 56px; }
+
+/* Split mode wants every pixel it can find, so the frame tightens and, on a
+   short window, the extras step aside -- turn the split off to get them back. */
+body.split .app { padding-top: 34px; }
+@media (max-width: 899px) and (max-height: 920px) {
+  body.split .extras { display: none; }
+}
+
+/* while split, the chips pick the upper pane rather than filtering */
+.edit-note {
+  margin: 2px 0 0;
+  font-size: 0.68rem;
+  color: var(--soft);
+}
+
+.chip-label {
+  align-self: center;
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--soft);
+  margin-right: 2px;
+}

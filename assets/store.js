@@ -232,26 +232,19 @@ window.Store = (function () {
     changed();
   }
 
-  /* A repeating task with a time of day lays itself down on the timeline as soon
-     as you look at that day. Drag it about afterwards and it stays where you put it. */
+  /* Repeating tasks live in the list, not on the timeline -- they turn up on
+     each day they are due and you put them on the day yourself when you want
+     them there. This sweeps up the blocks the older, automatic version left
+     behind: only ones still machine-placed (moving one by hand clears the flag)
+     and only from today on, so your past days stay as they were. */
   function ensureRoutine(key) {
-    var date = new Date(key + 'T12:00');
-    var made = 0;
-    state.tasks.forEach(function (task) {
-      if (!repeats(task) || typeof task.at !== 'number') return;
-      if (!dueOn(task, date)) return;
-      if (task.skips && task.skips[key]) return;
-      var already = state.blocks.some(function (b) { return b.date === key && b.taskId === task.id; });
-      if (already) return;
-      state.blocks.push({
-        id: id('b_'), date: key,
-        start: task.at, end: Math.min(1440, task.at + (task.mins || 30)),
-        taskId: task.id, title: task.title, done: false, ranOver: 0, routine: true
-      });
-      made++;
+    var today = dayKey();
+    var before = state.blocks.length;
+    state.blocks = state.blocks.filter(function (b) {
+      return !(b.routine && b.date >= today && !b.done);
     });
-    if (made) changed();
-    return made;
+    if (state.blocks.length !== before) changed();
+    return 0;
   }
 
   function blockById(blockId) {

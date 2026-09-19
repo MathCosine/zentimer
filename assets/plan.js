@@ -14,8 +14,24 @@ window.Plan = (function () {
     pinned: false,
     editing: null,           // task id open for editing
     selected: null,          // block id open in the block bar
-    adding: null             // 'paste' | 'list' | null
+    adding: null,            // 'paste' | 'list' | null
+    split: false,            // show two panes instead of one list
+    top: []                  // tag ids that belong in the upper pane
   };
+
+  /* Which tags sit up top is a way of looking, not data, so it stays on this
+     machine rather than riding along in the synced document. */
+  var PREF = 'pip_view';
+  function loadPrefs() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(PREF) || '{}');
+      ui.split = !!saved.split;
+      ui.top = Array.isArray(saved.top) ? saved.top : [];
+    } catch (e) { /* private mode, or nothing saved yet */ }
+  }
+  function savePrefs() {
+    try { localStorage.setItem(PREF, JSON.stringify({ split: ui.split, top: ui.top })); } catch (e) {}
+  }
   var hour12 = false;
   var hoverTimer = 0, collapseTimer = 0, peekTimer = 0;
   var dwellAt = null;
@@ -57,13 +73,15 @@ window.Plan = (function () {
       return;
     }
 
-    var list = document.querySelector('.task-list');
+    var lists = 0;
+    [el.taskList, el.taskListB].forEach(function (n) { if (n && !n.hidden) lists += n.clientHeight; });
     var floor = ui.expanded ? OPEN_FLOOR : TASK_FLOOR;
-    // while a task editor is open the list needs the room more than the day does
-    var shut = ui.editing
-      ? clamp(Math.round(window.innerHeight * 0.14), 108, 200)
-      : clamp(Math.round(window.innerHeight * 0.20), 126, 320);
-    var want = el.timelineWrap.clientHeight + (list ? list.clientHeight - floor : 0);
+    /* The day gives up room whenever the list needs it more: while a task
+       editor is open, and while two panes are sharing what one used to have. */
+    var share = ui.editing ? 0.13 : (ui.split ? 0.15 : 0.20);
+    var least = ui.split || ui.editing ? 92 : 126;
+    var shut = clamp(Math.round(window.innerHeight * share), least, 320);
+    var want = el.timelineWrap.clientHeight + (lists - floor);
 
     boxTarget = ui.expanded ? clamp(Math.round(want), shut, 1100) : shut;
     el.timelineWrap.style.height = boxTarget + 'px';
@@ -119,7 +137,7 @@ window.Plan = (function () {
     return Store.tasks().filter(function (task) {
       if (ui.view !== 'all' && task.listId !== ui.view) return false;
       if (ui.tags.length && !ui.tags.some(function (t) { return (task.tags || []).indexOf(t) !== -1; })) return false;
-      if (Store.repeats(task) && !Store.dueOn(task, today)) return false;
+      if (Store.repeats(task) && !Store.dueOn(task, today) && ui.editing !== task.id) return false;
       if (!ui.showDone && Store.isDone(task, key) && ui.editing !== task.id) return false;
       return true;
     }).sort(function (a, b) {
@@ -173,25 +191,38 @@ window.Plan = (function () {
     var tags = Store.tags();
     if (!tags.length) { el.tagChips.hidden = true; return; }
     el.tagChips.hidden = false;
+    if (ui.split) {
+      var hint = document.createElement('span');
+      hint.className = 'chip-label';
+      hint.textContent = 'top pane';
+      el.tagChips.appendChild(hint);
+    }
     tags.forEach(function (tag) {
       var chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'chip tone-' + tag.color;
       chip.textContent = tag.name;
-      chip.setAttribute('aria-pressed', String(ui.tags.indexOf(tag.id) !== -1));
+      var list = ui.split ? ui.top : ui.tags;
+      chip.setAttribute('aria-pressed', String(list.indexOf(tag.id) !== -1));
       chip.addEventListener('click', function () {
-        var at = ui.tags.indexOf(tag.id);
-        if (at === -1) ui.tags.push(tag.id); else ui.tags.splice(at, 1);
+        var into = ui.split ? ui.top : ui.tags;
+        var at = into.indexOf(tag.id);
+        if (at === -1) into.push(tag.id); else into.splice(at, 1);
+        if (ui.split) savePrefs();
         render();
       });
       el.tagChips.appendChild(chip);
     });
-    if (ui.tags.length) {
+    var chosen = ui.split ? ui.top : ui.tags;
+    if (chosen.length) {
       var clear = document.createElement('button');
       clear.type = 'button';
       clear.className = 'chip chip-clear';
       clear.textContent = 'clear';
-      clear.addEventListener('click', function () { ui.tags = []; render(); });
+      clear.addEventListener('click', function () {
+        if (ui.split) { ui.top = []; savePrefs(); } else ui.tags = [];
+        render();
+      });
       el.tagChips.appendChild(clear);
     }
   }
@@ -254,8 +285,7 @@ window.Plan = (function () {
       meta.appendChild(due);
     }
     var slot = scheduled[task.id];
-    // a routine sitting at its usual time already says so above
-    if (slot && !(slot.routine && slot.start === task.at)) {
+    if (slot) {
       var when = document.createElement('span');
       when.className = 'task-flag is-planned';
       when.textContent = label(slot.start);
@@ -273,14 +303,31 @@ window.Plan = (function () {
       event.stopPropagation();
       if (scheduled[task.id]) { selectBlock(scheduled[task.id].id); return; }
       var day = viewDate();
+      var length = task.mins || 30;
       var from = isToday() ? Store.minutesNow() : 9 * 60;
-      var start = Store.findSlot(task.mins || 30, from, day);
+      // a usual time is where it wants to go; findSlot only steps in if it is taken
+      var wanted = typeof task.at === 'number' && task.at + length <= DAY_END ? task.at : from;
+      var start = Store.findSlot(length, wanted, day);
       var block = Store.addBlock({ date: day, start: start, end: start + (task.mins || 30), taskId: task.id, title: task.title });
       selectBlock(block.id);
       peek();
     });
     item.appendChild(plan);
     return item;
+  }
+
+  /* When does a repeat next come round? Walk forward a fortnight; nothing we
+     support repeats less often than that. */
+  function nextDueLabel(task) {
+    var day = new Date();
+    for (var i = 1; i <= 14; i++) {
+      day.setDate(day.getDate() + 1);
+      if (Store.dueOn(task, day)) {
+        if (i === 1) return 'tomorrow';
+        return day.toLocaleDateString(undefined, { weekday: 'long' }).toLowerCase();
+      }
+    }
+    return 'later';
   }
 
   function field(labelText, control, wide) {
@@ -336,12 +383,9 @@ window.Plan = (function () {
       chip.textContent = pair[1];
       chip.setAttribute('aria-pressed', String((task.repeat || 'none') === pair[0]));
       chip.addEventListener('click', function () {
-        var turningOn = pair[0] !== 'none' && typeof task.at !== 'number';
         Store.updateTask(task.id, {
           repeat: pair[0],
-          weekday: pair[0] === 'weekly' ? new Date(viewDate() + 'T12:00').getDay() : null,
-          // a repeat with no time never lands on the day, so start it somewhere sensible
-          at: pair[0] === 'none' ? task.at : (turningOn ? Math.min(1380, Math.round((Store.minutesNow() + 60) / 30) * 30) : task.at)
+          weekday: pair[0] === 'weekly' ? new Date(viewDate() + 'T12:00').getDay() : null
         });
         render();
       });
@@ -357,10 +401,16 @@ window.Plan = (function () {
         var parts = at.value.split(':');
         var minutes = at.value ? (+parts[0]) * 60 + (+parts[1]) : null;
         Store.updateTask(task.id, { at: minutes });
-        if (minutes !== null) Store.ensureRoutine(viewDate());
         render();
       });
-      grid.appendChild(field('starts at', at));
+      grid.appendChild(field('usual time', at));
+
+      if (!Store.dueOn(task, new Date())) {
+        var away = document.createElement('p');
+        away.className = 'edit-note';
+        away.textContent = 'not on today\u2019s list \u2014 back ' + nextDueLabel(task);
+        box.appendChild(away);
+      }
 
       var mins = document.createElement('input');
       mins.type = 'number';
@@ -422,34 +472,108 @@ window.Plan = (function () {
     render();
   }
 
+  function fillList(node, tasks, key, scheduled, emptyText) {
+    node.textContent = '';
+    if (!tasks.length) {
+      var empty = document.createElement('li');
+      empty.className = 'task-empty';
+      empty.textContent = emptyText;
+      node.appendChild(empty);
+      return;
+    }
+    tasks.forEach(function (task) { node.appendChild(taskRow(task, key, scheduled)); });
+  }
+
+  /* An editor opened near the bottom would hide the very fields you came for,
+     so walk its pane up until the whole of it is showing. */
+  function revealEditor() {
+    if (!reveal) return;
+    reveal = null;
+    var row = document.querySelector('.task-list .task.is-editing');
+    if (!row) return;
+    var pane = row.parentNode;
+    // measured against the pane itself: .task-list is not the offset parent,
+    // so offsetTop would be relative to the card and land in the wrong place
+    var box = pane.getBoundingClientRect();
+    var seat = row.getBoundingClientRect();
+    // an editor taller than its pane can only ever show its top, so go there
+    if (seat.height >= box.height - 8) {
+      pane.scrollTop += (seat.top - box.top) - 8;
+      return;
+    }
+    if (seat.bottom > box.bottom) pane.scrollTop += (seat.bottom - box.bottom) + 8;
+    seat = row.getBoundingClientRect();
+    if (seat.top < box.top) pane.scrollTop -= (box.top - seat.top) + 8;
+  }
+
+  function paneName(ids) {
+    var names = Store.tags()
+      .filter(function (t) { return ids.indexOf(t.id) !== -1; })
+      .map(function (t) { return t.name; });
+    return names.length ? names.join(' · ') : '';
+  }
+
+  function paneHead(node, name, count) {
+    node.textContent = '';
+    var strong = document.createElement('b');
+    strong.textContent = name;
+    node.appendChild(strong);
+    var tally = document.createElement('span');
+    tally.className = 'pane-count';
+    tally.textContent = count;
+    node.appendChild(tally);
+    node.hidden = false;
+  }
+
+  /* Flex shrinks both panes in proportion, which starves a short pane to feed a
+     long one. When the two together want more room than there is, the shorter
+     one is capped at what it actually needs and the longer one takes the rest. */
+  function sharePanes() {
+    el.taskList.style.maxHeight = '';
+    el.taskListB.style.maxHeight = '';
+    if (!ui.split) return;
+    var room = el.taskList.clientHeight + el.taskListB.clientHeight;
+    var needA = el.taskList.scrollHeight, needB = el.taskListB.scrollHeight;
+    if (!room || needA + needB <= room) return;
+    // capping the long pane is what lets the short one keep its full size:
+    // a max-height can only shrink a pane, never grow the other one back
+    var keep = Math.min(Math.min(needA, needB), Math.round(room * 0.6));
+    var long = needA > needB ? el.taskList : el.taskListB;
+    long.style.maxHeight = (room - keep) + 'px';
+  }
+
   function renderTasks() {
     var key = Store.dayKey();
     var tasks = visibleTasks();
-    el.taskList.textContent = '';
 
     var scheduled = {};
     Store.blocks(viewDate()).forEach(function (b) { if (b.taskId) scheduled[b.taskId] = b; });
 
-    if (!tasks.length) {
-      var empty = document.createElement('li');
-      empty.className = 'task-empty';
-      empty.textContent = ui.tags.length ? 'nothing with those tags' : 'nothing here yet';
-      el.taskList.appendChild(empty);
+    document.body.classList.toggle('split', ui.split);
+    el.splitBtn.setAttribute('aria-pressed', String(ui.split));
+
+    if (!ui.split) {
+      el.paneHeadA.hidden = el.paneHeadB.hidden = el.taskListB.hidden = true;
+      el.taskListB.textContent = '';
+      fillList(el.taskList, tasks, key, scheduled,
+        ui.tags.length ? 'nothing with those tags' : 'nothing here yet');
+    } else {
+      var up = [], down = [];
+      tasks.forEach(function (task) {
+        var mine = (task.tags || []).some(function (t) { return ui.top.indexOf(t) !== -1; });
+        (mine ? up : down).push(task);
+      });
+      var name = paneName(ui.top);
+      paneHead(el.paneHeadA, name || 'top pane', up.length);
+      paneHead(el.paneHeadB, name ? 'everything else' : 'everything', down.length);
+      el.taskListB.hidden = false;
+      fillList(el.taskList, up, key, scheduled,
+        name ? 'nothing tagged ' + name + ' today' : 'tap a tag above to fill this pane');
+      fillList(el.taskListB, down, key, scheduled, 'nothing here yet');
     }
 
-    tasks.forEach(function (task) { el.taskList.appendChild(taskRow(task, key, scheduled)); });
-
-    /* An editor opened near the bottom would hide the very fields you came for,
-       so walk the list up until the whole of it is showing. */
-    if (reveal) {
-      var row = el.taskList.querySelector('.task.is-editing');
-      reveal = null;
-      if (row) {
-        var over = row.offsetTop + row.offsetHeight - (el.taskList.scrollTop + el.taskList.clientHeight);
-        if (over > 0) el.taskList.scrollTop += over + 8;
-        if (row.offsetTop < el.taskList.scrollTop) el.taskList.scrollTop = Math.max(0, row.offsetTop - 8);
-      }
-    }
+    sharePanes();
+    revealEditor();
 
     var open = Store.tasks().filter(function (t) { return !Store.isDone(t, key); }).length;
     paint(el.taskCount, open + ' open');
@@ -980,6 +1104,15 @@ window.Plan = (function () {
       el.doneBtn.setAttribute('aria-pressed', String(ui.showDone));
       render();
     });
+
+    el.splitBtn.addEventListener('click', function () {
+      ui.split = !ui.split;
+      // the chips mean something different in each mode, so never carry a
+      // filter across and leave tasks quietly hidden in the other one
+      ui.tags = [];
+      savePrefs();
+      render();
+    });
   }
 
   /* ---------- api ---------- */
@@ -1031,7 +1164,8 @@ window.Plan = (function () {
     el = {
       views: $('views'), tagChips: $('tagChips'), taskList: $('taskList'), taskCount: $('taskCount'),
       taskAdd: $('taskAdd'), taskInput: $('taskInput'), bulkBtn: $('bulkBtn'), listBtn: $('listBtn'),
-      doneBtn: $('doneBtn'), addPanel: $('addPanel'),
+      doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'),
+      taskListB: $('taskListB'), paneHeadA: $('paneHeadA'), paneHeadB: $('paneHeadB'),
       timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'), blockBar: $('blockBar'),
       nowStrip: $('nowStrip'), nowTitle: $('nowTitle'), nowWhen: $('nowWhen'), nowShift: $('nowShift'),
       dayPrev: $('dayPrev'), dayNext: $('dayNext'), dayLabel: $('dayLabel'), daySum: $('daySum'),
@@ -1039,6 +1173,7 @@ window.Plan = (function () {
     };
     if (!el.timeline) return;
     hour12 = !!(prefs && prefs.hour12);
+    loadPrefs();
 
     Store.init();
     Store.subscribe(render);
