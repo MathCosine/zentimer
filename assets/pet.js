@@ -316,27 +316,25 @@ window.Pet = (function () {
 
   /* ---------- perches: the floor, plus the top edge of every card ---------- */
 
+  /* The floor along the bottom of the window, and the margins either side of the
+     page when there are any. They used to climb onto the cards, which meant
+     standing in front of whatever you were reading. */
   function scanPerches() {
-    var list = [{
-      y: window.innerHeight - 18,
-      x0: 8,
-      x1: Math.max(60, window.innerWidth - 8 - GW * PX)
-    }];
+    var floor = window.innerHeight - 14;
+    var app = document.querySelector('.app');
+    var list = [{ y: floor, x0: 8, x1: Math.max(60, window.innerWidth - 8 - GW * PX) }];
 
-    if (window.innerWidth < 620) {
-      perchList = list;
-      for (var n = 0; n < cast.length; n++) if (cast[n].perch >= 1) cast[n].perch = 0;
-      return;
+    if (app) {
+      var box = app.getBoundingClientRect();
+      var margin = GW * PX + 16;
+      if (box.left > margin) list.push({ y: floor, x0: 8, x1: Math.round(box.left) - GW * PX - 8 });
+      if (window.innerWidth - box.right > margin) {
+        list.push({ y: floor, x0: Math.round(box.right) + 8, x1: window.innerWidth - 8 - GW * PX });
+      }
     }
 
-    var cards = document.querySelectorAll('[data-perch]');
-    for (var i = 0; i < cards.length; i++) {
-      var r = cards[i].getBoundingClientRect();
-      if (r.width < 130 || r.top < 46 || r.top > window.innerHeight - 30) continue;
-      list.push({ y: Math.round(r.top) + 3, x0: Math.round(r.left) + 6, x1: Math.round(r.right) - 6 - GW * PX });
-    }
     perchList = list.filter(function (p) { return p.x1 > p.x0 + 10; });
-    for (var m = 0; m < cast.length; m++) if (cast[m].perch >= perchList.length) cast[m].perch = 0;
+    for (var n = 0; n < cast.length; n++) if (cast[n].perch >= perchList.length) cast[n].perch = 0;
   }
 
   function perchOf(c) { return perchList[c.perch] || perchList[0]; }

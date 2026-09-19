@@ -817,6 +817,7 @@
     settings.pet = !settings.pet;
     el.petBtn.setAttribute('aria-pressed', String(settings.pet));
     Pet.setEnabled(settings.pet);
+    document.body.classList.toggle('pets-off', !settings.pet);
     save();
   });
 
@@ -1074,6 +1075,7 @@
     renderSync();
     Pet.init();
     Pet.setEnabled(settings.pet);
+    document.body.classList.toggle('pets-off', !settings.pet);
     if (anyRinging()) Pet.alarm(true);
   })();
 })();

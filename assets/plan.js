@@ -27,6 +27,37 @@ window.Plan = (function () {
   var OPEN_PPM = 1.15;
 
   function ppm() { return ui.expanded ? OPEN_PPM : COMPACT_PPM; }
+
+  /* The timeline takes whatever room the window actually has, measured rather
+     than guessed, and never so much that the task list is squeezed to nothing. */
+  var TASK_FLOOR = 180;   // the list never shrinks below this
+
+  function sizeTimeline() {
+    if (!el.timelineWrap || !el.planCard) return;
+    var app = document.querySelector('.app');
+    var bar = document.querySelector('.bar');
+    var extras = document.querySelector('.extras');
+    if (!app) return;
+
+    // wide screens hand the timeline its own column row; the stylesheet fills it
+    if (window.innerWidth >= 900) { el.timelineWrap.style.height = ''; return; }
+
+    var tall = window.innerHeight;
+    var style = getComputedStyle(app);
+    var frame = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) + 9 * 3;
+    var chrome = el.planCard.offsetHeight - el.timelineWrap.offsetHeight;
+    var tasks = document.querySelector('.tasks-card');
+    var list = document.querySelector('.task-list');
+    var taskFloor = (tasks && list ? tasks.offsetHeight - list.offsetHeight : 103) + TASK_FLOOR;
+    var used = (bar ? bar.offsetHeight : 140) + (extras ? extras.offsetHeight : 76) + chrome + frame;
+
+    var room = tall - used;
+    var shut = clamp(Math.round(tall * 0.20), 126, 320);
+    var open = clamp(room - taskFloor, 200, 900);
+    if (open < shut) open = shut;
+
+    el.timelineWrap.style.height = (ui.expanded ? open : shut) + 'px';
+  }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
   function label(mins) { return Store.clockLabel(mins, hour12); }
   function paint(node, text) { if (node && node.textContent !== text) node.textContent = text; }
@@ -459,9 +490,10 @@ window.Plan = (function () {
     node.style.top = ((block.start - span.from) * scale) + 'px';
     node.style.height = height + 'px';
 
+    var name = block.title || (task ? task.title : '');
     var title = document.createElement('span');
-    title.className = 'block-title';
-    title.textContent = block.title || (task ? task.title : 'block');
+    title.className = 'block-title' + (name ? '' : ' is-unnamed');
+    title.textContent = name || 'name it below…';
     node.appendChild(title);
 
     var when = document.createElement('span');
@@ -528,13 +560,57 @@ window.Plan = (function () {
     document.addEventListener('pointercancel', onUp);
   }
 
-  /* a tap on open timeline plans something of your own, edited right there */
-  function onTimelinePointer(event) {
-    if (event.target !== el.timeline) return;
+  /* Drawing on open timeline: press and drag to sketch out the length with a live
+     preview, or just tap for half an hour. Either way you watch it appear. */
+  function onTimelineDraw(event) {
+    if (event.target !== el.timeline || event.button === 2) return;
+    event.preventDefault();
+
+    var scale = ppm();
     var from = +el.timeline.dataset.from;
-    var minutes = clamp(Math.round((from + (event.offsetY / ppm())) / 15) * 15, DAY_START, DAY_END - 30);
-    var block = Store.addBlock({ date: viewDate(), start: minutes, end: minutes + 30, title: '' });
-    selectBlock(block.id, true);
+    var box = el.timeline.getBoundingClientRect();
+    var anchor = clamp(Math.round((from + (event.clientY - box.top) / scale) / 15) * 15, DAY_START, DAY_END - 15);
+    var start = anchor, end = anchor + 30;
+    var drew = false;
+
+    var ghost = document.createElement('div');
+    ghost.className = 'block is-ghost';
+    ghost.innerHTML = '<span class="block-title">new block</span><span class="block-when"></span>';
+    el.timeline.appendChild(ghost);
+    dragging = 'draw';
+
+    function paintGhost() {
+      ghost.style.top = ((start - from) * scale) + 'px';
+      ghost.style.height = Math.max(16, (end - start) * scale - 2) + 'px';
+      ghost.querySelector('.block-when').textContent = label(start) + '–' + label(end);
+      ghost.classList.toggle('is-tight', (end - start) * scale < 34);
+    }
+
+    function onMove(e) {
+      var at = clamp(Math.round((from + (e.clientY - box.top) / scale) / 15) * 15, DAY_START, DAY_END);
+      if (Math.abs(e.clientY - event.clientY) > 5) drew = true;
+      if (drew) {
+        start = Math.min(anchor, at);
+        end = Math.max(anchor + 15, Math.max(anchor, at));
+      }
+      paintGhost();
+    }
+
+    function onUp(e) {
+      if (e && typeof e.clientY === 'number') onMove(e);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      ghost.remove();
+      dragging = null;
+      var block = Store.addBlock({ date: viewDate(), start: start, end: Math.min(DAY_END, end), title: '' });
+      selectBlock(block.id, true);
+    }
+
+    paintGhost();
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
   }
 
   function selectBlock(blockId, fresh) {
@@ -542,6 +618,14 @@ window.Plan = (function () {
     ui.editing = null;
     ui.focusBlock = !!fresh;      // the store renders on a tick, so the bar focuses itself
     render();
+    setTimeout(function () {
+      var node = el.timeline.querySelector('[data-id="' + blockId + '"]');
+      if (!node || !ui.expanded) return;
+      var top = node.offsetTop, bottom = top + node.offsetHeight;
+      var view = el.timelineWrap.scrollTop, height = el.timelineWrap.clientHeight;
+      if (top < view + 10) el.timelineWrap.scrollTop = Math.max(0, top - 20);
+      else if (bottom > view + height - 10) el.timelineWrap.scrollTop = bottom - height + 20;
+    }, 30);
   }
 
   /* ---------- the bar that edits the picked block ---------- */
@@ -662,6 +746,7 @@ window.Plan = (function () {
     if (typeof pin === 'boolean') ui.pinned = pin;
     el.planCard.classList.toggle('is-open', open);
     el.pinBtn.setAttribute('aria-pressed', String(ui.pinned));
+    sizeTimeline();
     // let the height transition run, then redraw at the new scale
     setTimeout(function () { if (!dragging) { renderTimeline(); scrollToNow(); } }, open ? 300 : 0);
     renderTimeline();
@@ -716,7 +801,7 @@ window.Plan = (function () {
       if (outside) collapseSoon(); else clearTimeout(collapseTimer);
     });
 
-    el.timeline.addEventListener('click', onTimelinePointer);
+    el.timeline.addEventListener('pointerdown', onTimelineDraw);
 
     el.pinBtn.addEventListener('click', function (event) {
       event.stopPropagation();
@@ -913,6 +998,8 @@ window.Plan = (function () {
     Store.subscribe(render);
     wireHover();
     wireAdding();
+    sizeTimeline();
+    window.addEventListener('resize', function () { sizeTimeline(); renderTimeline(); });
     render();
   }
 
