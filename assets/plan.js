@@ -23,42 +23,52 @@ window.Plan = (function () {
 
   var DAY_START = 5 * 60;
   var DAY_END = 24 * 60;
-  var COMPACT_PPM = 0.8;
   var OPEN_PPM = 1.15;
+  var SHUT_MINUTES = 6 * 60;   // collapsed always shows your six local hours, +-3
 
-  function ppm() { return ui.expanded ? OPEN_PPM : COMPACT_PPM; }
+  /* Collapsed, the scale bends to the box so the six hours always fit exactly;
+     opened, the scale is fixed and the whole day scrolls past. */
+  var reveal = null;   // a task whose editor should be scrolled into view on the next draw
+  var boxTarget = 0;   // the height sizeTimeline just asked for, not the one mid-transition
+
+  function ppm() {
+    if (ui.expanded) return OPEN_PPM;
+    var box = (boxTarget || el.timelineWrap.clientHeight || 240) - 16;
+    return clamp(box / SHUT_MINUTES, 0.3, 1.6);
+  }
 
   /* The timeline takes whatever room the window actually has, measured rather
      than guessed, and never so much that the task list is squeezed to nothing. */
   var TASK_FLOOR = 180;   // the list never shrinks below this
+  var OPEN_FLOOR = 92;    // ...except while you are deliberately editing the day
 
+  /* The timeline and the task list share one flexed column, so whatever the
+     list can spare is exactly what the timeline can take. Measuring the list
+     rather than adding up everything above it means this lands in one pass and
+     stays right when the bar, the chips or the extras change height. */
   function sizeTimeline() {
     if (!el.timelineWrap || !el.planCard) return;
-    var app = document.querySelector('.app');
-    var bar = document.querySelector('.bar');
-    var extras = document.querySelector('.extras');
-    if (!app) return;
+    if (!document.querySelector('.app')) return;
 
     // wide screens hand the timeline its own column row; the stylesheet fills it
-    if (window.innerWidth >= 900) { el.timelineWrap.style.height = ''; return; }
+    if (window.innerWidth >= 900) {
+      el.timelineWrap.style.height = '';
+      boxTarget = el.timelineWrap.clientHeight;
+      return;
+    }
 
-    var tall = window.innerHeight;
-    var style = getComputedStyle(app);
-    var frame = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) + 9 * 3;
-    var chrome = el.planCard.offsetHeight - el.timelineWrap.offsetHeight;
-    var tasks = document.querySelector('.tasks-card');
     var list = document.querySelector('.task-list');
-    var taskFloor = (tasks && list ? tasks.offsetHeight - list.offsetHeight : 103) + TASK_FLOOR;
-    var used = (bar ? bar.offsetHeight : 140) + (extras ? extras.offsetHeight : 76) + chrome + frame;
+    var floor = ui.expanded ? OPEN_FLOOR : TASK_FLOOR;
+    // while a task editor is open the list needs the room more than the day does
+    var shut = ui.editing
+      ? clamp(Math.round(window.innerHeight * 0.14), 108, 200)
+      : clamp(Math.round(window.innerHeight * 0.20), 126, 320);
+    var want = el.timelineWrap.clientHeight + (list ? list.clientHeight - floor : 0);
 
-    var room = tall - used;
-    var shut = clamp(Math.round(tall * 0.20), 126, 320);
-    // opened on purpose, so the list gives up more of the room
-    var open = clamp(room - Math.round(taskFloor * 0.8), 220, 1100);
-    if (open < shut) open = shut;
-
-    el.timelineWrap.style.height = (ui.expanded ? open : shut) + 'px';
+    boxTarget = ui.expanded ? clamp(Math.round(want), shut, 1100) : shut;
+    el.timelineWrap.style.height = boxTarget + 'px';
   }
+
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
   function label(mins) { return Store.clockLabel(mins, hour12); }
   function paint(node, text) { if (node && node.textContent !== text) node.textContent = text; }
@@ -213,6 +223,7 @@ window.Plan = (function () {
       ui.editing = task.id;
       ui.focusTask = task.id;
       ui.selected = null;
+      reveal = task.id;
       render();
     });
 
@@ -316,22 +327,27 @@ window.Plan = (function () {
     due.addEventListener('change', function () { Store.updateTask(task.id, { due: due.value || null }); });
     grid.appendChild(field('due', due));
 
-    var repeat = document.createElement('select');
-    [['none', 'never'], ['daily', 'every day'], ['weekdays', 'weekdays'], ['weekly', 'weekly']].forEach(function (pair) {
-      var option = document.createElement('option');
-      option.value = pair[0];
-      option.textContent = pair[1];
-      if ((task.repeat || 'none') === pair[0]) option.selected = true;
-      repeat.appendChild(option);
-    });
-    repeat.addEventListener('change', function () {
-      Store.updateTask(task.id, {
-        repeat: repeat.value,
-        weekday: repeat.value === 'weekly' ? new Date(viewDate() + 'T12:00').getDay() : null
+    var repeatRow = document.createElement('div');
+    repeatRow.className = 'pick-row';
+    [['none', 'once'], ['daily', 'every day'], ['weekdays', 'weekdays'], ['weekly', 'weekly']].forEach(function (pair) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'pick';
+      chip.textContent = pair[1];
+      chip.setAttribute('aria-pressed', String((task.repeat || 'none') === pair[0]));
+      chip.addEventListener('click', function () {
+        var turningOn = pair[0] !== 'none' && typeof task.at !== 'number';
+        Store.updateTask(task.id, {
+          repeat: pair[0],
+          weekday: pair[0] === 'weekly' ? new Date(viewDate() + 'T12:00').getDay() : null,
+          // a repeat with no time never lands on the day, so start it somewhere sensible
+          at: pair[0] === 'none' ? task.at : (turningOn ? Math.min(1380, Math.round((Store.minutesNow() + 60) / 30) * 30) : task.at)
+        });
+        render();
       });
-      render();
+      repeatRow.appendChild(chip);
     });
-    grid.appendChild(field('repeat', repeat));
+    grid.appendChild(field('repeat', repeatRow, true));
 
     if (Store.repeats(task)) {
       var at = document.createElement('input');
@@ -344,7 +360,7 @@ window.Plan = (function () {
         if (minutes !== null) Store.ensureRoutine(viewDate());
         render();
       });
-      grid.appendChild(field('at', at));
+      grid.appendChild(field('starts at', at));
 
       var mins = document.createElement('input');
       mins.type = 'number';
@@ -354,7 +370,7 @@ window.Plan = (function () {
       mins.addEventListener('change', function () {
         Store.updateTask(task.id, { mins: clamp(+mins.value || 30, 5, 600) });
       });
-      grid.appendChild(field('minutes', mins));
+      grid.appendChild(field('for (min)', mins));
     }
 
     var lists = Store.lists();
@@ -423,6 +439,18 @@ window.Plan = (function () {
 
     tasks.forEach(function (task) { el.taskList.appendChild(taskRow(task, key, scheduled)); });
 
+    /* An editor opened near the bottom would hide the very fields you came for,
+       so walk the list up until the whole of it is showing. */
+    if (reveal) {
+      var row = el.taskList.querySelector('.task.is-editing');
+      reveal = null;
+      if (row) {
+        var over = row.offsetTop + row.offsetHeight - (el.taskList.scrollTop + el.taskList.clientHeight);
+        if (over > 0) el.taskList.scrollTop += over + 8;
+        if (row.offsetTop < el.taskList.scrollTop) el.taskList.scrollTop = Math.max(0, row.offsetTop - 8);
+      }
+    }
+
     var open = Store.tasks().filter(function (t) { return !Store.isDone(t, key); }).length;
     paint(el.taskCount, open + ' open');
   }
@@ -432,10 +460,7 @@ window.Plan = (function () {
   function viewWindow() {
     // opened means the whole day, scrolled to where you are — not a bigger peephole
     if (ui.expanded) return { from: DAY_START, to: DAY_END };
-    var box = el.timelineWrap.clientHeight - 16;
-    var scale = ppm();
-    var minutes = clamp(Math.round((box / scale) / 30) * 30, 120, DAY_END - DAY_START);
-    if (minutes >= DAY_END - DAY_START) return { from: DAY_START, to: DAY_END };
+    var minutes = SHUT_MINUTES;
     var centre;
     if (isToday()) centre = Store.minutesNow();
     else {
@@ -763,6 +788,7 @@ window.Plan = (function () {
     ui.expanded = open;
     if (typeof pin === 'boolean') ui.pinned = pin;
     el.planCard.classList.toggle('is-open', open);
+    document.body.classList.toggle('planning', open);
     el.pinBtn.setAttribute('aria-pressed', String(ui.pinned));
     sizeTimeline();
     // let the height transition run, then redraw at the new scale
@@ -980,6 +1006,7 @@ window.Plan = (function () {
     if (!el.timeline) return;
     if (dragging) { pendingRender = true; return; }
     keepingFocus(function () {
+      sizeTimeline();
       Store.ensureRoutine(viewDate());
       renderDayHead();
       renderViews();
