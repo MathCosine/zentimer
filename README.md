@@ -3,8 +3,9 @@
 A study desk for one long narrow window: the time, a timer, today's plan, and your task
 lists — with two little pixel creatures pottering about on top of it all.
 
-Static files on GitHub Pages. No build step, no third-party requests. Everything lives in
-the browser, and syncs through Supabase once you turn that on (see `supabase/README.md`).
+Static files on GitHub Pages. No build step, and nothing is fetched from anywhere unless you
+switch sync on. Everything lives in the browser; fill in `assets/config.js` and it syncs
+through Supabase instead (see `supabase/README.md`).
 
 ## The shape of it
 
@@ -24,10 +25,13 @@ a monitor as well as full width:
   starting with a short capitalised word does. `paste` takes a whole list at once, one per
   line, which is how you move in from Google Tasks.
 - **Repeat** daily, on weekdays, or weekly — the daily ones come back each morning and are
-  ticked off per day, so yesterday's tick doesn't clear today's.
+  ticked off per day, so yesterday's tick doesn't clear today's. Give a repeat **a time and a
+  length** and it lays itself on the timeline every day it's due. Move it and it stays where
+  you put it; throw it off and it stays off for that day.
 - **Due dates** are optional. Overdue goes red; today and tomorrow say so.
-- `⋯` on a row renames, retags, sets a due date, cycles the repeat, moves it between lists
-  or deletes it.
+- **Tap a task** and the row opens into an editor in place — title, tags, due date, repeat,
+  time, length, which list. No dialogs anywhere in the app: pasting a batch, naming a list and
+  naming a block all happen inline.
 
 ## Today's plan
 
@@ -38,19 +42,23 @@ A timeline of the day, snapped to 15 minutes.
   (or *back to today*) to return. The timer always keeps tracking *today's* blocks, whatever
   day you happen to be looking at.
 - Tucked away it shows a few hours either side of now, with a red line for the time.
-- **Hover it and it opens up** over the rest of the page for editing; the ▣ pin keeps it
-  open. `esc`, a click elsewhere, or moving the pointer away closes it again.
+- **Rest the pointer on it and it grows**, smoothly, taking room from the list below rather
+  than covering it. Passing through on your way somewhere else won't trigger it. The ▣ pin
+  keeps it open; `esc` or moving away closes it.
 - `+` on a task drops it in the next free slot. Click empty space on the timeline to plan
-  something that isn't a task at all — dinner, practice, a lesson.
-- Drag a block to move it, drag its bottom edge to make it longer. Click one for finished /
-  rename / ±15 min / push the rest later / remove.
+  something that isn't a task at all — dinner, practice, a lesson — and type its name straight
+  into the bar that appears.
+- Drag a block to move it, drag its bottom edge to make it longer. Click one to get the bar:
+  rename, ±15 minutes, finished, remove.
 - The bar above it always says what you should be doing now, or what's next.
 
 ### When something runs long
 
 The block you're in turns amber the moment it should have ended, and the bar says how far
 over you are with one button to **push the rest of the day back by that much** — so the
-plan follows what actually happened rather than quietly becoming a lie.
+plan follows what actually happened rather than quietly becoming a lie. It only counts as
+running over for an hour and a half; after that it's just an unfinished block from earlier
+and stops nagging.
 
 ## The timer
 
@@ -74,6 +82,7 @@ day/night, notifications, wake lock. `space` start, `r` reset, `a` alarm, `m` mu
 ```
 index.html                    markup
 assets/style.css              palette, layout, components
+assets/config.js              sync settings, blank until you fill them in
 assets/store.js               the data: lists, tags, tasks, blocks, logs, sync
 assets/plan.js                the planner: task list, filters, timeline
 assets/app.js                 clock, timer, breaks, alarms, chimes

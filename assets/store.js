@@ -120,8 +120,11 @@ window.Store = (function () {
       due: fields.due || null,
       repeat: fields.repeat || 'none',       // none | daily | weekdays | weekly
       weekday: typeof fields.weekday === 'number' ? fields.weekday : null,
+      at: typeof fields.at === 'number' ? fields.at : null,    // minutes past midnight
+      mins: fields.mins || 30,
       done: false,
       completions: {},
+      skips: {},
       created: Date.now(),
       order: state.tasks.length
     };
@@ -134,7 +137,15 @@ window.Store = (function () {
   function updateTask(taskId, fields) {
     var task = taskById(taskId);
     if (!task) return null;
+    var retimed = ('at' in fields) || ('mins' in fields) || ('repeat' in fields);
     Object.keys(fields).forEach(function (key) { task[key] = fields[key]; });
+    if (retimed) {
+      var today = dayKey();
+      state.blocks = state.blocks.filter(function (b) {
+        return !(b.routine && b.taskId === taskId && b.date >= today);
+      });
+      if (task.skips) Object.keys(task.skips).forEach(function (d) { if (d >= today) delete task.skips[d]; });
+    }
     changed();
     return task;
   }
@@ -201,15 +212,46 @@ window.Store = (function () {
   function updateBlock(blockId, fields) {
     var block = blockById(blockId);
     if (!block) return null;
+    var movedByHand = (('start' in fields) && fields.start !== block.start) ||
+                      (('end' in fields) && fields.end !== block.end);
     Object.keys(fields).forEach(function (key) { block[key] = fields[key]; });
+    if (movedByHand) block.routine = false;
     if (block.end <= block.start) block.end = block.start + 15;
     changed();
     return block;
   }
 
   function removeBlock(blockId) {
+    var block = blockById(blockId);
+    // a routine block you throw away should stay thrown away for that day
+    if (block && block.routine && block.taskId) {
+      var task = taskById(block.taskId);
+      if (task) { task.skips = task.skips || {}; task.skips[block.date] = true; }
+    }
     state.blocks = state.blocks.filter(function (b) { return b.id !== blockId; });
     changed();
+  }
+
+  /* A repeating task with a time of day lays itself down on the timeline as soon
+     as you look at that day. Drag it about afterwards and it stays where you put it. */
+  function ensureRoutine(key) {
+    var date = new Date(key + 'T12:00');
+    var made = 0;
+    state.tasks.forEach(function (task) {
+      if (!repeats(task) || typeof task.at !== 'number') return;
+      if (!dueOn(task, date)) return;
+      if (task.skips && task.skips[key]) return;
+      var already = state.blocks.some(function (b) { return b.date === key && b.taskId === task.id; });
+      if (already) return;
+      state.blocks.push({
+        id: id('b_'), date: key,
+        start: task.at, end: Math.min(1440, task.at + (task.mins || 30)),
+        taskId: task.id, title: task.title, done: false, ranOver: 0, routine: true
+      });
+      made++;
+    });
+    if (made) changed();
+    return made;
   }
 
   function blockById(blockId) {
@@ -236,11 +278,17 @@ window.Store = (function () {
     return blocksOn(dayKey()).filter(function (b) { return !b.done && b.start > at; })[0] || null;
   }
 
-  /* one that should have finished but has not been ticked off */
+  /* One that should have finished just now and has not been ticked off. Anything
+     older than OVERRUN_GRACE is simply an unfinished block from earlier in the day,
+     not something you are still sitting in. */
+  var OVERRUN_GRACE = 90;
+
   function overrunBlock(atMinutes) {
     var at = typeof atMinutes === 'number' ? atMinutes : minutesNow();
-    var today = blocksOn(dayKey()).filter(function (b) { return !b.done && b.end <= at; });
-    return today.length ? today[today.length - 1] : null;
+    var recent = blocksOn(dayKey()).filter(function (b) {
+      return !b.done && b.end <= at && (at - b.end) <= OVERRUN_GRACE;
+    });
+    return recent.length ? recent[recent.length - 1] : null;
   }
 
   /* push everything after this block later by n minutes */
@@ -319,13 +367,19 @@ window.Store = (function () {
   var Remote = (function () {
     var client = null, status = 'off', config = null, pushTimer = 0;
 
+    function usable(where) {
+      return where && typeof where.url === 'string' && typeof where.key === 'string' &&
+             where.url.trim().length > 8 && where.key.trim().length > 8;
+    }
+
     function creds() {
       if (config) return config;
       try {
         var saved = JSON.parse(localStorage.getItem('pip.supabase') || 'null');
-        if (saved && saved.url && saved.key) return (config = saved);
+        if (usable(saved)) return (config = { url: saved.url.trim(), key: saved.key.trim() });
       } catch (e) { /* ignore */ }
-      if (window.PIP_CONFIG && window.PIP_CONFIG.supabase) return (config = window.PIP_CONFIG.supabase);
+      var baked = window.PIP_CONFIG && window.PIP_CONFIG.supabase;
+      if (usable(baked)) return (config = { url: baked.url.trim(), key: baked.key.trim() });
       return null;
     }
 
@@ -406,6 +460,11 @@ window.Store = (function () {
     state = saved && saved.version ? saved : seed();
     if (!state.logs) state.logs = [];
     if (!state.blocks) state.blocks = [];
+    state.tasks.forEach(function (t) {
+      if (!t.skips) t.skips = {};
+      if (typeof t.at === 'undefined') t.at = null;
+      if (!t.mins) t.mins = 30;
+    });
     Remote.connect();
     return state;
   }
@@ -443,6 +502,7 @@ window.Store = (function () {
 
     blocks: blocksOn, addBlock: addBlock, updateBlock: updateBlock, removeBlock: removeBlock,
     blockById: blockById, currentBlock: currentBlock, nextBlock: nextBlock, daySummary: daySummary,
+    ensureRoutine: ensureRoutine,
     overrunBlock: overrunBlock, shiftAfter: shiftAfter, findSlot: findSlot,
 
     logTime: logTime, loggedOn: loggedOn,
