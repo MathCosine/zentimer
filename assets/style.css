@@ -1360,6 +1360,12 @@ body.is-ringing .pet-hit { pointer-events: none; }
 }
 
 /* very short windows: hand the space to the task list */
+/* a short window cannot show everything at once: opening the timeline borrows
+   the today/alarms row rather than crushing the task list */
+@media (max-width: 899px) and (max-height: 960px) {
+  .plan-card.is-open ~ .extras { display: none; }
+}
+
 @media (max-height: 640px) {
   .dial { width: 76px; height: 76px; }
   .clock { font-size: 1.6rem; }

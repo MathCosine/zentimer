@@ -397,7 +397,11 @@ window.Store = (function () {
           return status === 'on' ? pull() : false;
         })
         .catch(function (err) {
-          status = 'error: ' + (err && err.message ? err.message : err);
+          var why = (err && err.message ? err.message : String(err));
+          // say something a person can act on rather than the raw failure
+          if (/dynamically imported module|Failed to fetch/i.test(why)) status = 'no connection — working locally';
+          else if (/Invalid API key|JWT/i.test(why)) status = 'that key was not accepted';
+          else status = why.slice(0, 70);
           return false;
         });
     }
@@ -430,6 +434,7 @@ window.Store = (function () {
       connect: connect,
       push: push,
       ready: function () { return status === 'on'; },
+      configured: function () { return !!creds(); },
       status: function () { return status; },
       client: function () { return client; },
       save: function (url, key) {

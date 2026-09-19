@@ -3,9 +3,9 @@
 A study desk for one long narrow window: the time, a timer, today's plan, and your task
 lists — with two little pixel creatures pottering about on top of it all.
 
-Static files on GitHub Pages. No build step, and nothing is fetched from anywhere unless you
-switch sync on. Everything lives in the browser; fill in `assets/config.js` and it syncs
-through Supabase instead (see `supabase/README.md`).
+Static files on GitHub Pages. No build step. Everything lives in the browser, and with the
+project settings in `assets/config.js` it syncs through Supabase as well — sign in once per
+browser with the cloud button and the plan follows you (see `supabase/README.md`).
 
 ## The shape of it
 
@@ -41,13 +41,15 @@ A timeline of the day, snapped to 15 minutes.
   or look back at yesterday. The day pill turns yellow when you're away from today; tap it
   (or *back to today*) to return. The timer always keeps tracking *today's* blocks, whatever
   day you happen to be looking at.
+- It sizes itself to the window — a tall dock gets a tall timeline, a short one gets less,
+  and opening it on a short screen borrows the today/alarms row rather than crushing the list.
 - Tucked away it shows a few hours either side of now, with a red line for the time.
 - **Rest the pointer on it and it grows**, smoothly, taking room from the list below rather
   than covering it. Passing through on your way somewhere else won't trigger it. The ▣ pin
   keeps it open; `esc` or moving away closes it.
-- `+` on a task drops it in the next free slot. Click empty space on the timeline to plan
-  something that isn't a task at all — dinner, practice, a lesson — and type its name straight
-  into the bar that appears.
+- `+` on a task drops it in the next free slot. On empty timeline, **drag out the length you
+  want** — a dashed preview follows the pointer with its times — or just tap for half an hour.
+  Either way the name box is already waiting for you.
 - Drag a block to move it, drag its bottom edge to make it longer. Click one to get the bar:
   rename, ±15 minutes, finished, remove.
 - The bar above it always says what you should be doing now, or what's next.
@@ -68,8 +70,10 @@ spend is logged against that task.
 
 ## The creatures
 
-Pip (terracotta) and pop (mint, with a sprig) wander the page, hop onto the cards, do
-sixteen different things, and both come running when an alarm goes off. `p` hides them.
+Pip (terracotta) and pop (mint, with a sprig) potter along the floor at the bottom of the
+window — and the margins either side when the window is wide enough — doing sixteen different
+things, and both come running when an alarm goes off. They keep off the cards so they never
+stand in front of what you're reading. `p` hides them and gives the strip back.
 
 ## Everything else
 

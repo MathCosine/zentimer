@@ -889,12 +889,19 @@
 
   function renderSync() {
     var status = Store.remote.status();
-    var text = status === 'on' ? 'syncing with supabase'
-      : status === 'signed-out' ? 'connected — sign in below'
+    var baked = Store.remote.configured();
+    var text = status === 'on' ? '✓ syncing'
+      : status === 'signed-out' ? 'project ready — sign in below'
       : status === 'connecting' ? 'connecting…'
-      : status === 'off' ? 'local only (this browser)'
+      : status === 'off' ? (baked ? 'starting…' : 'local only (this browser)')
       : status;
     paint(el.syncStatus, 'textContent', text);
+
+    // url and key come from assets/config.js when they are set there
+    var fromConfig = baked && !el.syncUrl.value;
+    el.syncUrl.parentNode.hidden = fromConfig;
+    el.syncKey.parentNode.hidden = fromConfig;
+    el.syncConnect.textContent = status === 'on' ? 'reconnect' : 'sign in';
   }
 
   function toggleSyncPanel(force) {
@@ -914,13 +921,15 @@
   el.syncConnect.addEventListener('click', function () {
     var url = el.syncUrl.value.trim(), key = el.syncKey.value.trim();
     var email = el.syncEmail.value.trim(), password = el.syncPass.value;
-    if (!url || !key) { paint(el.syncStatus, 'textContent', 'paste the project url and anon key'); return; }
+    var baked = Store.remote.configured();
+    if ((!url || !key) && !baked) { paint(el.syncStatus, 'textContent', 'paste the project url and key'); return; }
+    if (!email || !password) { paint(el.syncStatus, 'textContent', 'an email and password, and it will make the account'); return; }
     paint(el.syncStatus, 'textContent', 'connecting…');
-    Store.remote.save(url, key)
+    (url && key ? Store.remote.save(url, key) : Store.remote.connect())
       .then(function () {
-        if (!email || !password) return null;
         return Store.remote.signIn(email, password).catch(function (err) {
-          if (/invalid login/i.test(err.message || '')) return Store.remote.signUp(email, password);
+          // first time through, the account does not exist yet
+          if (/invalid|credentials|not found/i.test(err.message || '')) return Store.remote.signUp(email, password);
           throw err;
         });
       })
