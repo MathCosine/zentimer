@@ -14,7 +14,7 @@
  */
 window.PIP_CONFIG = {
   supabase: {
-    url: '',   // e.g. 'https://abcdefghijkl.supabase.co'
-    key: ''    // the long anon public key, starts with eyJ
+    url: 'https://chornswzmwradivcuhpg.supabase.co',   // e.g. 'https://abcdefghijkl.supabase.co'
+    key: 'sb_publishable_j6Q57CrSqW4rUS3PES9WAQ_vM710Vy5'    // the long anon public key, starts with eyJ
   }
 };
