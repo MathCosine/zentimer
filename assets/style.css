@@ -331,6 +331,32 @@ body[data-mode="break"] .phase { color: var(--green); }
 
 .plan-card { display: grid; gap: 7px; }
 
+.plan-head { display: flex; align-items: center; gap: 4px; }
+
+.day-step, .day-label {
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 1.5px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 160ms var(--ease), border-color 160ms var(--ease);
+}
+
+.day-step { width: 22px; height: 22px; font-size: 0.9rem; line-height: 1; color: var(--muted); }
+.day-step:hover { background: var(--well); color: var(--ink); }
+
+.day-label { font-size: 0.76rem; font-weight: 600; padding: 2px 8px; }
+.day-label:hover { background: var(--well); }
+
+/* looking at another day, not the one you are living in */
+.day-label.is-away {
+  background: color-mix(in srgb, var(--yellow) 34%, var(--card));
+  border-color: var(--yellow);
+}
+
+.day-sum { flex: 1; min-width: 0; font-size: 0.63rem; color: var(--muted); text-align: right; }
+
 .now-strip { display: flex; align-items: center; gap: 8px; }
 
 .now-dot {
@@ -466,6 +492,11 @@ body[data-mode="break"] .phase { color: var(--green); }
 }
 
 .block.is-dragging { cursor: grabbing; opacity: .9; z-index: 5; }
+
+/* a short block has room for its name only */
+.block.is-tight { padding: 0 7px; }
+.block.is-tight .block-when { display: none; }
+.block.is-tight .block-title { font-size: 0.66rem; }
 .block-title { font-size: 0.72rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .block-when { font-size: 0.58rem; color: var(--muted); }
 .block-grip { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; }

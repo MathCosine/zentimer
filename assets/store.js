@@ -244,6 +244,13 @@ window.Store = (function () {
   }
 
   /* push everything after this block later by n minutes */
+  /* how much of a day is spoken for */
+  function daySummary(key) {
+    var day = blocksOn(key);
+    var planned = day.reduce(function (sum, b) { return sum + (b.end - b.start); }, 0);
+    return { count: day.length, minutes: planned, done: day.filter(function (b) { return b.done; }).length };
+  }
+
   function shiftAfter(blockId, minutes) {
     var block = blockById(blockId);
     if (!block) return;
@@ -259,8 +266,8 @@ window.Store = (function () {
   }
 
   /* first gap of `length` minutes from `from` onward */
-  function findSlot(length, from) {
-    var day = blocksOn(dayKey());
+  function findSlot(length, from, key) {
+    var day = blocksOn(key || dayKey());
     var at = Math.ceil((typeof from === 'number' ? from : minutesNow()) / 15) * 15;
     for (var guard = 0; guard < 96; guard++) {
       var clash = day.filter(function (b) { return at < b.end && at + length > b.start; })[0];
@@ -435,7 +442,7 @@ window.Store = (function () {
     taskById: taskById, toggleDone: toggleDone, isDone: isDone, repeats: repeats, dueOn: dueOn,
 
     blocks: blocksOn, addBlock: addBlock, updateBlock: updateBlock, removeBlock: removeBlock,
-    blockById: blockById, currentBlock: currentBlock, nextBlock: nextBlock,
+    blockById: blockById, currentBlock: currentBlock, nextBlock: nextBlock, daySummary: daySummary,
     overrunBlock: overrunBlock, shiftAfter: shiftAfter, findSlot: findSlot,
 
     logTime: logTime, loggedOn: loggedOn,

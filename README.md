@@ -33,6 +33,10 @@ a monitor as well as full width:
 
 A timeline of the day, snapped to 15 minutes.
 
+- **Any day, not just this one.** `‹` and `›` step through days — plan tomorrow tonight,
+  or look back at yesterday. The day pill turns yellow when you're away from today; tap it
+  (or *back to today*) to return. The timer always keeps tracking *today's* blocks, whatever
+  day you happen to be looking at.
 - Tucked away it shows a few hours either side of now, with a red line for the time.
 - **Hover it and it opens up** over the rest of the page for editing; the ▣ pin keeps it
   open. `esc`, a click elsewhere, or moving the pointer away closes it again.

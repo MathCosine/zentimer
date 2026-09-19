@@ -67,6 +67,13 @@
   </header>
 
   <section class="card plan-card" aria-label="Today's plan">
+    <div class="plan-head">
+      <button class="day-step" id="dayPrev" type="button" aria-label="Day before">‹</button>
+      <button class="day-label" id="dayLabel" type="button" title="Back to today">today</button>
+      <button class="day-step" id="dayNext" type="button" aria-label="Day after">›</button>
+      <span class="day-sum" id="daySum"></span>
+      <button class="pin" id="pinBtn" type="button" aria-pressed="false" title="Keep the timeline open">▣</button>
+    </div>
     <div class="now-strip" id="nowStrip">
       <span class="now-dot" aria-hidden="true"></span>
       <div class="now-text">
@@ -74,7 +81,6 @@
         <span id="nowWhen"></span>
       </div>
       <button class="now-shift" id="nowShift" type="button" hidden></button>
-      <button class="pin" id="pinBtn" type="button" aria-pressed="false" title="Keep the timeline open">▣</button>
     </div>
     <div class="timeline-wrap" id="timelineWrap">
       <div class="timeline" id="timeline"></div>

@@ -6,6 +6,7 @@ window.Plan = (function () {
   var $ = function (id) { return document.getElementById(id); };
   var el = {};
   var ui = {
+    date: null,              // the day on the timeline; null means follow today
     view: 'all',             // 'all' | listId
     tags: [],                // tag ids being filtered on
     showDone: false,
@@ -27,6 +28,43 @@ window.Plan = (function () {
   var OPEN_PPM = 1.15;
 
   function ppm() { return ui.expanded ? OPEN_PPM : COMPACT_PPM; }
+
+  function viewDate() { return ui.date || Store.dayKey(); }
+  function isToday() { return viewDate() === Store.dayKey(); }
+
+  function shiftDay(days) {
+    var d = new Date(viewDate() + 'T12:00');
+    d.setDate(d.getDate() + days);
+    var key = Store.dayKey(d);
+    ui.date = key === Store.dayKey() ? null : key;
+    render();
+  }
+
+  function dayName(key) {
+    if (key === Store.dayKey()) return 'today';
+    var d = new Date(key + 'T12:00');
+    var diff = Math.round((d - new Date(Store.dayKey() + 'T12:00')) / 86400000);
+    if (diff === 1) return 'tomorrow';
+    if (diff === -1) return 'yesterday';
+    var name = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toLowerCase();
+    return (diff > 1 && diff < 7) ? name.split(' ')[0] + ' ' + name.split(' ').slice(1).join(' ') : name;
+  }
+
+  function renderDayHead() {
+    var key = viewDate();
+    paint(el.dayLabel, dayName(key));
+    el.dayLabel.classList.toggle('is-away', !isToday());
+    var sum = Store.daySummary(key);
+    paint(el.daySum, sum.count ? sum.count + ' · ' + spanLabel(sum.minutes) : 'nothing planned');
+  }
+
+  function spanLabel(minutes) {
+    if (minutes < 60) return minutes + 'm';
+    var h = Math.floor(minutes / 60), m = minutes % 60;
+    return m ? h + 'h ' + m + 'm' : h + 'h';
+  }
+
+  function paint(node, text) { if (node && node.textContent !== text) node.textContent = text; }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
   function label(mins) { return Store.clockLabel(mins, hour12); }
 
@@ -116,7 +154,7 @@ window.Plan = (function () {
     }
 
     var scheduled = {};
-    Store.blocks(key).forEach(function (b) { if (b.taskId) scheduled[b.taskId] = b; });
+    Store.blocks(viewDate()).forEach(function (b) { if (b.taskId) scheduled[b.taskId] = b; });
 
     tasks.forEach(function (task) {
       var done = Store.isDone(task, key);
@@ -174,8 +212,10 @@ window.Plan = (function () {
       plan.textContent = scheduled[task.id] ? '·' : '+';
       plan.addEventListener('click', function () {
         if (scheduled[task.id]) { flashBlock(scheduled[task.id].id); return; }
-        var start = Store.findSlot(30, Store.minutesNow());
-        Store.addBlock({ start: start, end: start + 30, taskId: task.id, title: task.title });
+        var key = viewDate();
+        var from = isToday() ? Store.minutesNow() : 9 * 60;
+        var start = Store.findSlot(30, from, key);
+        Store.addBlock({ date: key, start: start, end: start + 30, taskId: task.id, title: task.title });
         peek();
       });
 
@@ -254,8 +294,14 @@ window.Plan = (function () {
     if (ui.expanded) return { from: DAY_START, to: DAY_END };
     var box = el.timelineWrap.clientHeight - 16;
     var minutes = clamp(Math.round((box / COMPACT_PPM) / 30) * 30, 120, 480);
-    var now = Store.minutesNow();
-    var from = clamp(Math.round((now - minutes / 2) / 15) * 15, DAY_START, DAY_END - minutes);
+    var centre;
+    if (isToday()) {
+      centre = Store.minutesNow();
+    } else {
+      var day = Store.blocks(viewDate());
+      centre = day.length ? day[0].start + minutes / 3 : 10 * 60 + minutes / 2;
+    }
+    var from = clamp(Math.round((centre - minutes / 2) / 15) * 15, DAY_START, DAY_END - minutes);
     return { from: from, to: from + minutes };
   }
 
@@ -277,17 +323,19 @@ window.Plan = (function () {
       el.timeline.appendChild(line);
     }
 
-    var key = Store.dayKey();
-    var now = Store.minutesNow();
+    var key = viewDate();
+    var now = isToday() ? Store.minutesNow() : -1;
     Store.blocks(key).forEach(function (block) {
       if (block.end < span.from || block.start > span.to) return;
       el.timeline.appendChild(blockNode(block, span, scale, now));
     });
 
-    var nowLine = document.createElement('div');
-    nowLine.className = 'now-line';
-    nowLine.style.top = ((now - span.from) * scale) + 'px';
-    el.timeline.appendChild(nowLine);
+    if (isToday()) {
+      var nowLine = document.createElement('div');
+      nowLine.className = 'now-line';
+      nowLine.style.top = ((now - span.from) * scale) + 'px';
+      el.timeline.appendChild(nowLine);
+    }
 
     if (!ui.expanded) el.timeline.parentNode.scrollTop = 0;
   }
@@ -299,11 +347,13 @@ window.Plan = (function () {
     var running = now >= block.start && now < block.end && !block.done;
     var over = !block.done && now >= block.end;
 
+    var height = Math.max(18, (block.end - block.start) * scale - 2);
     node.className = 'block' + (tag ? ' tone-' + tag.color : '') +
-      (block.done ? ' is-done' : '') + (running ? ' is-now' : '') + (over ? ' is-over' : '');
+      (block.done ? ' is-done' : '') + (running ? ' is-now' : '') + (over ? ' is-over' : '') +
+      (height < 34 ? ' is-tight' : '');
     node.dataset.id = block.id;
     node.style.top = ((block.start - span.from) * scale) + 'px';
-    node.style.height = Math.max(18, (block.end - block.start) * scale - 2) + 'px';
+    node.style.height = height + 'px';
 
     var title = document.createElement('span');
     title.className = 'block-title';
@@ -434,14 +484,26 @@ window.Plan = (function () {
     if (event.target !== el.timeline) return;
     var from = +el.timeline.dataset.from;
     var minutes = Math.round((from + (event.offsetY / ppm())) / 15) * 15;
-    var title = window.prompt('What are you doing at ' + label(minutes) + '?', '');
+    var title = window.prompt('What are you doing at ' + label(minutes) + ' ' + dayName(viewDate()) + '?', '');
     if (title === null || !title.trim()) return;
-    Store.addBlock({ start: minutes, end: minutes + 30, title: title.trim() });
+    Store.addBlock({ date: viewDate(), start: minutes, end: minutes + 30, title: title.trim() });
   }
 
   /* ---------- the now strip ---------- */
 
   function renderNow() {
+    if (!isToday()) {
+      var sum = Store.daySummary(viewDate());
+      el.nowStrip.classList.remove('is-over');
+      el.nowShift.hidden = false;
+      el.nowShift.textContent = 'back to today';
+      el.nowShift.onclick = function () { ui.date = null; render(); };
+      el.nowTitle.textContent = 'planning ' + dayName(viewDate());
+      el.nowWhen.textContent = sum.count
+        ? sum.count + (sum.count === 1 ? ' block' : ' blocks') + ' · ' + spanLabel(sum.minutes)
+        : 'drop tasks in with + , or click the timeline';
+      return;
+    }
     var now = Store.minutesNow();
     var block = Store.currentBlock(now);
     var over = block ? null : Store.overrunBlock(now);
@@ -528,6 +590,10 @@ window.Plan = (function () {
 
     el.timeline.addEventListener('click', onTimelineClick);
 
+    el.dayPrev.addEventListener('click', function () { shiftDay(-1); });
+    el.dayNext.addEventListener('click', function () { shiftDay(1); });
+    el.dayLabel.addEventListener('click', function () { ui.date = null; render(); });
+
     el.pinBtn.addEventListener('click', function (event) {
       event.stopPropagation();
       ui.pinned = !ui.pinned;
@@ -592,6 +658,7 @@ window.Plan = (function () {
   function render() {
     if (!el.timeline) return;           // before init, there is nothing to draw
     if (dragging) { pendingRender = true; return; }
+    renderDayHead();
     renderViews();
     renderChips();
     renderTasks();
@@ -611,6 +678,7 @@ window.Plan = (function () {
       taskAdd: $('taskAdd'), taskInput: $('taskInput'), bulkBtn: $('bulkBtn'), listBtn: $('listBtn'),
       doneBtn: $('doneBtn'), timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'),
       nowStrip: $('nowStrip'), nowTitle: $('nowTitle'), nowWhen: $('nowWhen'), nowShift: $('nowShift'),
+      dayPrev: $('dayPrev'), dayNext: $('dayNext'), dayLabel: $('dayLabel'), daySum: $('daySum'),
       planCard: document.querySelector('.plan-card')
     };
     if (!el.timeline) return;
@@ -631,6 +699,8 @@ window.Plan = (function () {
     render: render,
     tick: tick,
     setHour12: function (on) { if (hour12 !== !!on) { hour12 = !!on; render(); } },
+    day: function () { return viewDate(); },
+    goToDay: function (key) { ui.date = key === Store.dayKey() ? null : key; render(); },
     currentBlock: function () { return Store.currentBlock(); },
     openTimeline: openTimeline
   };
