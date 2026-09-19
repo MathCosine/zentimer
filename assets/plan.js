@@ -53,7 +53,8 @@ window.Plan = (function () {
 
     var room = tall - used;
     var shut = clamp(Math.round(tall * 0.20), 126, 320);
-    var open = clamp(room - taskFloor, 200, 900);
+    // opened on purpose, so the list gives up more of the room
+    var open = clamp(room - Math.round(taskFloor * 0.8), 220, 1100);
     if (open < shut) open = shut;
 
     el.timelineWrap.style.height = (ui.expanded ? open : shut) + 'px';
@@ -429,6 +430,8 @@ window.Plan = (function () {
   /* ---------- the timeline ---------- */
 
   function viewWindow() {
+    // opened means the whole day, scrolled to where you are — not a bigger peephole
+    if (ui.expanded) return { from: DAY_START, to: DAY_END };
     var box = el.timelineWrap.clientHeight - 16;
     var scale = ppm();
     var minutes = clamp(Math.round((box / scale) / 30) * 30, 120, DAY_END - DAY_START);

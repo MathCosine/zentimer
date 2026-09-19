@@ -401,6 +401,7 @@ window.Store = (function () {
           // say something a person can act on rather than the raw failure
           if (/dynamically imported module|Failed to fetch/i.test(why)) status = 'no connection — working locally';
           else if (/Invalid API key|JWT/i.test(why)) status = 'that key was not accepted';
+          else if (/not confirmed/i.test(why)) status = 'confirm the email, or switch confirmation off';
           else status = why.slice(0, 70);
           return false;
         });
@@ -453,7 +454,17 @@ window.Store = (function () {
       },
       signUp: function (email, password) {
         if (!client) return Promise.reject(new Error('not connected'));
-        return client.auth.signUp({ email: email, password: password });
+        var here = location.origin + location.pathname;
+        return client.auth.signUp({
+          email: email,
+          password: password,
+          options: { emailRedirectTo: here }     // not supabase's default localhost
+        }).then(function (res) {
+          if (res.error) throw res.error;
+          if (res.data && res.data.session) { status = 'on'; return pull(); }
+          status = 'check your email to confirm';
+          return false;
+        });
       }
     };
   })();

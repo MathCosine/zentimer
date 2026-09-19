@@ -928,13 +928,19 @@
     (url && key ? Store.remote.save(url, key) : Store.remote.connect())
       .then(function () {
         return Store.remote.signIn(email, password).catch(function (err) {
+          var why = err.message || '';
+          if (/not confirmed/i.test(why)) throw err;
           // first time through, the account does not exist yet
-          if (/invalid|credentials|not found/i.test(err.message || '')) return Store.remote.signUp(email, password);
+          if (/invalid|credentials|not found/i.test(why)) return Store.remote.signUp(email, password);
           throw err;
         });
       })
       .then(function () { el.syncPass.value = ''; renderSync(); })
-      .catch(function (err) { paint(el.syncStatus, 'textContent', 'error: ' + (err.message || err)); });
+      .catch(function (err) {
+        var why = err.message || String(err);
+        if (/not confirmed/i.test(why)) why = 'confirm the email, or turn confirmation off in supabase';
+        paint(el.syncStatus, 'textContent', why.slice(0, 80));
+      });
   });
 
   el.syncExport.addEventListener('click', function () {

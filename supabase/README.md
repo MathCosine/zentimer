@@ -6,13 +6,17 @@ you want the same plan on your laptop and your phone.
 1. **Make a project** at supabase.com (the free tier is plenty).
 2. **Run the schema**: SQL Editor → new query → paste `schema.sql` → Run.
 3. **Allow email sign-in**: Authentication → Providers → Email → on.
-   Turn *Confirm email* off if you would rather not do the email round trip.
-4. **Copy two things** from Project Settings → API:
+   **Turn *Confirm email* off.** With it on, Supabase emails you a link and you cannot sign
+   in until you click it.
+4. **Set the Site URL** so any link it does send comes back here rather than to a localhost
+   that isn't running: Authentication → URL Configuration → Site URL →
+   `https://<user>.github.io/zentimer/`, and add the same under Redirect URLs.
+5. **Copy two things** from Project Settings → API:
    - Project URL — `https://xxxxxxxx.supabase.co`
    - `anon` **public** key — the long `eyJ…` one.
      This one is meant to live in client code; the row-level security policy above is
      what actually protects the data. Never paste the `service_role` key anywhere.
-5. **In pip**: the cloud button (top right) → paste the URL and key, put in an email and a
+6. **In pip**: the cloud button (top right) → paste the URL and key, put in an email and a
    password you choose, and press connect. The first connect creates the account.
 
 Do the same on any other device and the plan follows you.
