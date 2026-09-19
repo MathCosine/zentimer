@@ -565,8 +565,22 @@ window.Plan = (function () {
 
   /* Drawing on open timeline: press and drag to sketch out the length with a live
      preview, or just tap for half an hour. Either way you watch it appear. */
+  var lastDraw = 0;
+
+  function onTimelineTap(event) {
+    if (event.target !== el.timeline) return;
+    if (Date.now() - lastDraw < 500) return;          // the mouse gesture already handled it
+    var scale = ppm();
+    var from = +el.timeline.dataset.from;
+    var box = el.timeline.getBoundingClientRect();
+    var at = clamp(Math.round((from + (event.clientY - box.top) / scale) / 15) * 15, DAY_START, DAY_END - 30);
+    var block = Store.addBlock({ date: viewDate(), start: at, end: at + 30, title: '' });
+    selectBlock(block.id, true);
+  }
+
   function onTimelineDraw(event) {
     if (event.target !== el.timeline || event.button === 2) return;
+    if (event.pointerType === 'touch') return;        // let a finger scroll instead
     event.preventDefault();
 
     var scale = ppm();
@@ -606,6 +620,7 @@ window.Plan = (function () {
       document.removeEventListener('pointercancel', onUp);
       ghost.remove();
       dragging = null;
+      lastDraw = Date.now();
       var block = Store.addBlock({ date: viewDate(), start: start, end: Math.min(DAY_END, end), title: '' });
       selectBlock(block.id, true);
     }
@@ -759,8 +774,8 @@ window.Plan = (function () {
   function scrollToNow() {
     if (!ui.expanded) { el.timelineWrap.scrollTop = 0; return; }
     var focus = isToday() ? Store.minutesNow() : (Store.blocks(viewDate())[0] || { start: 9 * 60 }).start;
-    var target = (focus - DAY_START - 90) * ppm();
-    el.timelineWrap.scrollTop = Math.max(0, target);
+    var middle = el.timelineWrap.clientHeight / 2;
+    el.timelineWrap.scrollTop = Math.max(0, (focus - DAY_START) * ppm() - middle);
   }
 
   function collapseSoon(delay) {
@@ -805,6 +820,7 @@ window.Plan = (function () {
     });
 
     el.timeline.addEventListener('pointerdown', onTimelineDraw);
+    el.timeline.addEventListener('click', onTimelineTap);
 
     el.pinBtn.addEventListener('click', function (event) {
       event.stopPropagation();

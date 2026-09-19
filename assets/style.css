@@ -452,6 +452,7 @@ body[data-mode="break"] .phase { color: var(--green); }
   margin: 6px 6px 10px;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: pan-y;        /* a finger scrolls the day */
 }
 
 .hour {
