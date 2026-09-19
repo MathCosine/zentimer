@@ -1,129 +1,80 @@
 # pip
 
-A cutesy study timer with two little pixel creatures who potter about the page while you work.
+A study desk for one long narrow window: the time, a timer, today's plan, and your task
+lists — with two little pixel creatures pottering about on top of it all.
 
-No accounts, no tracking, no build step, no third-party requests — a handful of static files that
-run entirely in the browser. Everything it remembers (your lengths, alarms, theme, today's
-sessions) lives in `localStorage` on your own device.
+Static files on GitHub Pages. No build step, no third-party requests. Everything lives in
+the browser, and syncs through Supabase once you turn that on (see `supabase/README.md`).
 
-## Pip and pop
+## The shape of it
 
-Pip is terracotta. Pop is mint, with a little sprig on his head. Both are drawn from character
-grids in `assets/pet.js` — no image files, no sprite sheets, no libraries. They wander the page on
-their own, walking along the bottom of the window and hopping up onto the top edge of the cards,
-keeping out of each other's way, and each settles into one of sixteen things to do:
+The page fills whatever window you give it, so it works docked as a strip down the side of
+a monitor as well as full width:
 
-| | | |
-|---|---|---|
-| 💻 taps away at a laptop | 📋 draws on a whiteboard | 🗂 flips through flashcards |
-| 📖 turns the pages of a book | ☕ leans in for a sip | 🎧 bobs along to music |
-| 🍪 nibbles a biscuit | 🪴 waters a plant, which grows | 🧱 stacks a tower of blocks |
-| 🧹 sweeps up | 🎈 holds a balloon | ⚽ boots a football about |
-| 🏊 paddles in a puddle | 😴 naps, with Zzz | 🤸 stretches and hums |
-| 👀 has a look around | | |
+- **narrow** — one column: clock and timer, then today's plan, then the task list taking
+  whatever height is left and scrolling on its own.
+- **900px and wider** — two columns: the desk on the left, the task list full height on the
+  right.
 
-Every one of them animates — his six legs tap while he types, shuffle while he sweeps, lift while
-he draws — and he sticks with a thing for anywhere from twenty seconds to two minutes rather than
-flitting about.
+## Tasks
 
-What they pick is weighted by what *you're* doing. While a session runs they're mostly at the
-laptop, the whiteboard or the flashcards; on a break they nap, swim and play; when nothing's
-running they just mooch. Every minute or two they wander over to each other for a natter. They
-cheer with confetti when a session lands, both come running when an alarm goes off, and either
-will say hello if you click him. They have no needs, no hunger and nothing to grind — they're
-company, not a chore.
+- **Lists** down the top (`everything`, `School`, `Extracurricular`, plus any you add) and
+  **tags** underneath as filter chips. Tap chips to narrow, tap again to widen.
+- **Tags come for free**: type `PHY Workbook Week 5` and it tags itself `PHY`. Anything
+  starting with a short capitalised word does. `paste` takes a whole list at once, one per
+  line, which is how you move in from Google Tasks.
+- **Repeat** daily, on weekdays, or weekly — the daily ones come back each morning and are
+  ticked off per day, so yesterday's tick doesn't clear today's.
+- **Due dates** are optional. Overdue goes red; today and tomorrow say so.
+- `⋯` on a row renames, retags, sets a due date, cycles the repeat, moves it between lists
+  or deletes it.
 
-Press `p` (or the creature button, top right) to send them away if you need a clear screen.
+## Today's plan
 
-## Using it
+A timeline of the day, snapped to 15 minutes.
 
-### Sessions and breaks
+- Tucked away it shows a few hours either side of now, with a red line for the time.
+- **Hover it and it opens up** over the rest of the page for editing; the ▣ pin keeps it
+  open. `esc`, a click elsewhere, or moving the pointer away closes it again.
+- `+` on a task drops it in the next free slot. Click empty space on the timeline to plan
+  something that isn't a task at all — dinner, practice, a lesson.
+- Drag a block to move it, drag its bottom edge to make it longer. Click one for finished /
+  rename / ±15 min / push the rest later / remove.
+- The bar above it always says what you should be doing now, or what's next.
 
-- **Pick a length** — 15 / 30 / 45 / 60 / 90 / 120 minutes, nudge with −5 / +5, or click the countdown
-  and type: `45`, `50:00`, `1h30`, `90m`, `25s`.
-- **Run it** — `start` / `pause` / `resume`.
-- **A session rolls straight into a 10-minute break.** When focus time is up a chime sounds, the
-  ring turns mint green and the break starts on its own, so the rest gets taken rather than
-  skipped. `end break` returns to a fresh session early; `−5` / `+5` change the break length and
-  it remembers.
-- When the break finishes it chimes again and settles back to `ready`. It never starts the next
-  session for you — that part is yours.
-- Breaks don't count toward the day's focused time, and only completed sessions are counted.
+### When something runs long
 
-### Alarms
+The block you're in turns amber the moment it should have ended, and the bar says how far
+over you are with one button to **push the rest of the day back by that much** — so the
+plan follows what actually happened rather than quietly becoming a lie.
 
-Clock-time alarms, independent of the timer — useful for "leave at 16:30" while a session runs.
+## The timer
 
-- `+ alarm` (or the `a` key), then type a time: `16:30`, `4:30pm`, `930`, `18` — or a distance
-  from now, like `45m` or `2h`. A time that has already passed is set for tomorrow.
-- Every armed alarm is listed with its countdown, so you can see what's still coming.
-- When one goes off you get the full performance: the screen dims and pulses, a card drops in with
-  a ringing pixel clock and the time on it, both creatures drop what they're doing and come
-  hurrying to the middle of the screen to jump about, and the tab title reads `alarm · pip`. If
-  sound is on it also rings a two-tone alarm every six seconds for two minutes; muted, you get the
-  animation only. Dismiss with the button, `esc`, `enter` or space.
+Same pomodoro as before — 15 / 30 / 45 / 60 / 90 / 120, then a 10-minute break — except it
+now knows what you're on. Whatever block is running shows under the ring, and the time you
+spend is logged against that task.
 
-### Study ambience
+## The creatures
 
-The headphone button opens a small panel with four calm tracks — **drift** (warm chords), **rain**
-(a soft shower), **bells** (far away) and **hush** (deep and low) — plus a volume slider. `m`
-plays and pauses.
+Pip (terracotta) and pop (mint, with a sprig) wander the page, hop onto the cards, do
+sixteen different things, and both come running when an alarm goes off. `p` hides them.
 
-None of it is a recording. Each track is a small machine built out of Web Audio oscillators and
-filtered noise that plays itself, so nothing loops and nothing is downloaded. It ducks down on its
-own while an alarm rings or a session lands, then comes back up.
+## Everything else
 
-### The clock
-
-Click it to switch between 24-hour and 12-hour. Below it: the date and your timezone, both read
-from the device.
-
-### Keys
-
-| key | |
-|---|---|
-| `space` | start / pause |
-| `r` | reset (ends a break early) |
-| `a` | add an alarm |
-| `e` | edit the length |
-| `↑` `↓` | ± 1 minute |
-| `m` | ambience on / off |
-| `p` | hide / show the pets |
-| `f` | fullscreen |
-| `s` | sound on / off |
-| `t` | day / night |
-
-### Nice to know
-
-- The countdown is anchored to a wall-clock timestamp, so it stays accurate if the tab is hidden
-  or throttled, and it survives a reload — close the tab mid-session and it picks up where it
-  should be. Alarms and the day's tally are stored the same way.
-- While a timer runs it asks for a screen wake lock, so the phone or laptop shouldn't dim.
-- The bell icon turns on browser notifications for session, break and alarm endings.
-- Day/night follows the system by default; the moon/sun button overrides it.
-- The pets animate at 12fps and stop entirely when the tab is in the background.
-- Ambience needs a click to start — browsers don't allow audio before you interact with a page —
-  so it never resumes by itself on a reload, though it remembers the track and volume.
-
-## Publishing it on GitHub Pages
-
-The site is plain static files at the repository root, so no workflow is needed:
-
-1. **Settings → Pages**
-2. **Source: Deploy from a branch**
-3. Branch: the branch holding this code, folder `/ (root)` → **Save**
-
-It appears at `https://<user>.github.io/zentimer/` within a minute or so. On a phone,
-"Add to Home Screen" installs it as a standalone app.
+Alarms with a full-screen ring, four generated ambient tracks behind the headphone button,
+day/night, notifications, wake lock. `space` start, `r` reset, `a` alarm, `m` music,
+`p` pets, `f` fullscreen, `t` theme.
 
 ## Files
 
 ```
 index.html                    markup
-assets/style.css              theme tokens, layout, animations
-assets/app.js                 clock, timer, breaks, alarms, storage, chimes
-assets/pet.js                 pip and pop: sprites, behaviour, canvas
+assets/style.css              palette, layout, components
+assets/store.js               the data: lists, tags, tasks, blocks, logs, sync
+assets/plan.js                the planner: task list, filters, timeline
+assets/app.js                 clock, timer, breaks, alarms, chimes
+assets/pet.js                 pip and pop
 assets/music.js               the ambience, generated with Web Audio
-assets/fonts/fredoka-*.woff2  the typeface, self-hosted (SIL OFL, see OFL.txt)
-manifest.webmanifest          add-to-home-screen
+supabase/schema.sql           the table and its row-level security
+supabase/README.md            how to switch sync on
 ```

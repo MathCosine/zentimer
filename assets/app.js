@@ -7,7 +7,7 @@
     body: document.body,
     clock: $('clock'), clockTime: $('clockTime'), clockSecs: $('clockSecs'), meridiem: $('meridiem'),
     dateLabel: $('dateLabel'), zoneLabel: $('zoneLabel'),
-    task: $('task'),
+    timerDoing: $('timerDoing'),
     ring: $('ringProgress'), countdown: $('countdown'), input: $('durationInput'), phase: $('phase'),
     presets: $('presets'), startPause: $('startPause'), reset: $('reset'),
     minus: $('minus'), plus: $('plus'),
@@ -19,7 +19,10 @@
     musicNext: $('musicNext'), musicTracks: $('musicTracks'), musicTrack: $('musicTrack'),
     musicNote: $('musicNote'), musicVol: $('musicVol'),
     ringOverlay: $('ringOverlay'), ringTime: $('ringTime'), ringHeading: $('ringHeading'),
-    ringDismiss: $('ringDismiss')
+    ringDismiss: $('ringDismiss'),
+    syncBtn: $('syncBtn'), syncPop: $('syncPop'), syncStatus: $('syncStatus'),
+    syncUrl: $('syncUrl'), syncKey: $('syncKey'), syncEmail: $('syncEmail'), syncPass: $('syncPass'),
+    syncConnect: $('syncConnect'), syncExport: $('syncExport'), syncImport: $('syncImport')
   };
 
   var MIN = 60000, HOUR = 3600000, DAY = 86400000;
@@ -29,13 +32,14 @@
 
   var settings = {
     hour12: false, sound: true, notify: false, theme: 'auto', pet: true,
-    focusMs: 30 * MIN, breakMs: 10 * MIN, task: '',
+    focusMs: 30 * MIN, breakMs: 10 * MIN,
     music: { track: 0, volume: 0.35 }
   };
   var timer = { mode: 'focus', duration: settings.focusMs, remaining: settings.focusMs, endAt: null, status: 'idle' };
   var stats = { day: dayKey(), sessions: 0, focused: 0 };
   var alarms = [];
 
+  var working = null;        // the block this session is being logged against
   var lastAccrual = Date.now();
   var lastSave = 0;
   var wakeLock = null;
@@ -223,6 +227,21 @@
     save(); render();
   }
 
+  /* whatever the timeline says is happening right now */
+  function assignment() {
+    if (!window.Store) return null;
+    var block = Store.currentBlock();
+    if (!block) return null;
+    var task = block.taskId ? Store.taskById(block.taskId) : null;
+    return { blockId: block.id, taskId: task ? task.id : null, title: block.title || (task ? task.title : 'block') };
+  }
+
+  function bankTime() {
+    if (!working) return;
+    Store.logTime(working.taskId, working.blockId, Date.now() - working.since);
+    working = null;
+  }
+
   function start() {
     var now = Date.now();
     if (timer.status === 'done' || timer.remaining <= 0) timer.remaining = timer.duration;
@@ -230,6 +249,10 @@
     timer.status = 'running';
     lastAccrual = now;
     said = {};
+    if (timer.mode === 'focus') {
+      working = assignment();
+      if (working) working.since = now;
+    }
     unlockAudio();
     requestWakeLock();
     if (timer.mode === 'focus') Pet.event('start');
@@ -242,6 +265,7 @@
     timer.remaining = Math.max(0, timer.endAt - now);
     timer.endAt = null;
     timer.status = 'paused';
+    bankTime();
     releaseWakeLock();
     save(); render();
   }
@@ -259,6 +283,7 @@
     timer.endAt = null;
     timer.status = 'idle';
     said = {};
+    bankTime();
     releaseWakeLock();
     save(); render();
   }
@@ -266,6 +291,7 @@
   function complete(quiet) {
     var finished = timer.mode;
     said = {};
+    bankTime();
     if (finished === 'focus') {
       rollDay();
       stats.sessions += 1;
@@ -461,6 +487,7 @@
     }
     paint(el.dateLabel, 'textContent', dateFormatter.format(d).toLowerCase());
     renderZone(d);
+    if (window.Plan) Plan.tick();
   }
 
   function renderZone(d) {
@@ -539,6 +566,9 @@
     if (el.body.dataset.mode !== timer.mode) el.body.dataset.mode = timer.mode;
 
     paint(el.phase, 'textContent', PHASES[timer.mode][timer.status]);
+
+    var doing = timer.mode === 'focus' ? (working || assignment()) : null;
+    paint(el.timerDoing, 'textContent', doing ? doing.title : '');
 
     var labels = { idle: 'start', running: 'pause', paused: 'resume', done: 'again' };
     paint(el.startPause, 'textContent', labels[timer.status]);
@@ -753,15 +783,11 @@
     }
   });
 
-  el.task.addEventListener('input', function () {
-    settings.task = el.task.value.slice(0, 42);
-    save();
-  });
-
   el.clock.addEventListener('click', function () {
     settings.hour12 = !settings.hour12;
     painted = {};
     lastMinute = -1;
+    if (window.Plan) Plan.setHour12(settings.hour12);
     save(); render();
   });
 
@@ -840,6 +866,7 @@
 
   document.addEventListener('click', function () {
     if (!el.musicPop.hidden) toggleMusicPanel(false);
+    if (!el.syncPop.hidden) toggleSyncPanel(false);
   });
 
   el.musicPlay.addEventListener('click', function () {
@@ -857,6 +884,63 @@
   el.musicVol.addEventListener('input', function () {
     settings.music.volume = Music.setVolume(+el.musicVol.value / 100);
     save();
+  });
+
+  function renderSync() {
+    var status = Store.remote.status();
+    var text = status === 'on' ? 'syncing with supabase'
+      : status === 'signed-out' ? 'connected — sign in below'
+      : status === 'connecting' ? 'connecting…'
+      : status === 'off' ? 'local only (this browser)'
+      : status;
+    paint(el.syncStatus, 'textContent', text);
+  }
+
+  function toggleSyncPanel(force) {
+    var open = typeof force === 'boolean' ? force : el.syncPop.hidden;
+    el.syncPop.hidden = !open;
+    el.syncBtn.setAttribute('aria-expanded', String(open));
+    if (open) { renderSync(); toggleMusicPanel(false); }
+  }
+
+  el.syncBtn.addEventListener('click', function (event) {
+    event.stopPropagation();
+    toggleSyncPanel();
+  });
+
+  el.syncPop.addEventListener('click', function (event) { event.stopPropagation(); });
+
+  el.syncConnect.addEventListener('click', function () {
+    var url = el.syncUrl.value.trim(), key = el.syncKey.value.trim();
+    var email = el.syncEmail.value.trim(), password = el.syncPass.value;
+    if (!url || !key) { paint(el.syncStatus, 'textContent', 'paste the project url and anon key'); return; }
+    paint(el.syncStatus, 'textContent', 'connecting…');
+    Store.remote.save(url, key)
+      .then(function () {
+        if (!email || !password) return null;
+        return Store.remote.signIn(email, password).catch(function (err) {
+          if (/invalid login/i.test(err.message || '')) return Store.remote.signUp(email, password);
+          throw err;
+        });
+      })
+      .then(function () { el.syncPass.value = ''; renderSync(); })
+      .catch(function (err) { paint(el.syncStatus, 'textContent', 'error: ' + (err.message || err)); });
+  });
+
+  el.syncExport.addEventListener('click', function () {
+    var blob = new Blob([Store.exportJSON()], { type: 'application/json' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'pip-' + Store.dayKey() + '.json';
+    link.click();
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 2000);
+  });
+
+  el.syncImport.addEventListener('click', function () {
+    var text = window.prompt('Paste a pip export');
+    if (!text) return;
+    try { Store.importJSON(text); paint(el.syncStatus, 'textContent', 'imported'); }
+    catch (err) { paint(el.syncStatus, 'textContent', 'that did not look like an export'); }
   });
 
   function effectiveTheme() {
@@ -891,6 +975,7 @@
       return;
     }
     if (event.key === 'Escape' && !el.musicPop.hidden) { toggleMusicPanel(false); return; }
+    if (event.key === 'Escape' && !el.syncPop.hidden) { toggleSyncPanel(false); return; }
 
     switch (event.key) {
       case ' ': case 'Spacebar':
@@ -943,7 +1028,6 @@
         settings.notify = !!stored.settings.notify;
         settings.pet = stored.settings.pet !== false;
         settings.theme = stored.settings.theme || 'auto';
-        settings.task = String(stored.settings.task || '').slice(0, 42);
         if (stored.settings.music) {
           settings.music = {
             track: stored.settings.music.track || 0,
@@ -979,7 +1063,7 @@
     }
 
     applyTheme();
-    el.task.value = settings.task;
+    if (window.Plan) Plan.init({ hour12: settings.hour12 });   // before the first render reaches into it
     el.soundBtn.setAttribute('aria-pressed', String(settings.sound));
     el.notifyBtn.setAttribute('aria-pressed', String(settings.notify));
     el.petBtn.setAttribute('aria-pressed', String(settings.pet));
@@ -987,6 +1071,7 @@
     render();
 
     buildMusicPanel();
+    renderSync();
     Pet.init();
     Pet.setEnabled(settings.pet);
     if (anyRinging()) Pet.alarm(true);

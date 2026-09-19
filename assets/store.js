@@ -1,0 +1,454 @@
+/* The data behind the planner: lists, tags, tasks, day blocks and time logs.
+   Everything runs through here so there is exactly one place that knows how
+   data is shaped and where it is kept. A backend is pluggable: local storage
+   today, Supabase once it is configured. */
+window.Store = (function () {
+  'use strict';
+
+  var KEY = 'pip.plan.v1';
+  var listeners = [];
+  var saveTimer = 0;
+
+  var TAG_COLORS = ['blue', 'green', 'yellow', 'violet', 'coral', 'teal', 'pink'];
+
+  var state = blank();
+
+  function blank() {
+    return {
+      version: 1,
+      lists: [],
+      tags: [],
+      tasks: [],
+      blocks: [],
+      logs: [],
+      updated: 0
+    };
+  }
+
+  function seed() {
+    return {
+      version: 1,
+      lists: [
+        { id: 'l_school', name: 'School', order: 0 },
+        { id: 'l_extra', name: 'Extracurricular', order: 1 }
+      ],
+      tags: [],
+      tasks: [],
+      blocks: [],
+      logs: [],
+      updated: Date.now()
+    };
+  }
+
+  /* ---------- helpers ---------- */
+
+  function id(prefix) {
+    return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  function dayKey(d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  function minutesNow(d) {
+    d = d || new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  function clockLabel(minutes, hour12) {
+    var h = Math.floor(minutes / 60) % 24, m = minutes % 60, suffix = '';
+    if (hour12) { suffix = h < 12 ? 'am' : 'pm'; h = h % 12 || 12; }
+    return (hour12 ? h : pad(h)) + ':' + pad(m) + suffix;
+  }
+
+  function byOrder(a, b) { return (a.order || 0) - (b.order || 0); }
+
+  /* ---------- persistence ---------- */
+
+  function read() {
+    try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; }
+  }
+
+  function persist() {
+    state.updated = Date.now();
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* private mode */ }
+    if (Remote.ready()) Remote.push(state);
+  }
+
+  function changed() {
+    persist();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      listeners.forEach(function (fn) { fn(state); });
+    }, 0);
+  }
+
+  /* ---------- tasks ---------- */
+
+  function tagByName(name) {
+    var clean = String(name || '').trim();
+    if (!clean) return null;
+    var found = state.tags.filter(function (t) { return t.name.toLowerCase() === clean.toLowerCase(); })[0];
+    if (found) return found;
+    var tag = { id: id('g_'), name: clean, color: TAG_COLORS[state.tags.length % TAG_COLORS.length] };
+    state.tags.push(tag);
+    return tag;
+  }
+
+  /* "PHY Workbook Week 5" → tagged PHY. Bulk paste then lands already sorted. */
+  function sniffTag(title) {
+    var first = String(title || '').trim().split(/\s+/)[0] || '';
+    if (/^[A-Z][A-Z0-9]{1,7}$/.test(first) && first !== 'A' && first !== 'I') return first;
+    return null;
+  }
+
+  function addTask(fields) {
+    var tags = (fields.tags || []).slice();
+    var sniffed = fields.autoTag === false ? null : sniffTag(fields.title);
+    if (sniffed) {
+      var tag = tagByName(sniffed);
+      if (tag && tags.indexOf(tag.id) === -1) tags.push(tag.id);
+    }
+    var task = {
+      id: id('t_'),
+      listId: fields.listId || (state.lists[0] && state.lists[0].id) || null,
+      title: String(fields.title || '').trim().slice(0, 140),
+      tags: tags,
+      due: fields.due || null,
+      repeat: fields.repeat || 'none',       // none | daily | weekdays | weekly
+      weekday: typeof fields.weekday === 'number' ? fields.weekday : null,
+      done: false,
+      completions: {},
+      created: Date.now(),
+      order: state.tasks.length
+    };
+    if (!task.title) return null;
+    state.tasks.push(task);
+    changed();
+    return task;
+  }
+
+  function updateTask(taskId, fields) {
+    var task = taskById(taskId);
+    if (!task) return null;
+    Object.keys(fields).forEach(function (key) { task[key] = fields[key]; });
+    changed();
+    return task;
+  }
+
+  function removeTask(taskId) {
+    state.tasks = state.tasks.filter(function (t) { return t.id !== taskId; });
+    state.blocks.forEach(function (b) { if (b.taskId === taskId) b.taskId = null; });
+    changed();
+  }
+
+  function taskById(taskId) {
+    return state.tasks.filter(function (t) { return t.id === taskId; })[0] || null;
+  }
+
+  function repeats(task) { return task.repeat && task.repeat !== 'none'; }
+
+  /* does this repeating task belong on this date at all? */
+  function dueOn(task, date) {
+    if (!repeats(task)) return true;
+    var day = date.getDay();
+    if (task.repeat === 'daily') return true;
+    if (task.repeat === 'weekdays') return day >= 1 && day <= 5;
+    if (task.repeat === 'weekly') return day === (task.weekday === null ? date.getDay() : task.weekday);
+    return true;
+  }
+
+  function isDone(task, key) {
+    return repeats(task) ? !!task.completions[key || dayKey()] : !!task.done;
+  }
+
+  function toggleDone(taskId, key) {
+    var task = taskById(taskId);
+    if (!task) return;
+    var when = key || dayKey();
+    if (repeats(task)) {
+      if (task.completions[when]) delete task.completions[when];
+      else task.completions[when] = Date.now();
+    } else {
+      task.done = !task.done;
+      task.doneAt = task.done ? Date.now() : null;
+    }
+    changed();
+  }
+
+  /* ---------- day blocks ---------- */
+
+  function addBlock(fields) {
+    var block = {
+      id: id('b_'),
+      date: fields.date || dayKey(),
+      start: Math.max(0, Math.min(1439, fields.start)),
+      end: Math.max(15, Math.min(1440, fields.end)),
+      taskId: fields.taskId || null,
+      title: String(fields.title || '').slice(0, 140),
+      done: false,
+      ranOver: 0
+    };
+    if (block.end <= block.start) block.end = block.start + 30;
+    state.blocks.push(block);
+    changed();
+    return block;
+  }
+
+  function updateBlock(blockId, fields) {
+    var block = blockById(blockId);
+    if (!block) return null;
+    Object.keys(fields).forEach(function (key) { block[key] = fields[key]; });
+    if (block.end <= block.start) block.end = block.start + 15;
+    changed();
+    return block;
+  }
+
+  function removeBlock(blockId) {
+    state.blocks = state.blocks.filter(function (b) { return b.id !== blockId; });
+    changed();
+  }
+
+  function blockById(blockId) {
+    return state.blocks.filter(function (b) { return b.id === blockId; })[0] || null;
+  }
+
+  function blocksOn(key) {
+    return state.blocks.filter(function (b) { return b.date === (key || dayKey()); })
+      .sort(function (a, b) { return a.start - b.start; });
+  }
+
+  /* the block happening right now, if any */
+  function currentBlock(atMinutes) {
+    var at = typeof atMinutes === 'number' ? atMinutes : minutesNow();
+    var today = blocksOn(dayKey());
+    for (var i = 0; i < today.length; i++) {
+      if (!today[i].done && at >= today[i].start && at < today[i].end) return today[i];
+    }
+    return null;
+  }
+
+  function nextBlock(atMinutes) {
+    var at = typeof atMinutes === 'number' ? atMinutes : minutesNow();
+    return blocksOn(dayKey()).filter(function (b) { return !b.done && b.start > at; })[0] || null;
+  }
+
+  /* one that should have finished but has not been ticked off */
+  function overrunBlock(atMinutes) {
+    var at = typeof atMinutes === 'number' ? atMinutes : minutesNow();
+    var today = blocksOn(dayKey()).filter(function (b) { return !b.done && b.end <= at; });
+    return today.length ? today[today.length - 1] : null;
+  }
+
+  /* push everything after this block later by n minutes */
+  function shiftAfter(blockId, minutes) {
+    var block = blockById(blockId);
+    if (!block) return;
+    blocksOn(block.date).forEach(function (b) {
+      if (b.start >= block.end && b.id !== block.id) {
+        b.start = Math.min(1425, b.start + minutes);
+        b.end = Math.min(1440, b.end + minutes);
+      }
+    });
+    block.end = Math.min(1440, block.end + minutes);
+    block.ranOver = (block.ranOver || 0) + minutes;
+    changed();
+  }
+
+  /* first gap of `length` minutes from `from` onward */
+  function findSlot(length, from) {
+    var day = blocksOn(dayKey());
+    var at = Math.ceil((typeof from === 'number' ? from : minutesNow()) / 15) * 15;
+    for (var guard = 0; guard < 96; guard++) {
+      var clash = day.filter(function (b) { return at < b.end && at + length > b.start; })[0];
+      if (!clash) return Math.min(at, 1440 - length);
+      at = Math.ceil(clash.end / 15) * 15;
+    }
+    return Math.min(at, 1440 - length);
+  }
+
+  /* ---------- time logs ---------- */
+
+  function logTime(taskId, blockId, ms) {
+    if (!ms || ms < 1000) return;
+    state.logs.push({ id: id('s_'), taskId: taskId || null, blockId: blockId || null, date: dayKey(), ms: ms, at: Date.now() });
+    if (state.logs.length > 2000) state.logs = state.logs.slice(-2000);
+    changed();
+  }
+
+  function loggedOn(key, taskId) {
+    return state.logs.filter(function (l) {
+      return l.date === (key || dayKey()) && (!taskId || l.taskId === taskId);
+    }).reduce(function (sum, l) { return sum + l.ms; }, 0);
+  }
+
+  /* ---------- lists ---------- */
+
+  function addList(name) {
+    var list = { id: id('l_'), name: String(name || 'List').trim().slice(0, 40), order: state.lists.length };
+    state.lists.push(list);
+    changed();
+    return list;
+  }
+
+  function removeList(listId) {
+    state.lists = state.lists.filter(function (l) { return l.id !== listId; });
+    state.tasks.forEach(function (t) {
+      if (t.listId === listId) t.listId = state.lists[0] ? state.lists[0].id : null;
+    });
+    changed();
+  }
+
+  function renameList(listId, name) {
+    var list = state.lists.filter(function (l) { return l.id === listId; })[0];
+    if (list) { list.name = String(name).trim().slice(0, 40); changed(); }
+  }
+
+  /* ---------- the remote half, dormant until it is configured ---------- */
+
+  var Remote = (function () {
+    var client = null, status = 'off', config = null, pushTimer = 0;
+
+    function creds() {
+      if (config) return config;
+      try {
+        var saved = JSON.parse(localStorage.getItem('pip.supabase') || 'null');
+        if (saved && saved.url && saved.key) return (config = saved);
+      } catch (e) { /* ignore */ }
+      if (window.PIP_CONFIG && window.PIP_CONFIG.supabase) return (config = window.PIP_CONFIG.supabase);
+      return null;
+    }
+
+    function connect() {
+      var where = creds();
+      if (!where) { status = 'off'; return Promise.resolve(false); }
+      status = 'connecting';
+      return import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm')
+        .then(function (mod) {
+          client = mod.createClient(where.url, where.key);
+          return client.auth.getSession();
+        })
+        .then(function (res) {
+          status = res && res.data && res.data.session ? 'on' : 'signed-out';
+          return status === 'on' ? pull() : false;
+        })
+        .catch(function (err) {
+          status = 'error: ' + (err && err.message ? err.message : err);
+          return false;
+        });
+    }
+
+    function pull() {
+      return client.from('pip_state').select('data, updated').eq('id', 'plan').maybeSingle()
+        .then(function (res) {
+          var row = res && res.data;
+          if (row && row.data && (row.data.updated || 0) > (state.updated || 0)) {
+            state = row.data;
+            listeners.forEach(function (fn) { fn(state); });
+          } else if (!row) {
+            push(state);
+          }
+          return true;
+        });
+    }
+
+    function push(snapshot) {
+      if (!client || status !== 'on') return;
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(function () {
+        client.from('pip_state')
+          .upsert({ id: 'plan', data: snapshot, updated: snapshot.updated }, { onConflict: 'user_id,id' })
+          .then(function () {}, function () {});
+      }, 900);
+    }
+
+    return {
+      connect: connect,
+      push: push,
+      ready: function () { return status === 'on'; },
+      status: function () { return status; },
+      client: function () { return client; },
+      save: function (url, key) {
+        config = { url: url, key: key };
+        try { localStorage.setItem('pip.supabase', JSON.stringify(config)); } catch (e) {}
+        return connect();
+      },
+      signIn: function (email, password) {
+        if (!client) return Promise.reject(new Error('not connected'));
+        return client.auth.signInWithPassword({ email: email, password: password })
+          .then(function (res) {
+            if (res.error) throw res.error;
+            status = 'on';
+            return pull();
+          });
+      },
+      signUp: function (email, password) {
+        if (!client) return Promise.reject(new Error('not connected'));
+        return client.auth.signUp({ email: email, password: password });
+      }
+    };
+  })();
+
+  /* ---------- boot ---------- */
+
+  function init() {
+    var saved = read();
+    state = saved && saved.version ? saved : seed();
+    if (!state.logs) state.logs = [];
+    if (!state.blocks) state.blocks = [];
+    Remote.connect();
+    return state;
+  }
+
+  return {
+    init: init,
+    state: function () { return state; },
+    subscribe: function (fn) { listeners.push(fn); },
+    notify: changed,
+
+    dayKey: dayKey,
+    minutesNow: minutesNow,
+    clockLabel: clockLabel,
+
+    lists: function () { return state.lists.slice().sort(byOrder); },
+    addList: addList, removeList: removeList, renameList: renameList,
+
+    tags: function () { return state.tags.slice(); },
+    tagByName: tagByName,
+    tagsOf: function (task) {
+      return (task.tags || []).map(function (tid) {
+        return state.tags.filter(function (t) { return t.id === tid; })[0];
+      }).filter(Boolean);
+    },
+    setTaskTags: function (taskId, names) {
+      var task = taskById(taskId);
+      if (!task) return;
+      task.tags = names.map(function (n) { var t = tagByName(n); return t && t.id; }).filter(Boolean);
+      changed();
+    },
+
+    tasks: function () { return state.tasks.slice(); },
+    addTask: addTask, updateTask: updateTask, removeTask: removeTask,
+    taskById: taskById, toggleDone: toggleDone, isDone: isDone, repeats: repeats, dueOn: dueOn,
+
+    blocks: blocksOn, addBlock: addBlock, updateBlock: updateBlock, removeBlock: removeBlock,
+    blockById: blockById, currentBlock: currentBlock, nextBlock: nextBlock,
+    overrunBlock: overrunBlock, shiftAfter: shiftAfter, findSlot: findSlot,
+
+    logTime: logTime, loggedOn: loggedOn,
+
+    remote: Remote,
+
+    /* a way out, whatever happens to the browser */
+    exportJSON: function () { return JSON.stringify(state, null, 2); },
+    importJSON: function (text) {
+      var incoming = JSON.parse(text);
+      if (!incoming || !incoming.version) throw new Error('not a pip export');
+      state = incoming;
+      changed();
+    }
+  };
+})();

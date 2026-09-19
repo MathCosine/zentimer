@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>pip — study timer</title>
-<meta name="description" content="A cutesy study timer with a little pixel creature who works alongside you.">
+<title>pip — study desk</title>
+<meta name="description" content="A study timer, day planner and task list with two little pixel creatures.">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#ffeedc" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#241d2e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eaf4fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#152530" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon.svg">
 <link rel="manifest" href="manifest.webmanifest">
@@ -18,55 +18,88 @@
 
 <div class="sky" aria-hidden="true"></div>
 
-<main class="stage">
+<main class="app">
 
-  <section class="card clock-card" data-perch>
-    <button class="clock" id="clock" type="button" title="Switch 12 / 24 hour">
-      <span id="clockTime">--:--</span><span class="secs" id="clockSecs">00</span><span class="mer" id="meridiem"></span>
-    </button>
-    <p class="clock-meta">
-      <span id="dateLabel">&nbsp;</span>
-      <span class="dot" aria-hidden="true">•</span>
-      <span id="zoneLabel">&nbsp;</span>
-    </p>
-  </section>
+  <header class="card bar" data-perch>
+    <div class="bar-clock">
+      <button class="clock" id="clock" type="button" title="Switch 12 / 24 hour">
+        <span id="clockTime">--:--</span><span class="secs" id="clockSecs">00</span><span class="mer" id="meridiem"></span>
+      </button>
+      <p class="clock-meta">
+        <span id="dateLabel">&nbsp;</span>
+        <span class="dot" aria-hidden="true">•</span>
+        <span id="zoneLabel">&nbsp;</span>
+      </p>
+    </div>
 
-  <section class="card timer-card" data-perch>
-    <input class="task" id="task" type="text" maxlength="42" spellcheck="false"
-           placeholder="what are we working on?" aria-label="What are you working on?">
+    <div class="bar-timer">
+      <div class="dial">
+        <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="ring-track" cx="100" cy="100" r="88"></circle>
+          <circle class="ring-progress" id="ringProgress" cx="100" cy="100" r="88"></circle>
+        </svg>
+        <div class="dial-face">
+          <button class="countdown" id="countdown" type="button" title="Click to set the length">30:00</button>
+          <input class="countdown-input" id="durationInput" type="text" spellcheck="false" hidden
+                 aria-label="Timer length, for example 25, 50:00 or 1h30">
+        </div>
+      </div>
 
-    <div class="dial">
-      <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
-        <circle class="ring-track" cx="100" cy="100" r="88"></circle>
-        <circle class="ring-progress" id="ringProgress" cx="100" cy="100" r="88"></circle>
-      </svg>
-      <div class="dial-face">
-        <button class="countdown" id="countdown" type="button" title="Click to set the length">30:00</button>
-        <input class="countdown-input" id="durationInput" type="text" spellcheck="false" hidden
-               aria-label="Timer length, for example 25, 50:00 or 1h30">
+      <div class="timer-side">
         <p class="phase" id="phase" role="status" aria-live="polite">ready</p>
+        <p class="timer-doing" id="timerDoing"></p>
+        <div class="presets" id="presets" role="group" aria-label="Session lengths in minutes">
+          <button type="button" data-min="15">15</button>
+          <button type="button" data-min="30">30</button>
+          <button type="button" data-min="45">45</button>
+          <button type="button" data-min="60">60</button>
+          <button type="button" data-min="90">90</button>
+          <button type="button" data-min="120">120</button>
+        </div>
+        <div class="controls">
+          <button class="nudge" id="minus" type="button" aria-label="Five minutes less">−5</button>
+          <button class="go" id="startPause" type="button">start</button>
+          <button class="nudge" id="plus" type="button" aria-label="Five minutes more">+5</button>
+          <button class="ghost reset is-gone" id="reset" type="button" tabindex="-1" aria-hidden="true">reset</button>
+        </div>
       </div>
     </div>
+  </header>
 
-    <div class="presets" id="presets" role="group" aria-label="Session lengths in minutes">
-      <button type="button" data-min="15">15</button>
-      <button type="button" data-min="30">30</button>
-      <button type="button" data-min="45">45</button>
-      <button type="button" data-min="60">60</button>
-      <button type="button" data-min="90">90</button>
-      <button type="button" data-min="120">120</button>
+  <section class="card plan-card" aria-label="Today's plan">
+    <div class="now-strip" id="nowStrip">
+      <span class="now-dot" aria-hidden="true"></span>
+      <div class="now-text">
+        <strong id="nowTitle">nothing planned</strong>
+        <span id="nowWhen"></span>
+      </div>
+      <button class="now-shift" id="nowShift" type="button" hidden></button>
+      <button class="pin" id="pinBtn" type="button" aria-pressed="false" title="Keep the timeline open">▣</button>
     </div>
-
-    <div class="controls">
-      <button class="nudge" id="minus" type="button" aria-label="Five minutes less">−5</button>
-      <button class="go" id="startPause" type="button">start</button>
-      <button class="nudge" id="plus" type="button" aria-label="Five minutes more">+5</button>
+    <div class="timeline-wrap" id="timelineWrap">
+      <div class="timeline" id="timeline"></div>
     </div>
-
-    <button class="ghost reset is-gone" id="reset" type="button" tabindex="-1" aria-hidden="true">reset</button>
   </section>
 
-  <div class="row">
+  <section class="card tasks-card" aria-label="Tasks">
+    <div class="task-head">
+      <div class="views" id="views" role="group" aria-label="Lists"></div>
+      <div class="task-tools">
+        <button id="listBtn" type="button" title="New list">+ list</button>
+        <button id="bulkBtn" type="button" title="Paste many tasks">paste</button>
+        <button id="doneBtn" type="button" aria-pressed="false" title="Show finished">done</button>
+      </div>
+    </div>
+    <div class="chips" id="tagChips" hidden></div>
+    <form class="task-add" id="taskAdd">
+      <input id="taskInput" type="text" autocomplete="off" placeholder="add a task… (PHY Reading)" aria-label="Add a task">
+      <button type="submit" aria-label="Add">+</button>
+    </form>
+    <ul class="task-list" id="taskList"></ul>
+    <p class="task-foot"><span id="taskCount">0 open</span></p>
+  </section>
+
+  <div class="extras">
     <section class="card today-card" data-perch aria-label="Today">
       <h2 class="card-title">today</h2>
       <div class="pips" id="pips" aria-hidden="true"></div>
@@ -82,12 +115,9 @@
     </section>
   </div>
 
-  <p class="hint" aria-hidden="true">space start · r reset · a alarm · m music · p hide pets</p>
-
 </main>
 
 <canvas id="petCanvas" aria-hidden="true"></canvas>
-
 
 <div class="tools">
   <button id="soundBtn" type="button" class="tool" aria-pressed="true" title="Sound on / off">
@@ -102,9 +132,13 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 14 6 10z"></path><path d="M10.2 18.5a2 2 0 0 0 3.6 0"></path></svg>
     <span class="sr">Notify</span>
   </button>
-  <button id="petBtn" type="button" class="tool" aria-pressed="true" title="Hide / show pip">
+  <button id="petBtn" type="button" class="tool" aria-pressed="true" title="Hide / show the pets">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 15.5c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5v3H5z"></path><path d="M9 13.5h.01M15 13.5h.01" stroke-width="2.2"></path><path d="M8 18.5v2M12 18.5v2M16 18.5v2"></path></svg>
-    <span class="sr">Pip</span>
+    <span class="sr">Pets</span>
+  </button>
+  <button id="syncBtn" type="button" class="tool" aria-expanded="false" title="Sync">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5A5.5 5.5 0 0 1 7 6.5h.6A6.5 6.5 0 0 1 19 9a4.3 4.3 0 0 1-.5 8.5z"></path></svg>
+    <span class="sr">Sync</span>
   </button>
   <button id="themeBtn" type="button" class="tool" title="Day / night">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 0 1 9.5 4 8.2 8.2 0 1 0 20 14.5z"></path><g class="sun"><circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"></path></g></svg>
@@ -134,6 +168,20 @@
   </label>
 </div>
 
+<div class="sync-pop" id="syncPop" hidden>
+  <h3>sync</h3>
+  <p class="sync-status" id="syncStatus">local only</p>
+  <label class="sync-field"><span>project url</span><input id="syncUrl" type="url" spellcheck="false" placeholder="https://xxxx.supabase.co"></label>
+  <label class="sync-field"><span>anon key</span><input id="syncKey" type="text" spellcheck="false" placeholder="eyJhbGci…"></label>
+  <label class="sync-field"><span>email</span><input id="syncEmail" type="email" spellcheck="false" autocomplete="username"></label>
+  <label class="sync-field"><span>password</span><input id="syncPass" type="password" autocomplete="current-password"></label>
+  <div class="sync-row">
+    <button id="syncConnect" type="button" class="go small">connect</button>
+    <button id="syncExport" type="button" class="ghost">export</button>
+    <button id="syncImport" type="button" class="ghost">import</button>
+  </div>
+</div>
+
 <div class="ring-overlay" id="ringOverlay" hidden>
   <div class="ring-card" role="alertdialog" aria-labelledby="ringHeading">
     <svg class="ring-clock" viewBox="0 0 11 12" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="0" width="1" height="1" fill="currentColor"/><rect x="8" y="0" width="1" height="1" fill="currentColor"/><rect x="1" y="1" width="1" height="1" fill="currentColor"/><rect x="2" y="1" width="1" height="1" fill="currentColor"/><rect x="3" y="1" width="1" height="1" fill="currentColor"/><rect x="7" y="1" width="1" height="1" fill="currentColor"/><rect x="8" y="1" width="1" height="1" fill="currentColor"/><rect x="9" y="1" width="1" height="1" fill="currentColor"/><rect x="2" y="2" width="1" height="1" fill="currentColor"/><rect x="3" y="2" width="1" height="1" fill="currentColor"/><rect x="4" y="2" width="1" height="1" fill="currentColor"/><rect x="5" y="2" width="1" height="1" fill="currentColor"/><rect x="6" y="2" width="1" height="1" fill="currentColor"/><rect x="7" y="2" width="1" height="1" fill="currentColor"/><rect x="8" y="2" width="1" height="1" fill="currentColor"/><rect x="1" y="3" width="1" height="1" fill="currentColor"/><rect x="2" y="3" width="1" height="1" fill="var(--card)"/><rect x="3" y="3" width="1" height="1" fill="var(--card)"/><rect x="4" y="3" width="1" height="1" fill="var(--card)"/><rect x="5" y="3" width="1" height="1" fill="var(--card)"/><rect x="6" y="3" width="1" height="1" fill="var(--card)"/><rect x="7" y="3" width="1" height="1" fill="var(--card)"/><rect x="8" y="3" width="1" height="1" fill="var(--card)"/><rect x="9" y="3" width="1" height="1" fill="currentColor"/><rect x="0" y="4" width="1" height="1" fill="currentColor"/><rect x="1" y="4" width="1" height="1" fill="var(--card)"/><rect x="2" y="4" width="1" height="1" fill="var(--card)"/><rect x="3" y="4" width="1" height="1" fill="var(--card)"/><rect x="4" y="4" width="1" height="1" fill="currentColor"/><rect x="5" y="4" width="1" height="1" fill="var(--card)"/><rect x="6" y="4" width="1" height="1" fill="var(--card)"/><rect x="7" y="4" width="1" height="1" fill="var(--card)"/><rect x="8" y="4" width="1" height="1" fill="var(--card)"/><rect x="9" y="4" width="1" height="1" fill="var(--card)"/><rect x="10" y="4" width="1" height="1" fill="currentColor"/><rect x="0" y="5" width="1" height="1" fill="currentColor"/><rect x="1" y="5" width="1" height="1" fill="var(--card)"/><rect x="2" y="5" width="1" height="1" fill="var(--card)"/><rect x="3" y="5" width="1" height="1" fill="var(--card)"/><rect x="4" y="5" width="1" height="1" fill="currentColor"/><rect x="5" y="5" width="1" height="1" fill="var(--card)"/><rect x="6" y="5" width="1" height="1" fill="var(--card)"/><rect x="7" y="5" width="1" height="1" fill="var(--card)"/><rect x="8" y="5" width="1" height="1" fill="var(--card)"/><rect x="9" y="5" width="1" height="1" fill="var(--card)"/><rect x="10" y="5" width="1" height="1" fill="currentColor"/><rect x="0" y="6" width="1" height="1" fill="currentColor"/><rect x="1" y="6" width="1" height="1" fill="var(--card)"/><rect x="2" y="6" width="1" height="1" fill="var(--card)"/><rect x="3" y="6" width="1" height="1" fill="var(--card)"/><rect x="4" y="6" width="1" height="1" fill="currentColor"/><rect x="5" y="6" width="1" height="1" fill="currentColor"/><rect x="6" y="6" width="1" height="1" fill="currentColor"/><rect x="7" y="6" width="1" height="1" fill="var(--card)"/><rect x="8" y="6" width="1" height="1" fill="var(--card)"/><rect x="9" y="6" width="1" height="1" fill="var(--card)"/><rect x="10" y="6" width="1" height="1" fill="currentColor"/><rect x="0" y="7" width="1" height="1" fill="currentColor"/><rect x="1" y="7" width="1" height="1" fill="var(--card)"/><rect x="2" y="7" width="1" height="1" fill="var(--card)"/><rect x="3" y="7" width="1" height="1" fill="var(--card)"/><rect x="4" y="7" width="1" height="1" fill="var(--card)"/><rect x="5" y="7" width="1" height="1" fill="var(--card)"/><rect x="6" y="7" width="1" height="1" fill="var(--card)"/><rect x="7" y="7" width="1" height="1" fill="var(--card)"/><rect x="8" y="7" width="1" height="1" fill="var(--card)"/><rect x="9" y="7" width="1" height="1" fill="var(--card)"/><rect x="10" y="7" width="1" height="1" fill="currentColor"/><rect x="0" y="8" width="1" height="1" fill="currentColor"/><rect x="1" y="8" width="1" height="1" fill="var(--card)"/><rect x="2" y="8" width="1" height="1" fill="var(--card)"/><rect x="3" y="8" width="1" height="1" fill="var(--card)"/><rect x="4" y="8" width="1" height="1" fill="var(--card)"/><rect x="5" y="8" width="1" height="1" fill="var(--card)"/><rect x="6" y="8" width="1" height="1" fill="var(--card)"/><rect x="7" y="8" width="1" height="1" fill="var(--card)"/><rect x="8" y="8" width="1" height="1" fill="var(--card)"/><rect x="9" y="8" width="1" height="1" fill="var(--card)"/><rect x="10" y="8" width="1" height="1" fill="currentColor"/><rect x="1" y="9" width="1" height="1" fill="currentColor"/><rect x="2" y="9" width="1" height="1" fill="var(--card)"/><rect x="3" y="9" width="1" height="1" fill="var(--card)"/><rect x="4" y="9" width="1" height="1" fill="var(--card)"/><rect x="5" y="9" width="1" height="1" fill="var(--card)"/><rect x="6" y="9" width="1" height="1" fill="var(--card)"/><rect x="7" y="9" width="1" height="1" fill="var(--card)"/><rect x="8" y="9" width="1" height="1" fill="var(--card)"/><rect x="9" y="9" width="1" height="1" fill="currentColor"/><rect x="2" y="10" width="1" height="1" fill="currentColor"/><rect x="3" y="10" width="1" height="1" fill="currentColor"/><rect x="4" y="10" width="1" height="1" fill="currentColor"/><rect x="5" y="10" width="1" height="1" fill="currentColor"/><rect x="6" y="10" width="1" height="1" fill="currentColor"/><rect x="7" y="10" width="1" height="1" fill="currentColor"/><rect x="8" y="10" width="1" height="1" fill="currentColor"/><rect x="1" y="11" width="1" height="1" fill="currentColor"/><rect x="9" y="11" width="1" height="1" fill="currentColor"/></svg>
@@ -144,6 +192,8 @@
 </div>
 
 <script src="assets/music.js"></script>
+<script src="assets/store.js"></script>
+<script src="assets/plan.js"></script>
 <script src="assets/pet.js"></script>
 <script src="assets/app.js"></script>
 </body>
