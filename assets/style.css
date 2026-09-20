@@ -438,7 +438,7 @@ body[data-mode="break"] .phase { color: var(--green); }
   background: var(--well);
   border: 1.5px solid var(--hair);
   border-radius: 12px;
-  transition: height 320ms var(--ease), background 320ms var(--ease);
+  transition: height 150ms var(--ease), background 150ms var(--ease);
   overscroll-behavior: contain;
 }
 
@@ -524,6 +524,12 @@ body[data-mode="break"] .phase { color: var(--green); }
 }
 
 .block.is-dragging { cursor: grabbing; opacity: .9; z-index: 5; }
+
+/* Shut, a press opens the day; open, it draws a block. Say which. */
+.timeline-wrap { cursor: zoom-in; }
+.plan-card.is-open .timeline-wrap { cursor: default; }
+.plan-card.is-open .timeline { cursor: crosshair; }
+.block { cursor: grab; }
 
 /* a short block has room for its name only */
 .block.is-tight { padding: 0 7px; }
@@ -1439,10 +1445,16 @@ body.split .pane-head { margin: 1px 2px 0; }
   letter-spacing: 0;
 }
 
-/* Two panes share the room the one list used to have, but a short pane only
-   takes what it needs -- a pane with two tasks should not hold back a pane
-   with eight. They shrink, and scroll, only once there is genuinely no room. */
-body.split .task-list { flex: 0 1 auto; min-height: 56px; }
+/* The panes own whatever the card has left, and JS hands out that height
+   between them, so the card is filled exactly -- no pane scrolling two rows
+   at a time above an acre of blank card. */
+.panes {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+body.split .task-list { flex: 0 0 auto; }
 
 /* Split mode wants every pixel it can find, so the frame tightens and, on a
    short window, the extras step aside -- turn the split off to get them back. */

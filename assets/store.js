@@ -73,13 +73,28 @@ window.Store = (function () {
   }
 
   function persist() {
-    state.updated = Date.now();
+    persistTimer = 0;
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* private mode */ }
     if (Remote.ready()) Remote.push(state);
   }
 
+  /* Typing a title used to serialise the whole document to storage on every
+     keystroke. The stamp still lands at the moment of the edit, so last-write
+     -wins stays honest, but the writing itself waits for you to pause -- and
+     goes out at once if the page is about to disappear. */
+  var persistTimer = 0;
+  function save() {
+    state.updated = Date.now();
+    if (!persistTimer) persistTimer = setTimeout(persist, 250);
+  }
+
+  function flush() { if (persistTimer) { clearTimeout(persistTimer); persist(); } }
+
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) flush(); });
+
   function changed() {
-    persist();
+    save();
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       listeners.forEach(function (fn) { fn(state); });
@@ -239,11 +254,14 @@ window.Store = (function () {
      and only from today on, so your past days stay as they were. */
   function ensureRoutine(key) {
     var today = dayKey();
-    var before = state.blocks.length;
+    var stale = state.blocks.some(function (b) {
+      return b.routine && b.date >= today && !b.done;
+    });
+    if (!stale) return 0;                 // the usual case: nothing to do, nothing allocated
     state.blocks = state.blocks.filter(function (b) {
       return !(b.routine && b.date >= today && !b.done);
     });
-    if (state.blocks.length !== before) changed();
+    changed();
     return 0;
   }
 
@@ -483,6 +501,7 @@ window.Store = (function () {
     state: function () { return state; },
     subscribe: function (fn) { listeners.push(fn); },
     notify: changed,
+    quiet: save,      // save it, but do not make the whole planner redraw
 
     dayKey: dayKey,
     minutesNow: minutesNow,

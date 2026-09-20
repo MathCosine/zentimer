@@ -33,7 +33,7 @@ window.Plan = (function () {
     try { localStorage.setItem(PREF, JSON.stringify({ split: ui.split, top: ui.top })); } catch (e) {}
   }
   var hour12 = false;
-  var hoverTimer = 0, collapseTimer = 0, peekTimer = 0;
+  var hoverTimer = 0, collapseTimer = 0;
   var dwellAt = null;
   var dragging = null, pendingRender = false, pressed = false;
 
@@ -349,7 +349,9 @@ window.Plan = (function () {
     title.className = 'edit-title';
     title.dataset.focusKey = 'task-title:' + task.id;
     title.value = task.title;
-    title.addEventListener('input', function () { task.title = title.value.slice(0, 140); Store.notify(); });
+    // nothing else on screen shows this title while the editor is open, so
+    // typing in it need not redraw the planner a character at a time
+    title.addEventListener('input', function () { task.title = title.value.slice(0, 140); Store.quiet(); });
     title.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); closeEditor(); }
     });
@@ -525,21 +527,55 @@ window.Plan = (function () {
     node.hidden = false;
   }
 
-  /* Flex shrinks both panes in proportion, which starves a short pane to feed a
-     long one. When the two together want more room than there is, the shorter
-     one is capped at what it actually needs and the longer one takes the rest. */
+  /* The two panes are handed exact heights out of the room the card has left.
+     Flex alone either starved the short pane to feed the long one, or left
+     both content sized with the rest of the card blank beneath them.
+       both fit        -> the short one keeps its size, the slack goes below
+       neither fits    -> the shorter need is met first, the longer one scrolls
+     Measuring happens with both panes at zero so the room is the container's,
+     not whatever the last frame happened to leave behind. */
   function sharePanes() {
-    el.taskList.style.maxHeight = '';
-    el.taskListB.style.maxHeight = '';
-    if (!ui.split) return;
-    var room = el.taskList.clientHeight + el.taskListB.clientHeight;
-    var needA = el.taskList.scrollHeight, needB = el.taskListB.scrollHeight;
-    if (!room || needA + needB <= room) return;
-    // capping the long pane is what lets the short one keep its full size:
-    // a max-height can only shrink a pane, never grow the other one back
-    var keep = Math.min(Math.min(needA, needB), Math.round(room * 0.6));
-    var long = needA > needB ? el.taskList : el.taskListB;
-    long.style.maxHeight = (room - keep) + 'px';
+    el.taskList.style.height = '';
+    el.taskListB.style.height = '';
+    if (!ui.split || !el.panes) return;
+
+    el.taskList.style.height = '0px';
+    el.taskListB.style.height = '0px';
+    var needA = el.taskList.scrollHeight;
+    var needB = el.taskListB.scrollHeight;
+    var room = el.panes.clientHeight - el.paneHeadA.offsetHeight - el.paneHeadB.offsetHeight;
+    if (room < 40) { el.taskList.style.height = ''; el.taskListB.style.height = ''; return; }
+
+    var floor = Math.min(56, Math.floor(room / 2));
+    var high;
+    if (needA + needB <= room) {
+      high = needA;                       // both fit; the slack sits under the lower pane
+    } else {
+      // neither fits: share by how much each wants, then hand back anything a
+      // pane cannot use, so nine tasks are never crushed to feed five
+      high = clamp(Math.round(room * needA / (needA + needB)), floor, room - floor);
+      if (needA < high) high = Math.max(floor, needA);
+      else if (needB < room - high) high = Math.min(room - floor, room - needB);
+    }
+
+    high = wholeRows(el.taskList, clamp(Math.round(high), 0, room));
+    el.taskList.style.height = high + 'px';
+    el.taskListB.style.height = (room - high) + 'px';
+  }
+
+  /* A row sliced in half immediately above the next heading reads as a mistake.
+     The upper pane stops on a row boundary and the spare goes to the lower one,
+     where a part row sits against the foot and honestly means "more below". */
+  function wholeRows(node, height) {
+    var kids = node.children;
+    if (!kids.length) return height;
+    var first = kids[0].offsetTop, fits = 0;
+    for (var i = 0; i < kids.length; i++) {
+      var end = kids[i].offsetTop - first + kids[i].offsetHeight;
+      if (end > height) break;
+      fits = end;
+    }
+    return fits || height;
   }
 
   function renderTasks() {
@@ -714,11 +750,21 @@ window.Plan = (function () {
 
   /* Drawing on open timeline: press and drag to sketch out the length with a live
      preview, or just tap for half an hour. Either way you watch it appear. */
+  /* A mouse draw ends in a synthetic click on the same spot. That one click is
+     the gesture's own and must be swallowed -- but only that one. The old
+     half-second window also ate the next real click, which is why getting out
+     of the block bar took two goes. */
   var lastDraw = 0;
 
+  /* One rule for a press on empty timeline, so it is never a surprise:
+       shut          -> open the day, because six squashed hours are unaimable
+       something open-> put it away; getting out of an editor is not a new block
+       otherwise     -> a new half hour where you pressed                        */
   function onTimelineTap(event) {
     if (event.target !== el.timeline) return;
-    if (Date.now() - lastDraw < 500) return;          // the mouse gesture already handled it
+    if (lastDraw && Date.now() - lastDraw < 400) { lastDraw = 0; return; }
+    if (!ui.expanded) { openTimeline(true, true); return; }
+    if (ui.selected || ui.editing) { ui.selected = null; ui.editing = null; render(); return; }
     var scale = ppm();
     var from = +el.timeline.dataset.from;
     var box = el.timeline.getBoundingClientRect();
@@ -730,6 +776,8 @@ window.Plan = (function () {
   function onTimelineDraw(event) {
     if (event.target !== el.timeline || event.button === 2) return;
     if (event.pointerType === 'touch') return;        // let a finger scroll instead
+    // the click handler owns both of these; drawing here would pre-empt it
+    if (!ui.expanded || ui.selected || ui.editing) return;
     event.preventDefault();
 
     var scale = ppm();
@@ -913,10 +961,11 @@ window.Plan = (function () {
     if (typeof pin === 'boolean') ui.pinned = pin;
     el.planCard.classList.toggle('is-open', open);
     document.body.classList.toggle('planning', open);
-    el.pinBtn.setAttribute('aria-pressed', String(ui.pinned));
+    el.pinBtn.setAttribute('aria-pressed', String(ui.expanded));
+    el.pinBtn.title = ui.expanded ? 'Back to the next few hours' : 'Open the whole day';
     sizeTimeline();
     // let the height transition run, then redraw at the new scale
-    setTimeout(function () { if (!dragging) { renderTimeline(); scrollToNow(); } }, open ? 300 : 0);
+    setTimeout(function () { if (!dragging) { renderTimeline(); scrollToNow(); } }, open ? 170 : 0);
     renderTimeline();
     scrollToNow();
   }
@@ -928,17 +977,21 @@ window.Plan = (function () {
     el.timelineWrap.scrollTop = Math.max(0, (focus - DAY_START) * ppm() - middle);
   }
 
+  /* Nothing closes under you while you are in the middle of something. */
+  function busy() {
+    return ui.pinned || dragging || ui.selected || ui.editing ||
+           el.planCard.contains(document.activeElement);
+  }
+
   function collapseSoon(delay) {
     clearTimeout(collapseTimer);
     collapseTimer = setTimeout(function () {
-      if (!ui.pinned && !dragging && !ui.selected && !el.timelineWrap.contains(document.activeElement)) openTimeline(false);
-    }, delay || 320);
+      if (!busy()) openTimeline(false);
+    }, delay === undefined ? 180 : delay);
   }
 
   function peek() {
-    openTimeline(true);
-    clearTimeout(peekTimer);
-    peekTimer = setTimeout(function () { if (!ui.pinned && !ui.selected) collapseSoon(60); }, 2200);
+    openTimeline(true, true);
   }
 
   /* opens when the pointer settles, not when it is passing through */
@@ -953,20 +1006,17 @@ window.Plan = (function () {
       clearTimeout(hoverTimer);
       hoverTimer = setTimeout(function () {
         if (!pressed && !dragging && !ui.expanded) openTimeline(true);
-      }, 260);
+      }, 320);
     });
 
-    el.timelineWrap.addEventListener('pointerleave', function () {
+    /* Leaving the card is the whole signal -- no document-wide slop box second
+       guessing where the pointer went, which is what made it linger. */
+    el.planCard.addEventListener('pointerenter', function () { clearTimeout(collapseTimer); });
+    el.planCard.addEventListener('pointerleave', function (event) {
       clearTimeout(hoverTimer);
       dwellAt = null;
-    });
-
-    document.addEventListener('pointermove', function (event) {
-      if (!ui.expanded || ui.pinned || dragging) return;
-      var box = el.planCard.getBoundingClientRect();
-      var outside = event.clientX < box.left - 40 || event.clientX > box.right + 40 ||
-                    event.clientY < box.top - 40 || event.clientY > box.bottom + 40;
-      if (outside) collapseSoon(); else clearTimeout(collapseTimer);
+      if (event.pointerType === 'touch') return;      // a finger has no hover to lose
+      collapseSoon();
     });
 
     el.timeline.addEventListener('pointerdown', onTimelineDraw);
@@ -974,8 +1024,16 @@ window.Plan = (function () {
 
     el.pinBtn.addEventListener('click', function (event) {
       event.stopPropagation();
-      ui.pinned = !ui.pinned;
-      openTimeline(ui.pinned || ui.expanded, ui.pinned);
+      var open = !ui.expanded;
+      openTimeline(open, open);
+    });
+
+    /* Clicking away is the other way out of the block bar. */
+    document.addEventListener('pointerdown', function (event) {
+      if (!ui.selected || dragging) return;
+      if (el.planCard.contains(event.target)) return;
+      ui.selected = null;
+      render();
     });
 
     el.dayPrev.addEventListener('click', function () { shiftDay(-1); });
@@ -984,11 +1042,14 @@ window.Plan = (function () {
 
     document.addEventListener('keydown', function (event) {
       if (event.key !== 'Escape') return;
-      var tag = (event.target.tagName || '').toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      var inField = /^(input|textarea|select)$/.test((event.target.tagName || '').toLowerCase());
+      var mine = el.planCard.contains(event.target) || el.taskList.contains(event.target) ||
+                 (el.taskListB && el.taskListB.contains(event.target));
+      if (inField && !mine) return;                 // somebody else's field, leave it alone
+      if (inField) event.target.blur();
       if (ui.selected) { ui.selected = null; render(); return; }
       if (ui.editing) { closeEditor(); return; }
-      if (ui.expanded) { ui.pinned = false; openTimeline(false, false); }
+      if (ui.expanded) openTimeline(false, false);
     });
   }
 
@@ -1165,7 +1226,7 @@ window.Plan = (function () {
       views: $('views'), tagChips: $('tagChips'), taskList: $('taskList'), taskCount: $('taskCount'),
       taskAdd: $('taskAdd'), taskInput: $('taskInput'), bulkBtn: $('bulkBtn'), listBtn: $('listBtn'),
       doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'),
-      taskListB: $('taskListB'), paneHeadA: $('paneHeadA'), paneHeadB: $('paneHeadB'),
+      taskListB: $('taskListB'), paneHeadA: $('paneHeadA'), paneHeadB: $('paneHeadB'), panes: $('panes'),
       timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'), blockBar: $('blockBar'),
       nowStrip: $('nowStrip'), nowTitle: $('nowTitle'), nowWhen: $('nowWhen'), nowShift: $('nowShift'),
       dayPrev: $('dayPrev'), dayNext: $('dayNext'), dayLabel: $('dayLabel'), daySum: $('daySum'),
