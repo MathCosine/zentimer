@@ -73,14 +73,15 @@ window.Plan = (function () {
       return;
     }
 
-    var lists = 0;
-    [el.taskList, el.taskListB].forEach(function (n) { if (n && !n.hidden) lists += n.clientHeight; });
+    var lists = el.taskList.clientHeight;
     var floor = ui.expanded ? OPEN_FLOOR : TASK_FLOOR;
     /* The day gives up room whenever the list needs it more: while a task
        editor is open, and while two panes are sharing what one used to have. */
-    var share = ui.editing ? 0.13 : (ui.split ? 0.15 : 0.20);
-    var least = ui.split || ui.editing ? 92 : 126;
-    var shut = clamp(Math.round(window.innerHeight * share), least, 320);
+    /* Six hours read fine in about a seventh of the window; anything more was
+       just taking room the task list badly needs. */
+    var share = ui.editing ? 0.13 : 0.16;
+    var least = ui.editing ? 92 : 118;
+    var shut = clamp(Math.round(window.innerHeight * share), least, 260);
     var want = el.timelineWrap.clientHeight + (lists - floor);
 
     boxTarget = ui.expanded ? clamp(Math.round(want), shut, 1100) : shut;
@@ -474,31 +475,43 @@ window.Plan = (function () {
     render();
   }
 
-  function fillList(node, tasks, key, scheduled, emptyText) {
-    node.textContent = '';
+  function fillList(tasks, key, scheduled, emptyText) {
     if (!tasks.length) {
       var empty = document.createElement('li');
       empty.className = 'task-empty';
       empty.textContent = emptyText;
-      node.appendChild(empty);
+      el.taskList.appendChild(empty);
       return;
     }
-    tasks.forEach(function (task) { node.appendChild(taskRow(task, key, scheduled)); });
+    tasks.forEach(function (task) { el.taskList.appendChild(taskRow(task, key, scheduled)); });
+  }
+
+  /* A heading that stays put at the top of the list while you scroll past its
+     group, so you always know which half you are looking at. */
+  function section(name, count) {
+    var head = document.createElement('li');
+    head.className = 'pane-head';
+    var strong = document.createElement('b');
+    strong.textContent = name;
+    head.appendChild(strong);
+    var tally = document.createElement('span');
+    tally.className = 'pane-count';
+    tally.textContent = count;
+    head.appendChild(tally);
+    el.taskList.appendChild(head);
   }
 
   /* An editor opened near the bottom would hide the very fields you came for,
-     so walk its pane up until the whole of it is showing. */
+     so walk the list up until the whole of it is showing. */
   function revealEditor() {
     if (!reveal) return;
     reveal = null;
-    var row = document.querySelector('.task-list .task.is-editing');
+    var row = el.taskList.querySelector('.task.is-editing');
     if (!row) return;
-    var pane = row.parentNode;
-    // measured against the pane itself: .task-list is not the offset parent,
-    // so offsetTop would be relative to the card and land in the wrong place
+    var pane = el.taskList;
     var box = pane.getBoundingClientRect();
     var seat = row.getBoundingClientRect();
-    // an editor taller than its pane can only ever show its top, so go there
+    // an editor taller than the list can only ever show its top, so go there
     if (seat.height >= box.height - 8) {
       pane.scrollTop += (seat.top - box.top) - 8;
       return;
@@ -512,72 +525,12 @@ window.Plan = (function () {
     var names = Store.tags()
       .filter(function (t) { return ids.indexOf(t.id) !== -1; })
       .map(function (t) { return t.name; });
-    return names.length ? names.join(' · ') : '';
+    return names.length ? names.join(' \u00b7 ') : '';
   }
 
-  function paneHead(node, name, count) {
-    node.textContent = '';
-    var strong = document.createElement('b');
-    strong.textContent = name;
-    node.appendChild(strong);
-    var tally = document.createElement('span');
-    tally.className = 'pane-count';
-    tally.textContent = count;
-    node.appendChild(tally);
-    node.hidden = false;
-  }
-
-  /* The two panes are handed exact heights out of the room the card has left.
-     Flex alone either starved the short pane to feed the long one, or left
-     both content sized with the rest of the card blank beneath them.
-       both fit        -> the short one keeps its size, the slack goes below
-       neither fits    -> the shorter need is met first, the longer one scrolls
-     Measuring happens with both panes at zero so the room is the container's,
-     not whatever the last frame happened to leave behind. */
-  function sharePanes() {
-    el.taskList.style.height = '';
-    el.taskListB.style.height = '';
-    if (!ui.split || !el.panes) return;
-
-    el.taskList.style.height = '0px';
-    el.taskListB.style.height = '0px';
-    var needA = el.taskList.scrollHeight;
-    var needB = el.taskListB.scrollHeight;
-    var room = el.panes.clientHeight - el.paneHeadA.offsetHeight - el.paneHeadB.offsetHeight;
-    if (room < 40) { el.taskList.style.height = ''; el.taskListB.style.height = ''; return; }
-
-    var floor = Math.min(56, Math.floor(room / 2));
-    var high;
-    if (needA + needB <= room) {
-      high = needA;                       // both fit; the slack sits under the lower pane
-    } else {
-      // neither fits: share by how much each wants, then hand back anything a
-      // pane cannot use, so nine tasks are never crushed to feed five
-      high = clamp(Math.round(room * needA / (needA + needB)), floor, room - floor);
-      if (needA < high) high = Math.max(floor, needA);
-      else if (needB < room - high) high = Math.min(room - floor, room - needB);
-    }
-
-    high = wholeRows(el.taskList, clamp(Math.round(high), 0, room));
-    el.taskList.style.height = high + 'px';
-    el.taskListB.style.height = (room - high) + 'px';
-  }
-
-  /* A row sliced in half immediately above the next heading reads as a mistake.
-     The upper pane stops on a row boundary and the spare goes to the lower one,
-     where a part row sits against the foot and honestly means "more below". */
-  function wholeRows(node, height) {
-    var kids = node.children;
-    if (!kids.length) return height;
-    var first = kids[0].offsetTop, fits = 0;
-    for (var i = 0; i < kids.length; i++) {
-      var end = kids[i].offsetTop - first + kids[i].offsetHeight;
-      if (end > height) break;
-      fits = end;
-    }
-    return fits || height;
-  }
-
+  /* Split is a grouping, not a second window. One list scrolls, the two groups
+     sit in it under headings that stick -- so a long group is never crushed to
+     make room for a short one, and nothing is capped at a row and a half. */
   function renderTasks() {
     var key = Store.dayKey();
     var tasks = visibleTasks();
@@ -587,12 +540,10 @@ window.Plan = (function () {
 
     document.body.classList.toggle('split', ui.split);
     el.splitBtn.setAttribute('aria-pressed', String(ui.split));
+    el.taskList.textContent = '';
 
     if (!ui.split) {
-      el.paneHeadA.hidden = el.paneHeadB.hidden = el.taskListB.hidden = true;
-      el.taskListB.textContent = '';
-      fillList(el.taskList, tasks, key, scheduled,
-        ui.tags.length ? 'nothing with those tags' : 'nothing here yet');
+      fillList(tasks, key, scheduled, ui.tags.length ? 'nothing with those tags' : 'nothing here yet');
     } else {
       var up = [], down = [];
       tasks.forEach(function (task) {
@@ -600,15 +551,12 @@ window.Plan = (function () {
         (mine ? up : down).push(task);
       });
       var name = paneName(ui.top);
-      paneHead(el.paneHeadA, name || 'top pane', up.length);
-      paneHead(el.paneHeadB, name ? 'everything else' : 'everything', down.length);
-      el.taskListB.hidden = false;
-      fillList(el.taskList, up, key, scheduled,
-        name ? 'nothing tagged ' + name + ' today' : 'tap a tag above to fill this pane');
-      fillList(el.taskListB, down, key, scheduled, 'nothing here yet');
+      section(name || 'top of the list', up.length);
+      fillList(up, key, scheduled, name ? 'nothing tagged ' + name + ' today' : 'tap a tag above to fill this');
+      section(name ? 'everything else' : 'everything', down.length);
+      fillList(down, key, scheduled, 'nothing here yet');
     }
 
-    sharePanes();
     revealEditor();
 
     var open = Store.tasks().filter(function (t) { return !Store.isDone(t, key); }).length;
@@ -757,19 +705,19 @@ window.Plan = (function () {
   var lastDraw = 0;
 
   /* One rule for a press on empty timeline, so it is never a surprise:
-       shut          -> open the day, because six squashed hours are unaimable
-       something open-> put it away; getting out of an editor is not a new block
-       otherwise     -> a new half hour where you pressed                        */
+       something open -> put it away; getting out of an editor is not a new block
+       otherwise      -> a new half hour where you pressed, and the day opens so
+                         you can see it and drag it about                         */
   function onTimelineTap(event) {
     if (event.target !== el.timeline) return;
     if (lastDraw && Date.now() - lastDraw < 400) { lastDraw = 0; return; }
-    if (!ui.expanded) { openTimeline(true, true); return; }
     if (ui.selected || ui.editing) { ui.selected = null; ui.editing = null; render(); return; }
     var scale = ppm();
     var from = +el.timeline.dataset.from;
     var box = el.timeline.getBoundingClientRect();
     var at = clamp(Math.round((from + (event.clientY - box.top) / scale) / 15) * 15, DAY_START, DAY_END - 30);
     var block = Store.addBlock({ date: viewDate(), start: at, end: at + 30, title: '' });
+    if (!ui.expanded) openTimeline(true, true);
     selectBlock(block.id, true);
   }
 
@@ -777,7 +725,8 @@ window.Plan = (function () {
     if (event.target !== el.timeline || event.button === 2) return;
     if (event.pointerType === 'touch') return;        // let a finger scroll instead
     // the click handler owns both of these; drawing here would pre-empt it
-    if (!ui.expanded || ui.selected || ui.editing) return;
+    if (ui.selected || ui.editing) return;
+    if (!ui.expanded) return;          // shut, a press is a tap: the click handler has it
     event.preventDefault();
 
     var scale = ppm();
@@ -1043,8 +992,7 @@ window.Plan = (function () {
     document.addEventListener('keydown', function (event) {
       if (event.key !== 'Escape') return;
       var inField = /^(input|textarea|select)$/.test((event.target.tagName || '').toLowerCase());
-      var mine = el.planCard.contains(event.target) || el.taskList.contains(event.target) ||
-                 (el.taskListB && el.taskListB.contains(event.target));
+      var mine = el.planCard.contains(event.target) || el.taskList.contains(event.target);
       if (inField && !mine) return;                 // somebody else's field, leave it alone
       if (inField) event.target.blur();
       if (ui.selected) { ui.selected = null; render(); return; }
@@ -1226,7 +1174,6 @@ window.Plan = (function () {
       views: $('views'), tagChips: $('tagChips'), taskList: $('taskList'), taskCount: $('taskCount'),
       taskAdd: $('taskAdd'), taskInput: $('taskInput'), bulkBtn: $('bulkBtn'), listBtn: $('listBtn'),
       doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'),
-      taskListB: $('taskListB'), paneHeadA: $('paneHeadA'), paneHeadB: $('paneHeadB'), panes: $('panes'),
       timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'), blockBar: $('blockBar'),
       nowStrip: $('nowStrip'), nowTitle: $('nowTitle'), nowWhen: $('nowWhen'), nowShift: $('nowShift'),
       dayPrev: $('dayPrev'), dayNext: $('dayNext'), dayLabel: $('dayLabel'), daySum: $('daySum'),
