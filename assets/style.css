@@ -635,7 +635,9 @@ body[data-mode="break"] .phase { color: var(--green); }
 }
 
 .views::-webkit-scrollbar { display: none; }
-.views button { white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+/* the row already scrolls sideways; without this the buttons squeezed instead,
+   which is how "Extracurricular" became "E:" */
+.views button { white-space: nowrap; display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
 
 .view-count {
   font-size: 0.58rem;
@@ -809,12 +811,17 @@ body[data-mode="break"] .phase { color: var(--green); }
 .task-meta { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 
 .tag {
+  font: inherit;
   font-size: 0.6rem;
   font-weight: 500;
   padding: 1px 6px;
   border-radius: 999px;
+  border: 0;
+  color: var(--ink);
   background: color-mix(in srgb, var(--tone, var(--blue)) 26%, var(--card));
+  cursor: pointer;
 }
+.tag:hover { background: color-mix(in srgb, var(--tone, var(--blue)) 52%, var(--card)); }
 
 .task-flag { font-size: 0.6rem; color: var(--muted); }
 .task-flag.is-late { color: var(--coral); font-weight: 600; }
@@ -1780,3 +1787,53 @@ body.settings-open .extras { display: none; }
 .stat-track { flex: 1 1 auto; height: 8px; border-radius: 999px; background: var(--well); border: 1.5px solid var(--hair); overflow: hidden; }
 .stat-of { display: block; height: 100%; background: var(--green); min-width: 2px; }
 .stat-mins { font-size: 0.68rem; color: var(--soft); font-variant-numeric: tabular-nums; }
+
+/* what the add box understood, before you commit to it */
+.add-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: -2px 2px 0;
+  font-size: 0.68rem;
+  animation: pop-in 180ms var(--ease) both;
+}
+.add-bit {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 1.5px solid var(--outline);
+  color: #fff;
+  white-space: nowrap;
+}
+.add-rest {
+  color: var(--soft);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* the task riding along with the pointer */
+.drag-chip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  pointer-events: none;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.74rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1.5px solid var(--outline);
+  box-shadow: 0 6px 16px rgba(20, 45, 60, 0.18);
+  opacity: 0.55;
+  transition: opacity 120ms var(--ease);
+}
+.drag-chip.is-over { opacity: 1; border-color: var(--accent); }
+body.dragging-task { cursor: grabbing; }
+body.dragging-task .task-list { pointer-events: none; }

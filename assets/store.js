@@ -529,6 +529,7 @@ window.Store = (function () {
     tags: function () { return state.tags.slice(); },
     tagByName: tagByName,
     tagColors: function () { return TAG_COLORS.slice(); },
+    sniffTag: sniffTag,
     tagUse: function (tagId) {
       return state.tasks.filter(function (t) { return (t.tags || []).indexOf(tagId) !== -1; }).length;
     },

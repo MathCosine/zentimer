@@ -150,6 +150,147 @@ window.Plan = (function () {
     });
   }
 
+  /* ---------- writing a task in one line ---------- */
+
+  var WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+  function dayKeyFrom(date) { return Store.dayKey(date); }
+
+  function nextWeekday(index) {
+    var d = new Date();
+    var ahead = (index - d.getDay() + 7) % 7;
+    d.setDate(d.getDate() + (ahead || 7));
+    return d;
+  }
+
+  /* "PHY essay tue 4pm 45m every week" -> a tagged task, due Tuesday, usually
+     at 16:00, half an hour long, repeating. Anything it does not recognise is
+     left in the title, so plain typing still works exactly as before. */
+  function parseAdd(raw) {
+    var text = String(raw || '').trim();
+    var out = { title: text, due: null, at: null, mins: null, repeat: 'none', weekday: null, found: [] };
+    if (!text) { out.title = ''; return out; }
+
+    function take(re, apply) {
+      var hit = text.match(re);
+      if (!hit) return;
+      if (apply(hit) === false) return;
+      text = (text.slice(0, hit.index) + ' ' + text.slice(hit.index + hit[0].length)).replace(/\s{2,}/g, ' ').trim();
+    }
+
+    // repeats first: "every day", "weekdays", "every tuesday"
+    take(/\b(every\s+day|daily|weekdays|every\s+week(?:day)?|every\s+(sun|sunday|mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday))\b/i, function (hit) {
+      var word = hit[0].toLowerCase();
+      if (/every\s+day|daily/.test(word)) { out.repeat = 'daily'; out.found.push('every day'); return; }
+      if (/weekdays|every\s+weekday/.test(word)) { out.repeat = 'weekdays'; out.found.push('weekdays'); return; }
+      if (hit[2]) {
+        var index = WEEKDAYS.map(function (d) { return d.slice(0, 3); }).indexOf(hit[2].toLowerCase().slice(0, 3));
+        if (index === -1) return false;
+        out.repeat = 'weekly';
+        out.weekday = index;
+        out.found.push('every ' + WEEKDAYS[index]);
+        return;
+      }
+      out.repeat = 'weekly';
+      out.found.push('weekly');
+    });
+
+    /* A length: "45m", "45 min", "1h", "1h30", "2h 30m". The minutes after an
+       hour are their own optional run of digits -- requiring a trailing "m"
+       meant 1h30 matched nothing at all. */
+    take(/\b(\d{1,2})\s*h(?:ours?|rs?)?\s*(\d{1,2})?\s*m?(?:in(?:ute)?s?)?\b|\b(\d{1,3})\s*m(?:in(?:ute)?s?)?\b/i, function (hit) {
+      var mins = hit[3] ? +hit[3] : (+hit[1]) * 60 + (hit[2] ? +hit[2] : 0);
+      if (!mins || mins > 600) return false;
+      out.mins = mins;
+      out.found.push(mins >= 60 ? Math.floor(mins / 60) + 'h' + (mins % 60 ? ' ' + (mins % 60) + 'm' : '') : mins + 'm');
+    });
+
+    // a time of day: "4pm", "16:30", "at 9"
+    take(/\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b(?:at\s+)?(\d{1,2}):(\d{2})\b/i, function (hit) {
+      var h, m;
+      if (hit[3]) {
+        h = +hit[1] % 12;
+        if (hit[3].toLowerCase() === 'pm') h += 12;
+        m = hit[2] ? +hit[2] : 0;
+      } else {
+        h = +hit[4]; m = +hit[5];
+      }
+      if (h > 23 || m > 59) return false;
+      out.at = h * 60 + m;
+      out.found.push(label(out.at));
+    });
+
+    // a bare hour, but only when you said "at": "at 9", "at 4"
+    if (out.at === null) {
+      take(/\bat\s+(\d{1,2})\b/i, function (hit) {
+        var h = +hit[1];
+        if (h > 23) return false;
+        if (h >= 1 && h <= 6) h += 12;     // nobody means four in the morning
+        out.at = h * 60;
+        out.found.push(label(out.at));
+      });
+    }
+
+    // a day: today, tomorrow, a weekday name, or 12/3
+    take(/\btoday\b|\btomorrow\b|\b(sun|sunday|mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday)\b|\b(\d{1,2})\/(\d{1,2})\b/i, function (hit) {
+      var word = hit[0].toLowerCase();
+      if (word === 'today') { out.due = Store.dayKey(); out.found.push('due today'); return; }
+      if (word === 'tomorrow') {
+        var t = new Date(); t.setDate(t.getDate() + 1);
+        out.due = dayKeyFrom(t); out.found.push('due tomorrow'); return;
+      }
+      if (hit[2] && hit[3]) {
+        var made = new Date();
+        made.setMonth(+hit[2] - 1, +hit[3]);
+        if (made < new Date(Store.dayKey() + 'T00:00')) made.setFullYear(made.getFullYear() + 1);
+        if (isNaN(made.getTime())) return false;
+        out.due = dayKeyFrom(made);
+        out.found.push('due ' + dueLabel(out.due));
+        return;
+      }
+      if (hit[1]) {
+        var index = WEEKDAYS.map(function (d) { return d.slice(0, 3); }).indexOf(hit[1].toLowerCase().slice(0, 3));
+        if (index === -1) return false;
+        // a weekday only sets a due date when it is not already the repeat
+        if (out.repeat === 'weekly' && out.weekday === index) return false;
+        out.due = dayKeyFrom(nextWeekday(index));
+        out.found.push('due ' + WEEKDAYS[index]);
+        return;
+      }
+      return false;
+    });
+
+    out.title = text.replace(/\s{2,}/g, ' ').trim();
+    var sniffed = Store.sniffTag ? Store.sniffTag(out.title) : null;
+    if (sniffed) out.found.unshift(sniffed);
+    return out;
+  }
+
+  /* what it understood, shown under the box before you commit to it */
+  function renderHint() {
+    if (!el.addHint) return;
+    var value = el.taskInput.value;
+    var read = value.trim() ? parseAdd(value) : null;
+    if (!read || !read.found.length) {
+      el.addHint.hidden = true;
+      el.addHint.textContent = '';
+      return;
+    }
+    el.addHint.textContent = '';
+    read.found.forEach(function (bit) {
+      el.addHint.appendChild(node('span', 'add-bit', bit));
+    });
+    if (read.title) el.addHint.appendChild(node('span', 'add-rest', read.title));
+    el.addHint.hidden = false;
+  }
+
+  function node(tag, className, text) {
+    var n = document.createElement(tag);
+    if (className) n.className = className;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
   function dueLabel(due) {
     if (!due) return '';
     var today = Store.dayKey();
@@ -267,9 +408,18 @@ window.Plan = (function () {
     var meta = document.createElement('span');
     meta.className = 'task-meta';
     Store.tagsOf(task).forEach(function (tag) {
-      var badge = document.createElement('span');
+      // tapping the badge is the shortest way to "just this class"
+      var badge = document.createElement('button');
+      badge.type = 'button';
       badge.className = 'tag tone-' + tag.color;
       badge.textContent = tag.name;
+      badge.title = 'Show only ' + tag.name;
+      badge.addEventListener('click', function (event) {
+        event.stopPropagation();
+        if (ui.split) { ui.top = [tag.id]; savePrefs(); }
+        else ui.tags = ui.tags.length === 1 && ui.tags[0] === tag.id ? [] : [tag.id];
+        render();
+      });
       meta.appendChild(badge);
     });
     if (Store.repeats(task)) {
@@ -300,8 +450,14 @@ window.Plan = (function () {
     plan.className = 'task-plan';
     plan.title = scheduled[task.id] ? 'Already on ' + dayName(viewDate()) : 'Put on ' + dayName(viewDate());
     plan.textContent = scheduled[task.id] ? '✓' : '+';
+    plan.addEventListener('pointerdown', function (event) {
+      if (event.button === 2 || scheduled[task.id]) return;
+      startTaskDrag(event, task);
+    });
+
     plan.addEventListener('click', function (event) {
       event.stopPropagation();
+      if (droppedAt && Date.now() - droppedAt < 400) { droppedAt = 0; return; }
       if (scheduled[task.id]) { selectBlock(scheduled[task.id].id); return; }
       var day = viewDate();
       var length = task.mins || 30;
@@ -721,6 +877,83 @@ window.Plan = (function () {
     selectBlock(block.id, true);
   }
 
+  /* Drag the + straight onto an hour. A plain click still drops the task at its
+     usual time, so nothing is lost by not knowing this is here; the day opens
+     as soon as you start dragging, because you cannot aim at what you cannot
+     see. */
+  var droppedAt = 0;
+
+  function startTaskDrag(event, task) {
+    var from = { x: event.clientX, y: event.clientY };
+    var length = task.mins || 30;
+    var live = false, ghost = null, hover = null, at = null;
+
+    function timeUnder(y) {
+      var box = el.timeline.getBoundingClientRect();
+      if (y < box.top - 4 || y > box.bottom + 4) return null;
+      var scale = ppm();
+      var top = +el.timeline.dataset.from;
+      return clamp(Math.round((top + (y - box.top) / scale) / 15) * 15, DAY_START, DAY_END - length);
+    }
+
+    function begin() {
+      live = true;
+      dragging = 'task';
+      if (!ui.expanded) openTimeline(true, true);
+      ghost = document.createElement('div');
+      ghost.className = 'drag-chip';
+      ghost.textContent = task.title;
+      document.body.appendChild(ghost);
+      document.body.classList.add('dragging-task');
+    }
+
+    function move(e) {
+      if (!live) {
+        if (Math.abs(e.clientX - from.x) < 5 && Math.abs(e.clientY - from.y) < 5) return;
+        begin();
+      }
+      ghost.style.transform = 'translate(' + (e.clientX + 12) + 'px,' + (e.clientY - 14) + 'px)';
+
+      at = timeUnder(e.clientY);
+      if (hover) { hover.remove(); hover = null; }
+      ghost.classList.toggle('is-over', at !== null);
+      if (at === null) return;
+      var scale = ppm();
+      hover = document.createElement('div');
+      hover.className = 'block is-ghost';
+      hover.style.top = ((at - (+el.timeline.dataset.from)) * scale) + 'px';
+      hover.style.height = Math.max(16, length * scale - 2) + 'px';
+      hover.innerHTML = '<span class="block-title"></span><span class="block-when"></span>';
+      hover.querySelector('.block-title').textContent = task.title;
+      hover.querySelector('.block-when').textContent = label(at) + '\u2013' + label(at + length);
+      hover.classList.toggle('is-tight', length * scale < 34);
+      el.timeline.appendChild(hover);
+    }
+
+    function up(e) {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', up);
+      if (hover) hover.remove();
+      if (ghost) ghost.remove();
+      document.body.classList.remove('dragging-task');
+      if (!live) return;                       // never became a drag: the click stands
+      dragging = null;
+      droppedAt = Date.now();
+      var landed = e && typeof e.clientY === 'number' ? timeUnder(e.clientY) : at;
+      if (landed === null) { render(); return; }
+      var block = Store.addBlock({
+        date: viewDate(), start: landed, end: Math.min(DAY_END, landed + length),
+        taskId: task.id, title: task.title
+      });
+      selectBlock(block.id);
+    }
+
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', up);
+  }
+
   function onTimelineDraw(event) {
     if (event.target !== el.timeline || event.button === 2) return;
     if (event.pointerType === 'touch') return;        // let a finger scroll instead
@@ -1091,12 +1324,20 @@ window.Plan = (function () {
   function wireAdding() {
     el.taskAdd.addEventListener('submit', function (event) {
       event.preventDefault();
-      var value = el.taskInput.value.trim();
-      if (!value) return;
+      var read = parseAdd(el.taskInput.value);
+      if (!read.title) return;
       var listId = ui.view !== 'all' ? ui.view : (Store.lists()[0] || {}).id;
-      Store.addTask({ title: value, listId: listId });
+      Store.addTask({
+        title: read.title, listId: listId,
+        due: read.due, at: read.at, mins: read.mins,
+        repeat: read.repeat, weekday: read.weekday
+      });
       el.taskInput.value = '';
+      renderHint();
     });
+
+    el.taskInput.addEventListener('input', renderHint);
+    el.taskInput.addEventListener('blur', function () { setTimeout(renderHint, 120); });
 
     el.bulkBtn.addEventListener('click', function () {
       ui.adding = ui.adding === 'paste' ? null : 'paste';
@@ -1126,7 +1367,10 @@ window.Plan = (function () {
 
   /* ---------- api ---------- */
 
-  /* a redraw replaces the very field being typed into, so put the caret back */
+  /* A redraw throws away the very field being typed into and the scroll
+     position you were reading at, so both go back afterwards. Without the
+     scroll part the list jumps to the top every time anything changes --
+     ticking one task threw away where you were in twenty-six of them. */
   function keepingFocus(draw) {
     var active = document.activeElement;
     var key = active && active.dataset ? active.dataset.focusKey : null;
@@ -1134,7 +1378,17 @@ window.Plan = (function () {
     if (key) {
       try { start = active.selectionStart; end = active.selectionEnd; } catch (e) { /* not a text field */ }
     }
+    var listAt = el.taskList ? el.taskList.scrollTop : 0;
+    var dayAt = el.timelineWrap ? el.timelineWrap.scrollTop : 0;
+
     draw();
+
+    if (el.taskList && listAt) {
+      el.taskList.scrollTop = Math.min(listAt, Math.max(0, el.taskList.scrollHeight - el.taskList.clientHeight));
+    }
+    if (el.timelineWrap && dayAt) {
+      el.timelineWrap.scrollTop = Math.min(dayAt, Math.max(0, el.timeline.offsetHeight - el.timelineWrap.clientHeight));
+    }
     if (!key) return;
     var next = document.querySelector('[data-focus-key="' + key + '"]');
     if (!next || next === document.activeElement) return;
@@ -1173,7 +1427,7 @@ window.Plan = (function () {
     el = {
       views: $('views'), tagChips: $('tagChips'), taskList: $('taskList'), taskCount: $('taskCount'),
       taskAdd: $('taskAdd'), taskInput: $('taskInput'), bulkBtn: $('bulkBtn'), listBtn: $('listBtn'),
-      doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'),
+      doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'), addHint: $('addHint'),
       timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'), blockBar: $('blockBar'),
       nowStrip: $('nowStrip'), nowTitle: $('nowTitle'), nowWhen: $('nowWhen'), nowShift: $('nowShift'),
       dayPrev: $('dayPrev'), dayNext: $('dayNext'), dayLabel: $('dayLabel'), daySum: $('daySum'),
