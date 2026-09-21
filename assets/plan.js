@@ -37,7 +37,7 @@ window.Plan = (function () {
   var dwellAt = null;
   var dragging = null, pendingRender = false, pressed = false;
 
-  var DAY_START = 5 * 60;
+  var DAY_START = 5 * 60;   // both are yours to set in settings
   var DAY_END = 24 * 60;
   var OPEN_PPM = 1.15;
   var SHUT_MINUTES = 6 * 60;   // collapsed always shows your six local hours, +-3
@@ -1194,6 +1194,13 @@ window.Plan = (function () {
 
   return {
     init: init,
+    setDay: function (start, end) {
+      DAY_START = clamp(start, 0, 1380);
+      DAY_END = clamp(end, DAY_START + 120, 1440);
+      render();
+    },
+    dayStart: function () { return DAY_START; },
+    dayEnd: function () { return DAY_END; },
     render: render,
     tick: tick,
     setHour12: function (on) { if (hour12 !== !!on) { hour12 = !!on; render(); } },

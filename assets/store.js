@@ -113,6 +113,22 @@ window.Store = (function () {
     return tag;
   }
 
+  /* Two names for the same class: everything wearing one ends up wearing the
+     other, and the emptied tag goes. */
+  function mergeTags(fromId, intoId) {
+    if (fromId === intoId) return null;
+    var into = state.tags.filter(function (t) { return t.id === intoId; })[0];
+    if (!into) return null;
+    state.tasks.forEach(function (task) {
+      if (!task.tags || task.tags.indexOf(fromId) === -1) return;
+      task.tags = task.tags.filter(function (x) { return x !== fromId; });
+      if (task.tags.indexOf(intoId) === -1) task.tags.push(intoId);
+    });
+    state.tags = state.tags.filter(function (t) { return t.id !== fromId; });
+    changed();
+    return into;
+  }
+
   /* "PHY Workbook Week 5" → tagged PHY. Bulk paste then lands already sorted. */
   function sniffTag(title) {
     var first = String(title || '').trim().split(/\s+/)[0] || '';
@@ -512,6 +528,41 @@ window.Store = (function () {
 
     tags: function () { return state.tags.slice(); },
     tagByName: tagByName,
+    tagColors: function () { return TAG_COLORS.slice(); },
+    tagUse: function (tagId) {
+      return state.tasks.filter(function (t) { return (t.tags || []).indexOf(tagId) !== -1; }).length;
+    },
+    renameTag: function (tagId, name) {
+      var tag = state.tags.filter(function (t) { return t.id === tagId; })[0];
+      var clean = String(name || '').trim().slice(0, 16);
+      if (!tag || !clean) return null;
+      var clash = state.tags.filter(function (t) {
+        return t.id !== tagId && t.name.toLowerCase() === clean.toLowerCase();
+      })[0];
+      if (clash) return mergeTags(tagId, clash.id);   // renaming onto another tag is a merge
+      tag.name = clean;
+      changed();
+      return tag;
+    },
+    recolourTag: function (tagId, colour) {
+      var tag = state.tags.filter(function (t) { return t.id === tagId; })[0];
+      if (!tag || TAG_COLORS.indexOf(colour) === -1) return;
+      tag.color = colour;
+      changed();
+    },
+    removeTag: function (tagId) {
+      state.tags = state.tags.filter(function (t) { return t.id !== tagId; });
+      state.tasks.forEach(function (t) {
+        if (t.tags) t.tags = t.tags.filter(function (x) { return x !== tagId; });
+      });
+      changed();
+    },
+    mergeTags: mergeTags,
+    addTag: function (name) {
+      var tag = tagByName(name);
+      if (tag) changed();
+      return tag;
+    },
     tagsOf: function (task) {
       return (task.tags || []).map(function (tid) {
         return state.tags.filter(function (t) { return t.id === tid; })[0];

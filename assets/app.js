@@ -33,6 +33,8 @@
   var settings = {
     hour12: false, sound: true, notify: false, theme: 'auto', pet: true,
     focusMs: 30 * MIN, breakMs: 10 * MIN,
+    presets: [15, 30, 45, 60, 90, 120],
+    dayStart: 5 * 60, dayEnd: 24 * 60,
     music: { track: 0, volume: 0.35 }
   };
   var timer = { mode: 'focus', duration: settings.focusMs, remaining: settings.focusMs, endAt: null, status: 'idle' };
@@ -585,10 +587,7 @@
       : timer.status === 'paused' ? 'paused · pip' : 'pip';
     if (document.title !== title) document.title = title;
 
-    Array.prototype.forEach.call(el.presets.children, function (button) {
-      var active = Math.round(settings.focusMs / MIN) === +button.dataset.min;
-      button.setAttribute('aria-current', active ? 'true' : 'false');
-    });
+    drawPresets();
 
     Pet.setMode(timer.status === 'running' ? timer.mode : 'idle');
 
@@ -770,6 +769,91 @@
   el.minus.addEventListener('click', function () { adjust(-5 * MIN); });
   el.plus.addEventListener('click', function () { adjust(5 * MIN); });
 
+  var presetsDrawn = '';
+  function drawPresets() {
+    var want = settings.presets.join(',');
+    if (want !== presetsDrawn) {
+      presetsDrawn = want;
+      el.presets.textContent = '';
+      settings.presets.forEach(function (mins) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.min = mins;
+        button.textContent = mins;
+        el.presets.appendChild(button);
+      });
+    }
+    Array.prototype.forEach.call(el.presets.children, function (button) {
+      var active = Math.round(settings.focusMs / MIN) === +button.dataset.min;
+      button.setAttribute('aria-current', active ? 'true' : 'false');
+    });
+  }
+
+  /* Everything the settings page is allowed to change, and nothing else. */
+  function wirePanel() {
+    if (!window.Panel) return;
+    Panel.init({
+      presets: function () { return settings.presets.slice(); },
+      setPresets: function (list) {
+        settings.presets = list.map(function (n) { return Math.max(1, Math.min(600, Math.round(n))); }).slice(0, 8);
+        save(); render();
+      },
+      breakMs: function () { return settings.breakMs; },
+      setBreakMs: function (ms) { settings.breakMs = Math.max(MIN, Math.min(2 * HOUR, ms)); save(); render(); },
+
+      sound: function () { return settings.sound; },
+      setSound: function (on) {
+        settings.sound = !!on;
+        el.soundBtn.setAttribute('aria-pressed', String(settings.sound));
+        if (settings.sound) { unlockAudio(); chime('blip'); }
+        save();
+      },
+      notify: function () { return settings.notify; },
+      setNotify: function (on) {
+        if (!on) { settings.notify = false; el.notifyBtn.setAttribute('aria-pressed', 'false'); save(); return; }
+        askToNotify();
+      },
+
+      pet: function () { return settings.pet; },
+      setPet: function (on) {
+        settings.pet = !!on;
+        el.petBtn.setAttribute('aria-pressed', String(settings.pet));
+        document.body.classList.toggle('pets-off', !settings.pet);
+        Pet.setEnabled(settings.pet);
+        save();
+      },
+
+      theme: function () { return settings.theme; },
+      setTheme: function (value) { settings.theme = value; applyTheme(); save(); },
+
+      hour12: function () { return settings.hour12; },
+      setHour12: function (on) {
+        settings.hour12 = !!on;
+        painted = {}; lastMinute = -1;
+        if (window.Plan) Plan.setHour12(settings.hour12);
+        save(); render();
+      },
+
+      dayStart: function () { return settings.dayStart; },
+      dayEnd: function () { return settings.dayEnd; },
+      setDay: function (start, end) {
+        settings.dayStart = start;
+        settings.dayEnd = end;
+        if (window.Plan) {
+          Plan.setDay(start, end);
+          settings.dayStart = Plan.dayStart();
+          settings.dayEnd = Plan.dayEnd();
+        }
+        save();
+      },
+
+      exportData: function () { el.syncExport.click(); },
+      importData: function () { el.syncImport.click(); },
+      openSync: function () { Panel.show(false); el.syncBtn.click(); },
+      syncStatus: function () { return el.syncStatus ? el.syncStatus.textContent : 'local only'; }
+    });
+  }
+
   el.presets.addEventListener('click', function (event) {
     var button = event.target.closest('button[data-min]');
     if (!button) return;
@@ -798,6 +882,16 @@
     save();
   });
 
+  function askToNotify() {
+    if (!('Notification' in window)) return;
+    Notification.requestPermission().then(function (result) {
+      settings.notify = result === 'granted';
+      el.notifyBtn.setAttribute('aria-pressed', String(settings.notify));
+      save();
+      if (window.Panel) Panel.refresh();
+    });
+  }
+
   el.notifyBtn.addEventListener('click', function () {
     if (!('Notification' in window)) return;
     if (settings.notify) {
@@ -806,11 +900,7 @@
       save();
       return;
     }
-    Notification.requestPermission().then(function (result) {
-      settings.notify = result === 'granted';
-      el.notifyBtn.setAttribute('aria-pressed', String(settings.notify));
-      save();
-    });
+    askToNotify();
   });
 
   el.petBtn.addEventListener('click', function () {
@@ -1044,6 +1134,14 @@
         settings.notify = !!stored.settings.notify;
         settings.pet = stored.settings.pet !== false;
         settings.theme = stored.settings.theme || 'auto';
+        if (Array.isArray(stored.settings.presets) && stored.settings.presets.length) {
+          settings.presets = stored.settings.presets
+            .map(function (n) { return Math.max(1, Math.min(600, Math.round(+n) || 30)); })
+            .slice(0, 8);
+        }
+        if (typeof stored.settings.dayStart === 'number') settings.dayStart = stored.settings.dayStart;
+        if (typeof stored.settings.dayEnd === 'number') settings.dayEnd = stored.settings.dayEnd;
+        if (typeof stored.settings.breakMs === 'number') settings.breakMs = stored.settings.breakMs;
         if (stored.settings.music) {
           settings.music = {
             track: stored.settings.music.track || 0,
@@ -1079,7 +1177,11 @@
     }
 
     applyTheme();
-    if (window.Plan) Plan.init({ hour12: settings.hour12 });   // before the first render reaches into it
+    if (window.Plan) {
+      Plan.init({ hour12: settings.hour12 });   // before the first render reaches into it
+      Plan.setDay(settings.dayStart, settings.dayEnd);
+    }
+    wirePanel();
     el.soundBtn.setAttribute('aria-pressed', String(settings.sound));
     el.notifyBtn.setAttribute('aria-pressed', String(settings.notify));
     el.petBtn.setAttribute('aria-pressed', String(settings.pet));
