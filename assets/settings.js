@@ -379,6 +379,28 @@ window.Panel = (function () {
     buttons.appendChild(sync);
     data.appendChild(buttons);
     data.appendChild(node('p', 'set-note', api.syncStatus()));
+
+    /* If syncing ever replaced what was on this device, the old copy is still
+       here and can be put back. */
+    var kept = Store.remote.backup();
+    if (kept && kept.data) {
+      var when = new Date(kept.at || 0);
+      var counts = (kept.data.tasks || []).length + ' tasks, ' + (kept.data.blocks || []).length + ' blocks';
+      var line = node('div', 'set-row');
+      var name = node('div', 'set-label');
+      name.appendChild(node('span', null, 'replaced by sync'));
+      name.appendChild(node('small', null, counts + ' · ' +
+        when.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' ' +
+        when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })));
+      line.appendChild(name);
+      var put = node('button', 'ghost', 'put it back');
+      put.type = 'button';
+      put.addEventListener('click', function () {
+        if (Store.remote.restoreBackup()) draw();
+      });
+      line.appendChild(put);
+      data.appendChild(line);
+    }
   }
 
   /* ---------- drawing and opening ---------- */

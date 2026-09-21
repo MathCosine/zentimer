@@ -36,8 +36,23 @@ window.Store = (function () {
       tasks: [],
       blocks: [],
       logs: [],
-      updated: Date.now()
+      updated: 0        // never edited here, so it loses every tie with the server
     };
+  }
+
+  function hasContent(doc) {
+    return !!(doc && ((doc.tasks && doc.tasks.length) ||
+                      (doc.blocks && doc.blocks.length) ||
+                      (doc.logs && doc.logs.length)));
+  }
+
+  /* Nothing is ever replaced without a way back. */
+  var BACKUP = 'pip.plan.backup';
+  function keepSafetyCopy(doc) {
+    if (!hasContent(doc)) return;
+    try {
+      localStorage.setItem(BACKUP, JSON.stringify({ at: Date.now(), data: doc }));
+    } catch (e) { /* private mode, or no room */ }
   }
 
   /* ---------- helpers ---------- */
@@ -393,6 +408,7 @@ window.Store = (function () {
 
   var Remote = (function () {
     var client = null, status = 'off', config = null, pushTimer = 0;
+    var synced = false;    // has this device reconciled with the server yet?
 
     function usable(where) {
       return where && typeof where.url === 'string' && typeof where.key === 'string' &&
@@ -434,22 +450,44 @@ window.Store = (function () {
         });
     }
 
+    /* Deciding which copy wins, in the order that keeps data:
+         the server has something and this device is empty -> take the server,
+           whatever the stamps say. A fresh browser has nothing to lose and
+           everything to gain, and this is the case that used to go wrong.
+         both have something -> the later stamp wins, and the loser is kept
+           in a local backup first.
+         only this device has something -> ours goes up. */
     function pull() {
       return client.from('pip_state').select('data, updated').eq('id', 'plan').maybeSingle()
         .then(function (res) {
           var row = res && res.data;
-          if (row && row.data && (row.data.updated || 0) > (state.updated || 0)) {
-            state = row.data;
+          var theirs = row && row.data;
+          var mine = state;
+
+          if (hasContent(theirs) && (!hasContent(mine) || (theirs.updated || 0) > (mine.updated || 0))) {
+            keepSafetyCopy(mine);
+            state = theirs;
+            synced = true;
+            persist();
             listeners.forEach(function (fn) { fn(state); });
-          } else if (!row) {
-            push(state);
+            return true;
           }
+
+          synced = true;
+          if (!hasContent(theirs)) push(mine);   // the server has nothing worth keeping
           return true;
+        })
+        .catch(function () {
+          // a failed read must never look like an empty server
+          synced = false;
+          status = 'could not read your data — working locally';
+          return false;
         });
     }
 
     function push(snapshot) {
-      if (!client || status !== 'on') return;
+      // pushing before the first pull is how a blank device overwrites a full one
+      if (!client || status !== 'on' || !synced) return;
       clearTimeout(pushTimer);
       pushTimer = setTimeout(function () {
         client.from('pip_state')
@@ -476,8 +514,22 @@ window.Store = (function () {
           .then(function (res) {
             if (res.error) throw res.error;
             status = 'on';
+            synced = false;       // this account's copy has not been seen yet
             return pull();
           });
+      },
+      synced: function () { return synced; },
+      backup: function () {
+        try { return JSON.parse(localStorage.getItem(BACKUP) || 'null'); } catch (e) { return null; }
+      },
+      restoreBackup: function () {
+        var kept = null;
+        try { kept = JSON.parse(localStorage.getItem(BACKUP) || 'null'); } catch (e) { return false; }
+        if (!kept || !kept.data || !kept.data.version) return false;
+        state = kept.data;
+        state.updated = Date.now();       // deliberately the newest thing there is
+        changed();
+        return true;
       },
       signUp: function (email, password) {
         if (!client) return Promise.reject(new Error('not connected'));
