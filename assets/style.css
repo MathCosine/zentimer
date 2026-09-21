@@ -1112,6 +1112,7 @@ body[data-mode="break"] .phase { color: var(--green); }
 }
 
 .tool {
+  position: relative;
   width: 30px;
   height: 30px;
   display: grid;
@@ -1837,3 +1838,19 @@ body.settings-open .extras { display: none; }
 .drag-chip.is-over { opacity: 1; border-color: var(--accent); }
 body.dragging-task { cursor: grabbing; }
 body.dragging-task .task-list { pointer-events: none; }
+
+/* the settings button sits a little apart, so it does not read as one more
+   toggle in the row of toggles */
+.tool.is-apart { margin-left: 8px; }
+.tool.is-apart::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 20%;
+  bottom: 20%;
+  width: 1.5px;
+  border-radius: 2px;
+  background: var(--hair);
+}
+.tool[aria-pressed="true"]#settingsBtn { background: var(--accent); border-color: var(--outline); }
+.tool[aria-pressed="true"]#settingsBtn svg { color: #fff; stroke: #fff; }

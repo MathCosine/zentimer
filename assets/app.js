@@ -14,7 +14,7 @@
     pips: $('pips'), stats: $('stats'),
     alarmList: $('alarmList'), alarmAdd: $('alarmAdd'), alarmInput: $('alarmInput'),
     soundBtn: $('soundBtn'), notifyBtn: $('notifyBtn'), petBtn: $('petBtn'),
-    themeBtn: $('themeBtn'), fullBtn: $('fullBtn'),
+    themeBtn: $('themeBtn'), fullBtn: $('fullBtn'), settingsBtn: $('settingsBtn'),
     musicBtn: $('musicBtn'), musicPop: $('musicPop'), musicPlay: $('musicPlay'),
     musicNext: $('musicNext'), musicTracks: $('musicTracks'), musicTrack: $('musicTrack'),
     musicNote: $('musicNote'), musicVol: $('musicVol'),
@@ -1097,6 +1097,7 @@
       case 'f': case 'F': el.fullBtn.click(); break;
       case 's': case 'S': el.soundBtn.click(); break;
       case 't': case 'T': el.themeBtn.click(); break;
+      case ',': el.settingsBtn.click(); break;
       case 'ArrowUp': event.preventDefault(); adjust(MIN); break;
       case 'ArrowDown': event.preventDefault(); adjust(-MIN); break;
     }

@@ -448,7 +448,9 @@ window.Plan = (function () {
     var plan = document.createElement('button');
     plan.type = 'button';
     plan.className = 'task-plan';
-    plan.title = scheduled[task.id] ? 'Already on ' + dayName(viewDate()) : 'Put on ' + dayName(viewDate());
+    plan.title = scheduled[task.id]
+      ? 'Already on ' + dayName(viewDate())
+      : 'Put on ' + dayName(viewDate()) + ' — or drag me onto an hour';
     plan.textContent = scheduled[task.id] ? '✓' : '+';
     plan.addEventListener('pointerdown', function (event) {
       if (event.button === 2 || scheduled[task.id]) return;
