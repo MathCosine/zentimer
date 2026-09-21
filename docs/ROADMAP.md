@@ -7,6 +7,11 @@ people have some.
 **Shape agreed:** public sign-up, Supabase free tier, per-row sync, a real
 front page, plus accounts, undo + bin, offline, search and a week view.
 
+**Free, with no paid tier.** Not "free for now" in the copy, not a trial, not a
+plan. This constrains stage 3's wording (no pricing language at all) and stage
+2's scale: the free-tier ceilings below are the real budget, so if it ever
+outgrows them the answer is to cap sign-ups or move hosts, not to charge.
+
 ---
 
 ## The problem this is solving
@@ -122,7 +127,12 @@ password, sign out, delete account.
 ## Stage 3 — landing page
 
 - `/` becomes the front page: what it is, a screenshot or a live demo of the
-  desk, `start free` and `sign in`.
+  desk, `make a desk` and `sign in`.
+- **No pricing language anywhere.** It is free, there is no paid tier, and
+  nothing is planned. "Start free", "free forever", "upgrade", "pro", a pricing
+  link or a plan comparison all imply a paid tier exists and invite the
+  question of when it arrives. Say what it does; do not mention money at all.
+  If that ever changes, it changes deliberately, not by leftover copy.
 - The app moves to `/app/`. localStorage is per-origin, not per-path, so
   existing local data survives the move.
 - If a session already exists, the front page offers `open your desk` instead
