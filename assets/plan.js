@@ -607,7 +607,11 @@ window.Plan = (function () {
     remove.type = 'button';
     remove.className = 'edit-danger';
     remove.textContent = 'delete';
-    remove.addEventListener('click', function () { ui.editing = null; Store.removeTask(task.id); });
+    remove.addEventListener('click', function () {
+      ui.editing = null;
+      Store.removeTask(task.id);
+      offerUndo();
+    });
     actions.appendChild(remove);
 
     var close = document.createElement('button');
@@ -1088,6 +1092,7 @@ window.Plan = (function () {
     }, block.done ? 'is-on' : '');
     tool('✕', 'Remove from the day', function () {
       Store.removeBlock(block.id);
+      offerUndo();
       ui.selected = null;
     }, 'is-danger');
   }
@@ -1365,6 +1370,37 @@ window.Plan = (function () {
       savePrefs();
       render();
     });
+  }
+
+  /* ---------- putting something back ---------- */
+
+  var undoTimer = 0;
+
+  /* A line that appears where you were looking, says what went, and offers it
+     back. It leaves on its own, because a bar that needs dismissing is a
+     second thing to do after the thing you just did. */
+  function offerUndo() {
+    var last = Store.undoable();
+    if (!last) return;
+    clearTimeout(undoTimer);
+    var old = document.querySelector('.undo-bar');
+    if (old) old.remove();
+
+    var bar = document.createElement('div');
+    bar.className = 'undo-bar';
+    var said = node('span', 'undo-what', last.label ? '\u201c' + last.label + '\u201d deleted' : 'deleted');
+    bar.appendChild(said);
+    var back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'undo-go';
+    back.textContent = 'undo';
+    back.addEventListener('click', function () {
+      Store.undo();
+      bar.remove();
+    });
+    bar.appendChild(back);
+    document.body.appendChild(bar);
+    undoTimer = setTimeout(function () { bar.remove(); }, 7000);
   }
 
   /* ---------- api ---------- */

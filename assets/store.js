@@ -47,14 +47,67 @@ window.Store = (function () {
   /* A deleted row is marked, not removed. A row that is merely absent cannot
      be told apart from one another device has not pulled yet, which is how
      deleted things come back from the dead. */
-  function bury(table, matches) {
-    var when = Date.now(), any = false;
+  /* The last thing buried, so it can be dug straight back up. One step is
+     enough: anything older is in the bin. */
+  var lastBurial = null;
+
+  function bury(table, matches, label) {
+    var when = Date.now(), hit = [];
     state[table].forEach(function (row) {
       if (row.deletedAt || !matches(row)) return;
       row.deletedAt = when;
-      any = true;
+      hit.push(row.id);
     });
-    return any;
+    if (hit.length) lastBurial = { table: table, ids: hit, label: label || null, at: when };
+    return hit.length > 0;
+  }
+
+  function undoBurial() {
+    if (!lastBurial) return null;
+    var done = lastBurial;
+    lastBurial = null;
+    state[done.table].forEach(function (row) {
+      if (done.ids.indexOf(row.id) !== -1) row.deletedAt = null;
+    });
+    changed();
+    return done;
+  }
+
+  /* Everything in the bin, newest first, with enough to recognise it by. */
+  function binned() {
+    var out = [];
+    ROW_TABLES.forEach(function (table) {
+      state[table].forEach(function (row) {
+        if (!row.deletedAt) return;
+        out.push({
+          table: table, id: row.id, at: row.deletedAt,
+          what: row.title || row.name || (table === 'logs' ? 'a session' : 'untitled')
+        });
+      });
+    });
+    return out.sort(function (a, b) { return b.at - a.at; });
+  }
+
+  function unbury(table, id) {
+    var row = state[table].filter(function (r) { return r.id === id; })[0];
+    if (!row) return false;
+    row.deletedAt = null;
+    changed();
+    return true;
+  }
+
+  /* Thirty days on, it really goes. The server sweeps its own copy; this is
+     the same rule applied here so the two do not drift. */
+  var BIN_DAYS = 30;
+  function emptyOldBin() {
+    var cutoff = Date.now() - BIN_DAYS * 86400000;
+    var went = false;
+    ROW_TABLES.forEach(function (table) {
+      var before = state[table].length;
+      state[table] = state[table].filter(function (r) { return !r.deletedAt || r.deletedAt >= cutoff; });
+      if (state[table].length !== before) went = true;
+    });
+    return went;
   }
 
   function alive(rows) {
@@ -272,7 +325,8 @@ window.Store = (function () {
   }
 
   function removeTask(taskId) {
-    bury('tasks', function (t) { return t.id === taskId; });
+    var doomed = taskById(taskId);
+    bury('tasks', function (t) { return t.id === taskId; }, doomed && doomed.title);
     alive(state.blocks).forEach(function (b) { if (b.taskId === taskId) b.taskId = null; });
     changed();
   }
@@ -349,7 +403,7 @@ window.Store = (function () {
       var task = taskById(block.taskId);
       if (task) { task.skips = task.skips || {}; task.skips[block.date] = true; }
     }
-    bury('blocks', function (b) { return b.id === blockId; });
+    bury('blocks', function (b) { return b.id === blockId; }, block && (block.title || 'that block'));
     changed();
   }
 
@@ -465,7 +519,8 @@ window.Store = (function () {
   }
 
   function removeList(listId) {
-    bury('lists', function (l) { return l.id === listId; });
+    var gone = alive(state.lists).filter(function (l) { return l.id === listId; })[0];
+    bury('lists', function (l) { return l.id === listId; }, gone && gone.name);
     var home = alive(state.lists)[0];
     alive(state.tasks).forEach(function (t) {
       if (t.listId === listId) t.listId = home ? home.id : null;
@@ -602,6 +657,7 @@ window.Store = (function () {
     var saved = read();
     state = saved && saved.version ? saved : seed();
     normalise();
+    emptyOldBin();          // anything a month gone really goes
     snapshotDaily();
     Remote.attach();
     Remote.connect();
@@ -648,7 +704,8 @@ window.Store = (function () {
       changed();
     },
     removeTag: function (tagId) {
-      bury('tags', function (t) { return t.id === tagId; });
+      var old = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
+      bury('tags', function (t) { return t.id === tagId; }, old && old.name);
       alive(state.tasks).forEach(function (t) {
         if (t.tags) t.tags = t.tags.filter(function (x) { return x !== tagId; });
       });
@@ -686,6 +743,12 @@ window.Store = (function () {
 
     remote: Remote,
     pending: function () { return Remote.pending(); },
+
+    undo: undoBurial,
+    undoable: function () { return lastBurial; },
+    binned: binned,
+    unbury: unbury,
+    binDays: BIN_DAYS,
 
     /* a way out, whatever happens to the browser */
     exportJSON: function () { return JSON.stringify(state, null, 2); },

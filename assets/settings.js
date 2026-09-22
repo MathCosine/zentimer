@@ -213,6 +213,7 @@ window.Panel = (function () {
         if (merging === tag.id) merging = null;
         draw();
       });
+      drop.title = 'It goes to the bin, below, for ' + Store.binDays + ' days';
       line.appendChild(drop);
 
       // while a merge is armed, every other row becomes the destination
@@ -255,6 +256,8 @@ window.Panel = (function () {
         var drop = node('button', 'tag-act is-drop', 'delete');
         drop.type = 'button';
         drop.title = count ? 'Its tasks move to the first list' : 'Remove this list';
+        drop.title = (count ? 'Its tasks move to the first list. ' : '') +
+          'It goes to the bin for ' + Store.binDays + ' days';
         drop.addEventListener('click', function () { Store.removeList(entry.id); draw(); });
         line.appendChild(drop);
       }
@@ -356,6 +359,32 @@ window.Panel = (function () {
     }
   }
 
+  function drawBin() {
+    var gone = Store.binned();
+    if (!gone.length) return;
+    var box = section('the bin', 'deleted things wait ' + Store.binDays + ' days before they really go');
+    var rows = node('div', 'tag-rows');
+    var naming = { tasks: 'task', blocks: 'block', tags: 'tag', lists: 'list', logs: 'session' };
+
+    gone.slice(0, 20).forEach(function (item) {
+      var line = node('div', 'tag-row');
+      var name = node('div', 'set-label');
+      name.appendChild(node('span', null, item.what));
+      var days = Math.max(0, Store.binDays - Math.floor((Date.now() - item.at) / 86400000));
+      name.appendChild(node('small', null, naming[item.table] + ' \u00b7 ' +
+        (days ? days + ' days left' : 'going today')));
+      line.appendChild(name);
+      var back = node('button', 'tag-act', 'put back');
+      back.type = 'button';
+      back.addEventListener('click', function () { Store.unbury(item.table, item.id); draw(); });
+      line.appendChild(back);
+      rows.appendChild(line);
+    });
+
+    if (gone.length > 20) rows.appendChild(node('p', 'set-note', 'and ' + (gone.length - 20) + ' more'));
+    box.appendChild(rows);
+  }
+
   function drawRest() {
     var box = section('desk');
     row(box, 'pets', toggle(api.pet(), api.setPet), 'pip and pop along the bottom');
@@ -425,6 +454,7 @@ window.Panel = (function () {
     drawDay();
     drawTags();
     drawLists();
+    drawBin();
     drawRest();
 
     if (!key) return;

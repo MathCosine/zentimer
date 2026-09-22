@@ -1932,3 +1932,43 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 .update-bar button.update-later { background: none; border-color: var(--hair); color: var(--soft); }
 .update-bar button.update-later:hover { border-color: var(--accent); color: var(--accent); }
+
+/* what just went, and the way back */
+.undo-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--pet-band) + 14px);
+  transform: translateX(-50%);
+  z-index: 65;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 7px 8px 7px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  border: 1.5px solid var(--outline);
+  box-shadow: 0 8px 20px rgba(20, 45, 60, 0.22);
+  animation: pop-in 220ms var(--bounce) both;
+}
+.undo-what {
+  font-size: 0.74rem;
+  color: var(--card);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.undo-go {
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 3px 13px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--yellow);
+  color: var(--ink);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.undo-go:hover { filter: brightness(1.05); }
