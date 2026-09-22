@@ -16,7 +16,9 @@ window.Plan = (function () {
     selected: null,          // block id open in the block bar
     adding: null,            // 'paste' | 'list' | null
     split: false,            // show two panes instead of one list
-    top: []                  // tag ids that belong in the upper pane
+    top: [],                 // tag ids that belong in the upper pane
+    find: '',                // what you are looking for
+    week: false              // the seven days, instead of one
   };
 
   /* Which tags sit up top is a way of looking, not data, so it stays on this
@@ -132,14 +134,28 @@ window.Plan = (function () {
 
   /* ---------- tasks ---------- */
 
+  /* Looking for something crosses every other filter: a search that only
+     looked inside the list you happen to be on is a search you cannot trust. */
+  function matches(task) {
+    var hay = (task.title || '').toLowerCase() + ' ' +
+      Store.tagsOf(task).map(function (t) { return t.name; }).join(' ').toLowerCase();
+    return needles.every(function (n) { return hay.indexOf(n) !== -1; });
+  }
+
+  var needles = [];
+  var hunting = false;
+
   function visibleTasks() {
     var today = new Date();
     var key = Store.dayKey(today);
+    hunting = !!ui.find.trim();
+    needles = ui.find.toLowerCase().split(/\s+/).filter(Boolean);
     return Store.tasks().filter(function (task) {
+      if (hunting && !matches(task)) return false;
       if (ui.view !== 'all' && task.listId !== ui.view) return false;
       if (ui.tags.length && !ui.tags.some(function (t) { return (task.tags || []).indexOf(t) !== -1; })) return false;
-      if (Store.repeats(task) && !Store.dueOn(task, today) && ui.editing !== task.id) return false;
-      if (!ui.showDone && Store.isDone(task, key) && ui.editing !== task.id) return false;
+      if (!hunting && Store.repeats(task) && !Store.dueOn(task, today) && ui.editing !== task.id) return false;
+      if (!hunting && !ui.showDone && Store.isDone(task, key) && ui.editing !== task.id) return false;
       return true;
     }).sort(function (a, b) {
       var doneA = Store.isDone(a, key) ? 1 : 0, doneB = Store.isDone(b, key) ? 1 : 0;
@@ -704,7 +720,10 @@ window.Plan = (function () {
     el.splitBtn.setAttribute('aria-pressed', String(ui.split));
     el.taskList.textContent = '';
 
-    if (!ui.split) {
+    if (hunting) {
+      section('found', tasks.length);
+      fillList(tasks, key, scheduled, 'nothing matches \u201c' + ui.find.trim() + '\u201d');
+    } else if (!ui.split) {
       fillList(tasks, key, scheduled, ui.tags.length ? 'nothing with those tags' : 'nothing here yet');
     } else {
       var up = [], down = [];
@@ -1362,6 +1381,43 @@ window.Plan = (function () {
       render();
     });
 
+    function setFind(text) {
+      ui.find = text || '';
+      el.findRow.hidden = !ui.find && !findOpen;
+      el.findBtn.setAttribute('aria-pressed', String(findOpen));
+      render();
+    }
+
+    var findOpen = false;
+    el.findBtn.addEventListener('click', function () {
+      findOpen = !findOpen;
+      el.findRow.hidden = !findOpen;
+      el.findBtn.setAttribute('aria-pressed', String(findOpen));
+      if (findOpen) el.findInput.focus();
+      else { el.findInput.value = ''; setFind(''); }
+    });
+
+    el.findInput.dataset.focusKey = 'find';
+    el.findInput.addEventListener('input', function () { setFind(el.findInput.value); });
+    el.findInput.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      el.findInput.value = '';
+      findOpen = false;
+      setFind('');
+    });
+    el.findClear.addEventListener('click', function () {
+      el.findInput.value = '';
+      findOpen = false;
+      setFind('');
+    });
+
+    el.weekBtn.addEventListener('click', function () {
+      ui.week = !ui.week;
+      if (ui.week) { ui.selected = null; openTimeline(false, false); }
+      render();
+    });
+
     el.splitBtn.addEventListener('click', function () {
       ui.split = !ui.split;
       // the chips mean something different in each mode, so never carry a
@@ -1370,6 +1426,148 @@ window.Plan = (function () {
       savePrefs();
       render();
     });
+  }
+
+  /* ---------- the week ---------- */
+
+  function weekDays() {
+    var out = [];
+    var start = new Date(viewDate() + 'T12:00');
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));    // monday
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(start);
+      d.setDate(d.getDate() + i);
+      out.push(Store.dayKey(d));
+    }
+    return out;
+  }
+
+  /* Seven narrow days at a glance. The same blocks, the same drag: dropping
+     one on another day moves it there, which is the whole reason to look at a
+     week rather than step through it. */
+  function renderWeek() {
+    if (!el.week) return;
+    el.weekWrap.hidden = !ui.week;
+    el.timelineWrap.hidden = ui.week;
+    el.weekBtn.setAttribute('aria-pressed', String(ui.week));
+    if (!ui.week) return;
+
+    var days = weekDays();
+    var today = Store.dayKey();
+    var busiest = 1;
+    days.forEach(function (key) {
+      busiest = Math.max(busiest, Store.daySummary(key).minutes || 1);
+    });
+
+    el.week.textContent = '';
+    days.forEach(function (key) {
+      var when = new Date(key + 'T12:00');
+      var column = document.createElement('div');
+      column.className = 'week-day' +
+        (key === today ? ' is-today' : '') +
+        (key === viewDate() ? ' is-here' : '');
+      column.dataset.date = key;
+
+      var head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'week-head';
+      head.appendChild(node('b', null, when.toLocaleDateString(undefined, { weekday: 'short' }).toLowerCase()));
+      head.appendChild(node('span', null, String(when.getDate())));
+      head.addEventListener('click', function () {
+        ui.date = key === today ? null : key;
+        ui.selected = null;
+        ui.week = false;
+        render();
+      });
+      column.appendChild(head);
+
+      var stack = document.createElement('div');
+      stack.className = 'week-stack';
+      var day = Store.blocks(key);
+      day.forEach(function (block) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'week-block' + (block.done ? ' is-done' : '');
+        chip.dataset.id = block.id;
+        chip.style.height = Math.max(14, Math.round((block.end - block.start) / busiest * 120)) + 'px';
+        chip.appendChild(node('span', 'week-when', label(block.start)));
+        chip.appendChild(node('span', 'week-title', block.title || 'untitled'));
+        chip.title = block.title + ' · ' + label(block.start) + '–' + label(block.end);
+        chip.addEventListener('pointerdown', function (event) { startWeekDrag(event, block); });
+        chip.addEventListener('click', function () {
+          if (movedBlockAt && Date.now() - movedBlockAt < 400) { movedBlockAt = 0; return; }
+          ui.date = key === today ? null : key;
+          ui.week = false;
+          selectBlock(block.id);
+        });
+        stack.appendChild(chip);
+      });
+      if (!day.length) stack.appendChild(node('p', 'week-empty', ''));
+      column.appendChild(stack);
+
+      var sum = Store.daySummary(key);
+      column.appendChild(node('span', 'week-sum', sum.count ? spanLabel(sum.minutes) : ''));
+      el.week.appendChild(column);
+    });
+  }
+
+  /* Drag a block from one day to another. It keeps its time; only the date
+     changes, which is what moving something to Thursday means. */
+  var movedBlockAt = 0;
+
+  function startWeekDrag(event, block) {
+    if (event.button === 2) return;
+    var from = { x: event.clientX, y: event.clientY };
+    var live = false, ghost = null, over = null;
+
+    function columnUnder(x, y) {
+      var found = null;
+      Array.prototype.forEach.call(el.week.children, function (col) {
+        var box = col.getBoundingClientRect();
+        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) found = col;
+      });
+      return found;
+    }
+
+    function move(e) {
+      if (!live) {
+        if (Math.abs(e.clientX - from.x) < 5 && Math.abs(e.clientY - from.y) < 5) return;
+        live = true;
+        dragging = 'week';
+        ghost = document.createElement('div');
+        ghost.className = 'drag-chip';
+        ghost.textContent = block.title || 'block';
+        document.body.appendChild(ghost);
+        document.body.classList.add('dragging-task');
+      }
+      ghost.style.transform = 'translate(' + (e.clientX + 12) + 'px,' + (e.clientY - 14) + 'px)';
+      if (over) over.classList.remove('is-target');
+      over = columnUnder(e.clientX, e.clientY);
+      if (over && over.dataset.date !== block.date) over.classList.add('is-target');
+      else if (over) { over.classList.remove('is-target'); }
+      ghost.classList.toggle('is-over', !!over && over.dataset.date !== block.date);
+    }
+
+    function up(e) {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', up);
+      if (ghost) ghost.remove();
+      if (over) over.classList.remove('is-target');
+      document.body.classList.remove('dragging-task');
+      if (!live) return;
+      dragging = null;
+      movedBlockAt = Date.now();
+      var landed = e && typeof e.clientX === 'number' ? columnUnder(e.clientX, e.clientY) : over;
+      if (landed && landed.dataset.date !== block.date) {
+        Store.updateBlock(block.id, { date: landed.dataset.date });
+      }
+      render();
+    }
+
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    document.addEventListener('pointercancel', up);
   }
 
   /* ---------- putting something back ---------- */
@@ -1448,6 +1646,7 @@ window.Plan = (function () {
       renderAdders();
       renderTasks();
       renderTimeline();
+      renderWeek();
       renderBlockBar();
       renderNow();
     });
@@ -1466,6 +1665,8 @@ window.Plan = (function () {
       views: $('views'), tagChips: $('tagChips'), taskList: $('taskList'), taskCount: $('taskCount'),
       taskAdd: $('taskAdd'), taskInput: $('taskInput'), bulkBtn: $('bulkBtn'), listBtn: $('listBtn'),
       doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'), addHint: $('addHint'),
+      findBtn: $('findBtn'), findRow: $('findRow'), findInput: $('findInput'), findClear: $('findClear'),
+      weekBtn: $('weekBtn'), weekWrap: $('weekWrap'), week: $('week'),
       timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'), blockBar: $('blockBar'),
       nowStrip: $('nowStrip'), nowTitle: $('nowTitle'), nowWhen: $('nowWhen'), nowShift: $('nowShift'),
       dayPrev: $('dayPrev'), dayNext: $('dayNext'), dayLabel: $('dayLabel'), daySum: $('daySum'),

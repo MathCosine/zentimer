@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const { start } = require('./fakedb.js');
 const makeClient = require('./fakeclient.js');
 
-const APP = 'http://127.0.0.1:8899/index.html';
+const APP = 'http://127.0.0.1:8899/app/';
 const DB = 'http://127.0.0.1:8901';
 const CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const USER = '11111111-1111-1111-1111-111111111111';

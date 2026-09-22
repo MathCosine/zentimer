@@ -17,7 +17,7 @@ const USER = '11111111-1111-1111-1111-111111111111';
   const p = await ctx.newPage();
   p.on('pageerror', e => errs.push('PAGE: '+e.message));
   p.on('console', m => { const t=m.text(); if(m.type()==='error' && !/ERR_TUNNEL|ERR_CONN|Failed to load/.test(t)) errs.push('CON: '+t); });
-  await p.goto('http://127.0.0.1:8899/index.html'); await p.waitForTimeout(1400);
+  await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(1400);
 
   await p.click('#syncBtn'); await p.waitForTimeout(400);
   check('panel shows the account, not a url form', await p.evaluate(() => ({

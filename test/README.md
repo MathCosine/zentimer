@@ -1,13 +1,18 @@
-# Sync tests
+# Tests
 
-These drive two real browsers against a stand-in for Supabase: a shared
-in-memory database over HTTP that assigns `updated` from its own counter,
-exactly as the trigger in `supabase/schema.sql` does. That makes the cases
-worth testing — two devices editing at once, a delete that must not come back,
-an edit made offline — reproducible without a Supabase project.
+Browser tests driven by Playwright. The sync ones stand up a fake Supabase --
+a shared in-memory database over HTTP that assigns `updated` from its own
+counter, exactly as the trigger in `supabase/schema.sql` does -- so two real
+browsers can be pointed at it and the cases worth testing become reproducible
+without a Supabase project.
 
-    npx http-server -p 8899 -s &     # serve the app
-    node test/twodevice.js           # two devices, concurrent edits, offline
+    npx http-server -p 8899 -s &     # serve the site
+    node test/twodevice.js           # two devices: concurrent edits, deletes, offline queue
     node test/migrate.js             # the old single document becoming rows
+    node test/accounts.js            # sign in, sign up, sign out, delete account
+    node test/landing.js             # the front page, and the app at its new address
+    node test/offline.js             # the service worker, with the network switched off
+    node test/undo.js                # undo, and the bin
+    node test/findweek.js            # searching, and the week
 
-Both exit non-zero on a failure or any console error.
+Each exits non-zero on a failed check or any console error.

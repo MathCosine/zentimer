@@ -65,6 +65,7 @@
       <button class="day-label" id="dayLabel" type="button" title="Back to today">today</button>
       <button class="day-step" id="dayNext" type="button" aria-label="Day after">›</button>
       <span class="day-sum" id="daySum"></span>
+      <button class="pin" id="weekBtn" type="button" aria-pressed="false" title="The whole week">▤</button>
       <button class="pin" id="pinBtn" type="button" aria-pressed="false" title="Open the whole day">▣</button>
     </div>
     <div class="now-strip" id="nowStrip">
@@ -78,6 +79,9 @@
     <div class="timeline-wrap" id="timelineWrap">
       <div class="timeline" id="timeline"></div>
     </div>
+    <div class="week-wrap" id="weekWrap" hidden>
+      <div class="week" id="week"></div>
+    </div>
     <div class="block-bar" id="blockBar" hidden></div>
   </section>
 
@@ -87,9 +91,14 @@
       <div class="task-tools">
         <button id="listBtn" type="button" title="New list">+ list</button>
         <button id="bulkBtn" type="button" title="Paste many tasks">paste</button>
+        <button id="findBtn" type="button" aria-pressed="false" title="Find a task">find</button>
         <button id="splitBtn" type="button" aria-pressed="false" title="Two panes, split by tag">split</button>
         <button id="doneBtn" type="button" aria-pressed="false" title="Show finished">done</button>
       </div>
+    </div>
+    <div class="find-row" id="findRow" hidden>
+      <input id="findInput" type="search" autocomplete="off" placeholder="find a task…" aria-label="Find a task">
+      <button id="findClear" type="button" aria-label="Stop looking">✕</button>
     </div>
     <div class="chips" id="tagChips" hidden></div>
     <div class="add-panel" id="addPanel" hidden></div>
