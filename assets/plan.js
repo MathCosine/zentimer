@@ -18,7 +18,9 @@ window.Plan = (function () {
     split: false,            // show two panes instead of one list
     top: [],                 // tag ids that belong in the upper pane
     find: '',                // what you are looking for
-    week: false              // the seven days, instead of one
+    week: false,             // the seven days, instead of one
+    sort: 'due',             // due | added | tag | name | at
+    desc: false              // the other way round
   };
 
   /* Which tags sit up top is a way of looking, not data, so it stays on this
@@ -29,10 +31,16 @@ window.Plan = (function () {
       var saved = JSON.parse(localStorage.getItem(PREF) || '{}');
       ui.split = !!saved.split;
       ui.top = Array.isArray(saved.top) ? saved.top : [];
+      if (saved.sort) ui.sort = saved.sort;
+      ui.desc = !!saved.desc;
     } catch (e) { /* private mode, or nothing saved yet */ }
   }
   function savePrefs() {
-    try { localStorage.setItem(PREF, JSON.stringify({ split: ui.split, top: ui.top })); } catch (e) {}
+    try {
+      localStorage.setItem(PREF, JSON.stringify({
+        split: ui.split, top: ui.top, sort: ui.sort, desc: ui.desc
+      }));
+    } catch (e) {}
   }
   var hour12 = false;
   var hoverTimer = 0, collapseTimer = 0;
@@ -157,13 +165,57 @@ window.Plan = (function () {
       if (!hunting && Store.repeats(task) && !Store.dueOn(task, today) && ui.editing !== task.id) return false;
       if (!hunting && !ui.showDone && Store.isDone(task, key) && ui.editing !== task.id) return false;
       return true;
-    }).sort(function (a, b) {
+    }).sort(comparing(key));
+  }
+
+  /* ---------- the order they come in ---------- */
+
+  var SORTS = [
+    { id: 'due',   label: 'due' },
+    { id: 'added', label: 'added' },
+    { id: 'tag',   label: 'tag' },
+    { id: 'name',  label: 'name' },
+    { id: 'at',    label: 'time' }
+  ];
+
+  function firstTag(task) {
+    var names = Store.tagsOf(task).map(function (t) { return t.name.toLowerCase(); }).sort();
+    return names[0] || '';
+  }
+
+  /* Two rules sit outside whichever order you picked, because flipping them
+     never makes sense: a finished task belongs at the bottom, and a task with
+     nothing to sort on -- no due date, no tag, no time -- belongs after the
+     ones that have one, whichever way round the rest is. */
+  function comparing(key) {
+    var mode = ui.sort;
+    var flip = ui.desc ? -1 : 1;
+
+    return function (a, b) {
       var doneA = Store.isDone(a, key) ? 1 : 0, doneB = Store.isDone(b, key) ? 1 : 0;
       if (doneA !== doneB) return doneA - doneB;
-      if (!!a.due !== !!b.due) return a.due ? -1 : 1;
-      if (a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1;
-      return (a.order || 0) - (b.order || 0);
-    });
+
+      var side = 0;
+      if (mode === 'added') {
+        side = (a.created || 0) - (b.created || 0);
+      } else if (mode === 'name') {
+        side = (a.title || '').toLowerCase().localeCompare((b.title || '').toLowerCase());
+      } else if (mode === 'tag') {
+        var ta = firstTag(a), tb = firstTag(b);
+        if (!ta !== !tb) return ta ? -1 : 1;
+        side = ta.localeCompare(tb);
+      } else if (mode === 'at') {
+        var ha = typeof a.at === 'number', hb = typeof b.at === 'number';
+        if (ha !== hb) return ha ? -1 : 1;
+        side = ha ? a.at - b.at : 0;
+      } else {
+        if (!!a.due !== !!b.due) return a.due ? -1 : 1;
+        side = a.due && b.due ? (a.due < b.due ? -1 : a.due > b.due ? 1 : 0) : 0;
+      }
+
+      if (side) return side * flip;
+      return (a.order || 0) - (b.order || 0);     // a stable tiebreak, always
+    };
   }
 
   /* ---------- writing a task in one line ---------- */
@@ -342,6 +394,42 @@ window.Plan = (function () {
       }
       el.views.appendChild(button);
     });
+  }
+
+  var WHICH_WAY = {
+    due:   ['soonest first', 'latest first'],
+    added: ['oldest first', 'newest first'],
+    tag:   ['a to z', 'z to a'],
+    name:  ['a to z', 'z to a'],
+    at:    ['earliest first', 'latest first']
+  };
+
+  function renderSort() {
+    if (!el.sortRow) return;
+    el.sortRow.hidden = !ui.sorting;
+    el.sortBtn.setAttribute('aria-pressed', String(!!ui.sorting));
+    if (!ui.sorting) return;
+
+    el.sortPicks.textContent = '';
+    SORTS.forEach(function (sort) {
+      var chip = node('button', 'pick', sort.label);
+      chip.type = 'button';
+      chip.setAttribute('aria-pressed', String(ui.sort === sort.id));
+      chip.addEventListener('click', function () {
+        // picking the one already chosen turns it round, which is what
+        // clicking a column heading twice does everywhere else
+        if (ui.sort === sort.id) ui.desc = !ui.desc;
+        else { ui.sort = sort.id; ui.desc = false; }
+        savePrefs();
+        render();
+      });
+      el.sortPicks.appendChild(chip);
+    });
+
+    var ways = WHICH_WAY[ui.sort] || ['first', 'last'];
+    el.sortDir.textContent = (ui.desc ? '\u2191 ' : '\u2193 ') + ways[ui.desc ? 1 : 0];
+    el.sortDir.setAttribute('aria-pressed', String(ui.desc));
+    el.sortDir.title = 'Turn the order round';
   }
 
   function renderChips() {
@@ -1412,6 +1500,17 @@ window.Plan = (function () {
       setFind('');
     });
 
+    el.sortBtn.addEventListener('click', function () {
+      ui.sorting = !ui.sorting;
+      render();
+    });
+
+    el.sortDir.addEventListener('click', function () {
+      ui.desc = !ui.desc;
+      savePrefs();
+      render();
+    });
+
     el.weekBtn.addEventListener('click', function () {
       ui.week = !ui.week;
       if (ui.week) { ui.selected = null; openTimeline(false, false); }
@@ -1643,6 +1742,7 @@ window.Plan = (function () {
       renderDayHead();
       renderViews();
       renderChips();
+      renderSort();
       renderAdders();
       renderTasks();
       renderTimeline();
@@ -1666,6 +1766,7 @@ window.Plan = (function () {
       taskAdd: $('taskAdd'), taskInput: $('taskInput'), bulkBtn: $('bulkBtn'), listBtn: $('listBtn'),
       doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'), addHint: $('addHint'),
       findBtn: $('findBtn'), findRow: $('findRow'), findInput: $('findInput'), findClear: $('findClear'),
+      sortBtn: $('sortBtn'), sortRow: $('sortRow'), sortPicks: $('sortPicks'), sortDir: $('sortDir'),
       weekBtn: $('weekBtn'), weekWrap: $('weekWrap'), week: $('week'),
       timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'), blockBar: $('blockBar'),
       nowStrip: $('nowStrip'), nowTitle: $('nowTitle'), nowWhen: $('nowWhen'), nowShift: $('nowShift'),

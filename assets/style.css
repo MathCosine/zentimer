@@ -673,7 +673,9 @@ body[data-mode="break"] .phase { color: var(--green); }
 .views button:hover { color: var(--ink); background: var(--well); }
 .views button[aria-current="true"] { color: var(--ink); background: var(--well); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 
-.task-tools { display: flex; gap: 3px; flex: none; }
+/* Six small buttons will not fit a very narrow window in one row. They wrap
+   rather than pushing the card wider than the window it lives in. */
+.task-tools { display: flex; gap: 3px; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 
 .task-tools button {
   font: inherit;
@@ -2095,3 +2097,27 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 .week-empty { flex: 1 1 auto; margin: 0; }
 .week-sum { font-size: 0.56rem; color: var(--soft); text-align: center; min-height: 0.8em; }
+
+/* ---------- what order the list comes in ---------- */
+
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.sort-row .pick-row { flex: 1 1 auto; }
+
+.sort-dir {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.62rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1.5px solid var(--hair);
+  background: var(--well);
+  color: var(--soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sort-dir:hover { border-color: var(--accent); color: var(--accent); }

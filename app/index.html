@@ -92,9 +92,15 @@
         <button id="listBtn" type="button" title="New list">+ list</button>
         <button id="bulkBtn" type="button" title="Paste many tasks">paste</button>
         <button id="findBtn" type="button" aria-pressed="false" title="Find a task">find</button>
+        <button id="sortBtn" type="button" aria-pressed="false" title="What order the list comes in">sort</button>
         <button id="splitBtn" type="button" aria-pressed="false" title="Two panes, split by tag">split</button>
         <button id="doneBtn" type="button" aria-pressed="false" title="Show finished">done</button>
       </div>
+    </div>
+    <div class="sort-row" id="sortRow" hidden>
+      <span class="chip-label">order by</span>
+      <span class="pick-row" id="sortPicks"></span>
+      <button id="sortDir" type="button" class="sort-dir" aria-pressed="false"></button>
     </div>
     <div class="find-row" id="findRow" hidden>
       <input id="findInput" type="search" autocomplete="off" placeholder="find a task…" aria-label="Find a task">

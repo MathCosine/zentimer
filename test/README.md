@@ -15,5 +15,6 @@ without a Supabase project.
     node test/undo.js                # undo, and the bin
     node test/findweek.js            # searching, and the week
     node test/narrow.js              # nothing spills, 260px up, alone and in the frame
+    node test/sorting.js             # the five orders, both directions, inside a split
 
 Each exits non-zero on a failed check or any console error.
