@@ -40,10 +40,86 @@ window.Store = (function () {
     };
   }
 
+  /* ---------- rows, tombstones and what still needs sending ---------- */
+
+  var ROW_TABLES = ['lists', 'tags', 'tasks', 'blocks', 'logs'];
+
+  /* A deleted row is marked, not removed. A row that is merely absent cannot
+     be told apart from one another device has not pulled yet, which is how
+     deleted things come back from the dead. */
+  function bury(table, matches) {
+    var when = Date.now(), any = false;
+    state[table].forEach(function (row) {
+      if (row.deletedAt || !matches(row)) return;
+      row.deletedAt = when;
+      any = true;
+    });
+    return any;
+  }
+
+  function alive(rows) {
+    return rows.filter(function (r) { return !r.deletedAt; });
+  }
+
+  /* What the server last agreed each row looked like. Comparing against it on
+     save means the twenty places that edit a row do not each have to remember
+     to say so. */
+  var shadow = {};
+  ROW_TABLES.forEach(function (t) { shadow[t] = {}; });
+
+  function scanForChanges() {
+    ROW_TABLES.forEach(function (table) {
+      (state[table] || []).forEach(function (row) {
+        // a row created since the last pass has no stamps yet
+        if (typeof row.updated !== 'number') row.updated = 0;
+        if (typeof row.deletedAt === 'undefined') row.deletedAt = null;
+        if (!window.Sync) return;
+        var json = stamp(row);
+        if (shadow[table][row.id] === json) return;
+        shadow[table][row.id] = json;
+        Sync.markDirty(table, row.id);
+      });
+    });
+  }
+
+  // `updated` is the server's answer, not part of what we are proposing
+  function stamp(row) {
+    var copy = {}, keys = Object.keys(row).sort();
+    keys.forEach(function (k) { if (k !== 'updated') copy[k] = row[k]; });
+    return JSON.stringify(copy);
+  }
+
+  function markSynced(table, id) {
+    var row = (state[table] || []).filter(function (r) { return r.id === id; })[0];
+    if (row) shadow[table][id] = stamp(row);
+  }
+
   function hasContent(doc) {
     return !!(doc && ((doc.tasks && doc.tasks.length) ||
                       (doc.blocks && doc.blocks.length) ||
                       (doc.logs && doc.logs.length)));
+  }
+
+  /* A backup you have to remember to take is a backup you do not have. One
+     snapshot a day, the last five kept, entirely on this device. */
+  var SNAPS = 'pip.plan.snaps';
+  function snapshotDaily() {
+    if (!hasContent(state)) return;
+    var snaps = [];
+    try { snaps = JSON.parse(localStorage.getItem(SNAPS) || '[]'); } catch (e) { snaps = []; }
+    var today = dayKey();
+    if (snaps.length && snaps[snaps.length - 1].day === today) return;
+    snaps.push({ day: today, at: Date.now(), data: state });
+    while (snaps.length > 5) snaps.shift();
+    try { localStorage.setItem(SNAPS, JSON.stringify(snaps)); }
+    catch (e) {
+      // out of room: one snapshot is better than none
+      try { localStorage.setItem(SNAPS, JSON.stringify(snaps.slice(-1))); } catch (e2) {}
+    }
+  }
+
+  function snapshots() {
+    try { return JSON.parse(localStorage.getItem(SNAPS) || '[]'); } catch (e) { return []; }
   }
 
   /* Nothing is ever replaced without a way back. */
@@ -89,8 +165,9 @@ window.Store = (function () {
 
   function persist() {
     persistTimer = 0;
+    scanForChanges();
+    snapshotDaily();      // self-limiting: one a day, whenever there is something to keep
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* private mode */ }
-    if (Remote.ready()) Remote.push(state);
   }
 
   /* Typing a title used to serialise the whole document to storage on every
@@ -121,9 +198,9 @@ window.Store = (function () {
   function tagByName(name) {
     var clean = String(name || '').trim();
     if (!clean) return null;
-    var found = state.tags.filter(function (t) { return t.name.toLowerCase() === clean.toLowerCase(); })[0];
+    var found = alive(state.tags).filter(function (t) { return t.name.toLowerCase() === clean.toLowerCase(); })[0];
     if (found) return found;
-    var tag = { id: id('g_'), name: clean, color: TAG_COLORS[state.tags.length % TAG_COLORS.length] };
+    var tag = { id: id('g_'), name: clean, color: TAG_COLORS[alive(state.tags).length % TAG_COLORS.length] };
     state.tags.push(tag);
     return tag;
   }
@@ -132,14 +209,14 @@ window.Store = (function () {
      other, and the emptied tag goes. */
   function mergeTags(fromId, intoId) {
     if (fromId === intoId) return null;
-    var into = state.tags.filter(function (t) { return t.id === intoId; })[0];
+    var into = alive(state.tags).filter(function (t) { return t.id === intoId; })[0];
     if (!into) return null;
-    state.tasks.forEach(function (task) {
+    alive(state.tasks).forEach(function (task) {
       if (!task.tags || task.tags.indexOf(fromId) === -1) return;
       task.tags = task.tags.filter(function (x) { return x !== fromId; });
       if (task.tags.indexOf(intoId) === -1) task.tags.push(intoId);
     });
-    state.tags = state.tags.filter(function (t) { return t.id !== fromId; });
+    bury('tags', function (t) { return t.id === fromId; });
     changed();
     return into;
   }
@@ -187,9 +264,7 @@ window.Store = (function () {
     Object.keys(fields).forEach(function (key) { task[key] = fields[key]; });
     if (retimed) {
       var today = dayKey();
-      state.blocks = state.blocks.filter(function (b) {
-        return !(b.routine && b.taskId === taskId && b.date >= today);
-      });
+      bury('blocks', function (b) { return b.routine && b.taskId === taskId && b.date >= today; });
       if (task.skips) Object.keys(task.skips).forEach(function (d) { if (d >= today) delete task.skips[d]; });
     }
     changed();
@@ -197,13 +272,13 @@ window.Store = (function () {
   }
 
   function removeTask(taskId) {
-    state.tasks = state.tasks.filter(function (t) { return t.id !== taskId; });
-    state.blocks.forEach(function (b) { if (b.taskId === taskId) b.taskId = null; });
+    bury('tasks', function (t) { return t.id === taskId; });
+    alive(state.blocks).forEach(function (b) { if (b.taskId === taskId) b.taskId = null; });
     changed();
   }
 
   function taskById(taskId) {
-    return state.tasks.filter(function (t) { return t.id === taskId; })[0] || null;
+    return alive(state.tasks).filter(function (t) { return t.id === taskId; })[0] || null;
   }
 
   function repeats(task) { return task.repeat && task.repeat !== 'none'; }
@@ -274,7 +349,7 @@ window.Store = (function () {
       var task = taskById(block.taskId);
       if (task) { task.skips = task.skips || {}; task.skips[block.date] = true; }
     }
-    state.blocks = state.blocks.filter(function (b) { return b.id !== blockId; });
+    bury('blocks', function (b) { return b.id === blockId; });
     changed();
   }
 
@@ -285,23 +360,21 @@ window.Store = (function () {
      and only from today on, so your past days stay as they were. */
   function ensureRoutine(key) {
     var today = dayKey();
-    var stale = state.blocks.some(function (b) {
+    var stale = alive(state.blocks).some(function (b) {
       return b.routine && b.date >= today && !b.done;
     });
     if (!stale) return 0;                 // the usual case: nothing to do, nothing allocated
-    state.blocks = state.blocks.filter(function (b) {
-      return !(b.routine && b.date >= today && !b.done);
-    });
+    bury('blocks', function (b) { return b.routine && b.date >= today && !b.done; });
     changed();
     return 0;
   }
 
   function blockById(blockId) {
-    return state.blocks.filter(function (b) { return b.id === blockId; })[0] || null;
+    return alive(state.blocks).filter(function (b) { return b.id === blockId; })[0] || null;
   }
 
   function blocksOn(key) {
-    return state.blocks.filter(function (b) { return b.date === (key || dayKey()); })
+    return alive(state.blocks).filter(function (b) { return b.date === (key || dayKey()); })
       .sort(function (a, b) { return a.start - b.start; });
   }
 
@@ -377,7 +450,7 @@ window.Store = (function () {
   }
 
   function loggedOn(key, taskId) {
-    return state.logs.filter(function (l) {
+    return alive(state.logs).filter(function (l) {
       return l.date === (key || dayKey()) && (!taskId || l.taskId === taskId);
     }).reduce(function (sum, l) { return sum + l.ms; }, 0);
   }
@@ -385,181 +458,147 @@ window.Store = (function () {
   /* ---------- lists ---------- */
 
   function addList(name) {
-    var list = { id: id('l_'), name: String(name || 'List').trim().slice(0, 40), order: state.lists.length };
+    var list = { id: id('l_'), name: String(name || 'List').trim().slice(0, 40), order: alive(state.lists).length };
     state.lists.push(list);
     changed();
     return list;
   }
 
   function removeList(listId) {
-    state.lists = state.lists.filter(function (l) { return l.id !== listId; });
-    state.tasks.forEach(function (t) {
-      if (t.listId === listId) t.listId = state.lists[0] ? state.lists[0].id : null;
+    bury('lists', function (l) { return l.id === listId; });
+    var home = alive(state.lists)[0];
+    alive(state.tasks).forEach(function (t) {
+      if (t.listId === listId) t.listId = home ? home.id : null;
     });
     changed();
   }
 
   function renameList(listId, name) {
-    var list = state.lists.filter(function (l) { return l.id === listId; })[0];
+    var list = alive(state.lists).filter(function (l) { return l.id === listId; })[0];
     if (list) { list.name = String(name).trim().slice(0, 40); changed(); }
   }
 
   /* ---------- the remote half, dormant until it is configured ---------- */
 
+  /* ---------- the remote half, dormant until it is configured ---------- */
+
+  /* Sync owns the wire; this is the small surface it needs of the data, plus
+     the same names the rest of the app already calls. */
   var Remote = (function () {
-    var client = null, status = 'off', config = null, pushTimer = 0;
-    var synced = false;    // has this device reconciled with the server yet?
+    var statusText = 'off';
 
-    function usable(where) {
-      return where && typeof where.url === 'string' && typeof where.key === 'string' &&
-             where.url.trim().length > 8 && where.key.trim().length > 8;
+    function attach() {
+      if (!window.Sync) return;
+      Sync.init({
+        rows: function (table) { return state[table]; },
+
+        // the server agreed this row looks like this, so stop calling it changed
+        markSynced: markSynced,
+
+        // rows arrived from elsewhere: save them and redraw
+        merged: function () {
+          try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+          listeners.forEach(function (fn) { fn(state); });
+        },
+
+        // only stamps changed, so save but do not redraw
+        stamped: function () {
+          try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+        },
+
+        adoptLegacy: adoptLegacy
+      }, function (text) { statusText = text; listeners.forEach(function (fn) { fn(state); }); });
     }
 
-    function creds() {
-      if (config) return config;
-      try {
-        var saved = JSON.parse(localStorage.getItem('pip.supabase') || 'null');
-        if (usable(saved)) return (config = { url: saved.url.trim(), key: saved.key.trim() });
-      } catch (e) { /* ignore */ }
-      var baked = window.PIP_CONFIG && window.PIP_CONFIG.supabase;
-      if (usable(baked)) return (config = { url: baked.url.trim(), key: baked.key.trim() });
-      return null;
-    }
-
-    function connect() {
-      var where = creds();
-      if (!where) { status = 'off'; return Promise.resolve(false); }
-      status = 'connecting';
-      return import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm')
-        .then(function (mod) {
-          client = mod.createClient(where.url, where.key);
-          return client.auth.getSession();
-        })
-        .then(function (res) {
-          status = res && res.data && res.data.session ? 'on' : 'signed-out';
-          return status === 'on' ? pull() : false;
-        })
-        .catch(function (err) {
-          var why = (err && err.message ? err.message : String(err));
-          // say something a person can act on rather than the raw failure
-          if (/dynamically imported module|Failed to fetch/i.test(why)) status = 'no connection — working locally';
-          else if (/Invalid API key|JWT/i.test(why)) status = 'that key was not accepted';
-          else if (/not confirmed/i.test(why)) status = 'confirm the email, or switch confirmation off';
-          else status = why.slice(0, 70);
-          return false;
+    /* The old single document, turned into rows. Anything already here by the
+       same id wins, so running this twice changes nothing, and the old row is
+       left where it is as the way back. */
+    function adoptLegacy(doc) {
+      keepSafetyCopy(state);
+      ROW_TABLES.forEach(function (table) {
+        var incoming = doc[table] || [];
+        if (!incoming.length) return;
+        var have = {};
+        state[table].forEach(function (row) { have[row.id] = true; });
+        incoming.forEach(function (row) {
+          if (have[row.id]) return;
+          var copy = JSON.parse(JSON.stringify(row));
+          copy.updated = 0;              // never seen by the server in this shape
+          copy.deletedAt = copy.deletedAt || null;
+          state[table].push(copy);
         });
-    }
-
-    /* Deciding which copy wins, in the order that keeps data:
-         the server has something and this device is empty -> take the server,
-           whatever the stamps say. A fresh browser has nothing to lose and
-           everything to gain, and this is the case that used to go wrong.
-         both have something -> the later stamp wins, and the loser is kept
-           in a local backup first.
-         only this device has something -> ours goes up. */
-    function pull() {
-      return client.from('pip_state').select('data, updated').eq('id', 'plan').maybeSingle()
-        .then(function (res) {
-          var row = res && res.data;
-          var theirs = row && row.data;
-          var mine = state;
-
-          if (hasContent(theirs) && (!hasContent(mine) || (theirs.updated || 0) > (mine.updated || 0))) {
-            keepSafetyCopy(mine);
-            state = theirs;
-            synced = true;
-            persist();
-            listeners.forEach(function (fn) { fn(state); });
-            return true;
-          }
-
-          synced = true;
-          if (!hasContent(theirs)) push(mine);   // the server has nothing worth keeping
-          return true;
-        })
-        .catch(function () {
-          // a failed read must never look like an empty server
-          synced = false;
-          status = 'could not read your data — working locally';
-          return false;
-        });
-    }
-
-    function push(snapshot) {
-      // pushing before the first pull is how a blank device overwrites a full one
-      if (!client || status !== 'on' || !synced) return;
-      clearTimeout(pushTimer);
-      pushTimer = setTimeout(function () {
-        client.from('pip_state')
-          .upsert({ id: 'plan', data: snapshot, updated: snapshot.updated }, { onConflict: 'user_id,id' })
-          .then(function () {}, function () {});
-      }, 900);
+      });
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+      scanForChanges();                  // everything goes up as rows
+      listeners.forEach(function (fn) { fn(state); });
     }
 
     return {
-      connect: connect,
-      push: push,
-      ready: function () { return status === 'on'; },
-      configured: function () { return !!creds(); },
-      status: function () { return status; },
-      client: function () { return client; },
-      save: function (url, key) {
-        config = { url: url, key: key };
-        try { localStorage.setItem('pip.supabase', JSON.stringify(config)); } catch (e) {}
-        return connect();
-      },
-      signIn: function (email, password) {
-        if (!client) return Promise.reject(new Error('not connected'));
-        return client.auth.signInWithPassword({ email: email, password: password })
-          .then(function (res) {
-            if (res.error) throw res.error;
-            status = 'on';
-            synced = false;       // this account's copy has not been seen yet
-            return pull();
-          });
-      },
-      synced: function () { return synced; },
+      attach: attach,
+      connect: function () { return window.Sync ? Sync.connect() : Promise.resolve(false); },
+      ready: function () { return !!window.Sync && Sync.ready(); },
+      synced: function () { return !!window.Sync && Sync.ready(); },
+      pending: function () { return window.Sync ? Sync.pending() : 0; },
+      configured: function () { return !!window.Sync && Sync.configured(); },
+      status: function () { return statusText; },
+      client: function () { return window.Sync ? Sync.client() : null; },
+      save: function (url, key) { return Sync.save(url, key); },
+      signIn: function (email, password) { return Sync.signIn(email, password); },
+      signUp: function (email, password) { return Sync.signUp(email, password); },
+      signOut: function () { return Sync.signOut(); },
+
       backup: function () {
         try { return JSON.parse(localStorage.getItem(BACKUP) || 'null'); } catch (e) { return null; }
+      },
+      snapshots: snapshots,
+      restore: function (doc) {
+        if (!doc || !doc.version) return false;
+        keepSafetyCopy(state);
+        state = doc;
+        normalise();
+        ROW_TABLES.forEach(function (t) { shadow[t] = {}; });   // all of it goes back up
+        changed();
+        return true;
       },
       restoreBackup: function () {
         var kept = null;
         try { kept = JSON.parse(localStorage.getItem(BACKUP) || 'null'); } catch (e) { return false; }
-        if (!kept || !kept.data || !kept.data.version) return false;
-        state = kept.data;
-        state.updated = Date.now();       // deliberately the newest thing there is
-        changed();
-        return true;
-      },
-      signUp: function (email, password) {
-        if (!client) return Promise.reject(new Error('not connected'));
-        var here = location.origin + location.pathname;
-        return client.auth.signUp({
-          email: email,
-          password: password,
-          options: { emailRedirectTo: here }     // not supabase's default localhost
-        }).then(function (res) {
-          if (res.error) throw res.error;
-          if (res.data && res.data.session) { status = 'on'; return pull(); }
-          status = 'check your email to confirm';
-          return false;
-        });
+        return kept && kept.data ? Remote.restore(kept.data) : false;
       }
     };
   })();
 
+
   /* ---------- boot ---------- */
+
+  /* Everything a row needs to exist as a row, filled in for data written
+     before rows existed. Safe to run over anything. */
+  function normalise() {
+    if (!state.logs) state.logs = [];
+    if (!state.blocks) state.blocks = [];
+    if (!state.tags) state.tags = [];
+    if (!state.lists) state.lists = [];
+    if (!state.tasks) state.tasks = [];
+    state.tasks.forEach(function (t) {
+      if (!t.skips) t.skips = {};
+      if (!t.completions) t.completions = {};
+      if (typeof t.at === 'undefined') t.at = null;
+      if (!t.mins) t.mins = 30;
+    });
+    ROW_TABLES.forEach(function (table) {
+      state[table].forEach(function (row) {
+        if (typeof row.updated !== 'number') row.updated = 0;
+        if (typeof row.deletedAt === 'undefined') row.deletedAt = null;
+      });
+    });
+  }
 
   function init() {
     var saved = read();
     state = saved && saved.version ? saved : seed();
-    if (!state.logs) state.logs = [];
-    if (!state.blocks) state.blocks = [];
-    state.tasks.forEach(function (t) {
-      if (!t.skips) t.skips = {};
-      if (typeof t.at === 'undefined') t.at = null;
-      if (!t.mins) t.mins = 30;
-    });
+    normalise();
+    snapshotDaily();
+    Remote.attach();
     Remote.connect();
     return state;
   }
@@ -575,21 +614,21 @@ window.Store = (function () {
     minutesNow: minutesNow,
     clockLabel: clockLabel,
 
-    lists: function () { return state.lists.slice().sort(byOrder); },
+    lists: function () { return alive(state.lists).sort(byOrder); },
     addList: addList, removeList: removeList, renameList: renameList,
 
-    tags: function () { return state.tags.slice(); },
+    tags: function () { return alive(state.tags); },
     tagByName: tagByName,
     tagColors: function () { return TAG_COLORS.slice(); },
     sniffTag: sniffTag,
     tagUse: function (tagId) {
-      return state.tasks.filter(function (t) { return (t.tags || []).indexOf(tagId) !== -1; }).length;
+      return alive(state.tasks).filter(function (t) { return (t.tags || []).indexOf(tagId) !== -1; }).length;
     },
     renameTag: function (tagId, name) {
-      var tag = state.tags.filter(function (t) { return t.id === tagId; })[0];
+      var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
       var clean = String(name || '').trim().slice(0, 16);
       if (!tag || !clean) return null;
-      var clash = state.tags.filter(function (t) {
+      var clash = alive(state.tags).filter(function (t) {
         return t.id !== tagId && t.name.toLowerCase() === clean.toLowerCase();
       })[0];
       if (clash) return mergeTags(tagId, clash.id);   // renaming onto another tag is a merge
@@ -598,14 +637,14 @@ window.Store = (function () {
       return tag;
     },
     recolourTag: function (tagId, colour) {
-      var tag = state.tags.filter(function (t) { return t.id === tagId; })[0];
+      var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
       if (!tag || TAG_COLORS.indexOf(colour) === -1) return;
       tag.color = colour;
       changed();
     },
     removeTag: function (tagId) {
-      state.tags = state.tags.filter(function (t) { return t.id !== tagId; });
-      state.tasks.forEach(function (t) {
+      bury('tags', function (t) { return t.id === tagId; });
+      alive(state.tasks).forEach(function (t) {
         if (t.tags) t.tags = t.tags.filter(function (x) { return x !== tagId; });
       });
       changed();
@@ -617,8 +656,9 @@ window.Store = (function () {
       return tag;
     },
     tagsOf: function (task) {
+      var live = alive(state.tags);
       return (task.tags || []).map(function (tid) {
-        return state.tags.filter(function (t) { return t.id === tid; })[0];
+        return live.filter(function (t) { return t.id === tid; })[0];
       }).filter(Boolean);
     },
     setTaskTags: function (taskId, names) {
@@ -628,7 +668,7 @@ window.Store = (function () {
       changed();
     },
 
-    tasks: function () { return state.tasks.slice(); },
+    tasks: function () { return alive(state.tasks); },
     addTask: addTask, updateTask: updateTask, removeTask: removeTask,
     taskById: taskById, toggleDone: toggleDone, isDone: isDone, repeats: repeats, dueOn: dueOn,
 
@@ -640,14 +680,14 @@ window.Store = (function () {
     logTime: logTime, loggedOn: loggedOn,
 
     remote: Remote,
+    pending: function () { return Remote.pending(); },
 
     /* a way out, whatever happens to the browser */
     exportJSON: function () { return JSON.stringify(state, null, 2); },
     importJSON: function (text) {
       var incoming = JSON.parse(text);
       if (!incoming || !incoming.version) throw new Error('not a pip export');
-      state = incoming;
-      changed();
+      if (!Remote.restore(incoming)) throw new Error('not a pip export');
     }
   };
 })();

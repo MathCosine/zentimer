@@ -1,40 +1,178 @@
 -- pip — Supabase schema
--- Paste this into your project's SQL editor and run it once.
+-- Paste this into your project's SQL editor and run it. It is safe to run more
+-- than once, and safe to run over the older single-document schema: the old
+-- pip_state table is left exactly where it is, because the app migrates out of
+-- it on first run and it is the way back if anything goes wrong.
 --
--- The whole plan (lists, tags, tasks, blocks, logs) is kept as one JSON
--- document per user. That keeps the schema still while the app's shape is
--- still moving, and it is plenty for a single person's planner. Sync is
--- last-write-wins on `updated`: if two devices edit at the same moment, the
--- later save wins outright.
+-- One row per thing, rather than one document per person. Two devices editing
+-- different tasks now both win; under the old shape whichever saved last
+-- replaced the other outright.
 
-create table if not exists public.pip_state (
-  id       text  not null,
-  user_id  uuid  not null default auth.uid() references auth.users (id) on delete cascade,
-  data     jsonb not null,
-  updated  bigint not null default 0,
-  saved_at timestamptz not null default now(),
-  primary key (user_id, id)
-);
+-- ---------------------------------------------------------------------------
+-- the stamp every row is ordered by
+-- ---------------------------------------------------------------------------
 
-alter table public.pip_state enable row level security;
-
--- each account can only ever see and touch its own row
-drop policy if exists "pip owns its rows" on public.pip_state;
-create policy "pip owns its rows"
-  on public.pip_state
-  for all
-  to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
--- keep saved_at honest
-create or replace function public.pip_touch()
+-- Written by the server, never by the client. Devices disagree about the time,
+-- sometimes by minutes, so a client-written stamp makes "last write wins" mean
+-- "the device with the fastest clock wins". One clock decides.
+create or replace function public.pip_stamp()
 returns trigger language plpgsql as $$
 begin
-  new.saved_at = now();
+  new.updated = (extract(epoch from clock_timestamp()) * 1000)::bigint;
   return new;
 end $$;
 
-drop trigger if exists pip_touch on public.pip_state;
-create trigger pip_touch before insert or update on public.pip_state
-  for each row execute function public.pip_touch();
+-- ---------------------------------------------------------------------------
+-- the tables
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.lists (
+  id         text  not null,
+  user_id    uuid  not null default auth.uid() references auth.users (id) on delete cascade,
+  name       text  not null default '',
+  ord        int   not null default 0,
+  updated    bigint not null default 0,
+  deleted_at bigint,
+  primary key (user_id, id)
+);
+
+create table if not exists public.tags (
+  id         text  not null,
+  user_id    uuid  not null default auth.uid() references auth.users (id) on delete cascade,
+  name       text  not null default '',
+  colour     text  not null default 'blue',
+  updated    bigint not null default 0,
+  deleted_at bigint,
+  primary key (user_id, id)
+);
+
+create table if not exists public.tasks (
+  id          text  not null,
+  user_id     uuid  not null default auth.uid() references auth.users (id) on delete cascade,
+  list_id     text,
+  title       text  not null default '',
+  tags        text[] not null default '{}',
+  due         text,
+  repeat      text  not null default 'none',
+  weekday     int,
+  at          int,                      -- minutes past midnight, or null
+  mins        int   not null default 30,
+  done        boolean not null default false,
+  done_at     bigint,
+  completions jsonb not null default '{}'::jsonb,
+  skips       jsonb not null default '{}'::jsonb,
+  ord         int   not null default 0,
+  created     bigint,
+  updated     bigint not null default 0,
+  deleted_at  bigint,
+  primary key (user_id, id)
+);
+
+-- start and end are reserved words, hence start_min / end_min
+create table if not exists public.blocks (
+  id         text  not null,
+  user_id    uuid  not null default auth.uid() references auth.users (id) on delete cascade,
+  date       text  not null default '',
+  start_min  int   not null default 0,
+  end_min    int   not null default 30,
+  task_id    text,
+  title      text  not null default '',
+  done       boolean not null default false,
+  ran_over   int   not null default 0,
+  updated    bigint not null default 0,
+  deleted_at bigint,
+  primary key (user_id, id)
+);
+
+-- append only: a finished session is a fact, it is never edited
+create table if not exists public.logs (
+  id         text  not null,
+  user_id    uuid  not null default auth.uid() references auth.users (id) on delete cascade,
+  task_id    text,
+  block_id   text,
+  date       text  not null default '',
+  ms         bigint not null default 0,
+  at         bigint not null default 0,
+  updated    bigint not null default 0,
+  deleted_at bigint,
+  primary key (user_id, id)
+);
+
+-- everything that is a preference rather than data: session lengths, the
+-- break, when your day starts, the theme. One row, because these are only ever
+-- edited in one place at a time and there is nothing to merge.
+create table if not exists public.prefs (
+  user_id  uuid   not null primary key default auth.uid() references auth.users (id) on delete cascade,
+  data     jsonb  not null default '{}'::jsonb,
+  migrated boolean not null default false,
+  updated  bigint not null default 0
+);
+
+-- ---------------------------------------------------------------------------
+-- stamps, indexes and row security, applied to every table the same way
+-- ---------------------------------------------------------------------------
+
+do $$
+declare t text;
+begin
+  foreach t in array array['lists', 'tags', 'tasks', 'blocks', 'logs', 'prefs'] loop
+
+    -- the server stamps every write
+    execute format('drop trigger if exists pip_stamp on public.%I', t);
+    execute format(
+      'create trigger pip_stamp before insert or update on public.%I
+         for each row execute function public.pip_stamp()', t);
+
+    -- what a delta pull asks for: this account's rows, changed since last time
+    execute format(
+      'create index if not exists %I on public.%I (user_id, updated)', t || '_since', t);
+
+    execute format('alter table public.%I enable row level security', t);
+
+    -- an account can only ever see and touch its own rows
+    execute format('drop policy if exists "pip owns its rows" on public.%I', t);
+    execute format(
+      'create policy "pip owns its rows" on public.%I
+         for all to authenticated
+         using (auth.uid() = user_id) with check (auth.uid() = user_id)', t);
+
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- tombstones
+-- ---------------------------------------------------------------------------
+
+-- A deleted row is kept, marked, and swept up later. Deleting it outright
+-- cannot be told apart from a row a device has not pulled yet, which is how
+-- deleted things come back from the dead.
+create or replace function public.pip_sweep(older_than_days int default 30)
+returns void language plpgsql security invoker as $$
+declare
+  cutoff bigint := (extract(epoch from now()) * 1000)::bigint - (older_than_days::bigint * 86400000);
+  t text;
+begin
+  foreach t in array array['lists', 'tags', 'tasks', 'blocks', 'logs'] loop
+    execute format('delete from public.%I where deleted_at is not null and deleted_at < $1', t)
+      using cutoff;
+  end loop;
+end $$;
+
+-- Run it on a schedule if pg_cron is available, otherwise it is harmless to
+-- call by hand now and then: select public.pip_sweep();
+
+-- ---------------------------------------------------------------------------
+-- realtime
+-- ---------------------------------------------------------------------------
+
+-- so a second device sees a change within a second rather than on next load
+do $$
+declare t text;
+begin
+  foreach t in array array['lists', 'tags', 'tasks', 'blocks', 'logs'] loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    exception when duplicate_object then null;
+    end;
+  end loop;
+end $$;

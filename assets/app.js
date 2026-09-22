@@ -980,8 +980,11 @@
   function renderSync() {
     var status = Store.remote.status();
     var baked = Store.remote.configured();
-    var text = status === 'on' ? '✓ syncing'
-      : status === 'signed-out' ? 'project ready — sign in below'
+    var waiting = Store.pending();
+    var text = status === 'synced'
+      ? (waiting ? '✓ synced · ' + waiting + ' waiting' : '✓ synced')
+      : status === 'syncing' ? 'syncing…'
+      : status === 'signed out' ? 'sign in below to sync'
       : status === 'connecting' ? 'connecting…'
       : status === 'off' ? (baked ? 'starting…' : 'local only (this browser)')
       : status;
@@ -991,7 +994,7 @@
     var fromConfig = baked && !el.syncUrl.value;
     el.syncUrl.parentNode.hidden = fromConfig;
     el.syncKey.parentNode.hidden = fromConfig;
-    el.syncConnect.textContent = status === 'on' ? 'reconnect' : 'sign in';
+    el.syncConnect.textContent = status === 'synced' ? 'reconnect' : 'sign in';
   }
 
   function toggleSyncPanel(force) {

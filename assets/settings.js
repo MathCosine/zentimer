@@ -382,24 +382,31 @@ window.Panel = (function () {
 
     /* If syncing ever replaced what was on this device, the old copy is still
        here and can be put back. */
+    /* Daily snapshots, plus whatever syncing replaced. A backup you have to
+       remember to take is a backup you do not have. */
+    var saves = Store.remote.snapshots().slice().reverse();
     var kept = Store.remote.backup();
-    if (kept && kept.data) {
-      var when = new Date(kept.at || 0);
-      var counts = (kept.data.tasks || []).length + ' tasks, ' + (kept.data.blocks || []).length + ' blocks';
-      var line = node('div', 'set-row');
-      var name = node('div', 'set-label');
-      name.appendChild(node('span', null, 'replaced by sync'));
-      name.appendChild(node('small', null, counts + ' · ' +
-        when.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' ' +
-        when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })));
-      line.appendChild(name);
-      var put = node('button', 'ghost', 'put it back');
-      put.type = 'button';
-      put.addEventListener('click', function () {
-        if (Store.remote.restoreBackup()) draw();
+    if (kept && kept.data) saves.unshift({ day: 'replaced by sync', at: kept.at, data: kept.data });
+    if (saves.length) {
+      data.appendChild(node('p', 'set-note', 'kept on this device, in case'));
+      saves.slice(0, 6).forEach(function (snap) {
+        var when = new Date(snap.at || 0);
+        var line = node('div', 'set-row');
+        var name = node('div', 'set-label');
+        name.appendChild(node('span', null, snap.day === 'replaced by sync' ? snap.day
+          : when.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })));
+        name.appendChild(node('small', null,
+          (snap.data.tasks || []).filter(function (t) { return !t.deletedAt; }).length + ' tasks, ' +
+          (snap.data.blocks || []).filter(function (b) { return !b.deletedAt; }).length + ' blocks'));
+        line.appendChild(name);
+        var put = node('button', 'ghost', 'restore');
+        put.type = 'button';
+        put.addEventListener('click', function () {
+          if (Store.remote.restore(snap.data)) draw();
+        });
+        line.appendChild(put);
+        data.appendChild(line);
       });
-      line.appendChild(put);
-      data.appendChild(line);
     }
   }
 
