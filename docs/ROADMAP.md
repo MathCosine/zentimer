@@ -1,8 +1,23 @@
 # pip — from a personal tool to a product
 
-Decided 2026-09-21. Nothing here is built yet. Build order matters: stage 1
-must land before anything else, because migrating data gets harder the more
-people have some.
+Decided 2026-09-21. **All six stages shipped 2026-09-22** — this is kept as the
+record of what was decided and why, and of the things that turned out to bite.
+What each stage actually became is in its commit message; `test/` holds the
+checks that hold it up.
+
+Still to do, and deliberately not done:
+
+- **Email confirmation is still off**, because turning it on needs an SMTP
+  provider first — Supabase's built-in sender is rate-limited and not meant for
+  production. That is the one thing standing between this and being genuinely
+  open to strangers (stage 2 below says why).
+- `pip_state` is still there, untouched, holding the pre-migration copy. Drop
+  it only once the row path has been live a while.
+- `pip_sweep()` is installed but nothing calls it on a schedule. Run it by hand
+  now and then, or wire pg_cron.
+- Sync has never run against a real Supabase from here — the sandbox cannot
+  reach it. It is tested against a faithful stand-in (`test/`), which is not
+  the same thing as the real one.
 
 **Shape agreed:** public sign-up, Supabase free tier, per-row sync, a real
 front page, plus accounts, undo + bin, offline, search and a week view.
