@@ -1900,3 +1900,35 @@ body.dragging-task .task-list { pointer-events: none; }
 .sync-advanced summary::-webkit-details-marker { display: none; }
 .sync-advanced summary::before { content: "▸ "; }
 .sync-advanced[open] summary::before { content: "▾ "; }
+
+/* a new version is ready — asked, never done behind your back */
+.update-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1.5px solid var(--outline);
+  box-shadow: 0 8px 22px rgba(20, 45, 60, 0.2);
+  font-size: 0.76rem;
+  animation: pop-in 260ms var(--bounce) both;
+  max-width: calc(100vw - 24px);
+}
+.update-bar button {
+  font: inherit;
+  font-size: 0.74rem;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1.5px solid var(--outline);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.update-bar button.update-later { background: none; border-color: var(--hair); color: var(--soft); }
+.update-bar button.update-later:hover { border-color: var(--accent); color: var(--accent); }
