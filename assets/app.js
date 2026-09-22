@@ -1245,6 +1245,15 @@
 
     buildMusicPanel();
     renderSync();
+    // the front page links straight at the sign-in panel, whether that opens
+    // the app fresh or the app is already sitting there
+    function openFromHash() {
+      if (location.hash !== '#sign-in') return;
+      toggleSyncPanel(true);
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
     // the sync status changes on its own -- when rows arrive, when a push
     // fails, when a session expires -- so the panel follows it
     Store.subscribe(function () { if (!el.syncPop.hidden) renderSync(); });

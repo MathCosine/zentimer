@@ -1,13 +1,13 @@
 {
-  "name": "pip — study timer",
+  "name": "pip \u2014 study desk",
   "short_name": "pip",
-  "description": "A cutesy study timer with a little pixel creature who works alongside you.",
-  "start_url": ".",
-  "scope": ".",
+  "description": "A study timer, an hour-by-hour plan and your task list, with two small pixel creatures.",
+  "start_url": "/app/",
+  "scope": "/app/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#ffefd9",
-  "theme_color": "#ffefd9",
+  "background_color": "#eaf4fb",
+  "theme_color": "#eaf4fb",
   "icons": [
     {
       "src": "assets/icon.svg",

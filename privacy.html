@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pip — what it stores</title>
+<meta name="description" content="What pip keeps, where it keeps it, and how to take it back or delete it.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/landing.css">
+</head>
+<body class="landing">
+<div class="sky" aria-hidden="true"></div>
+
+<header class="front-bar">
+  <a class="front-mark" href="./">pip</a>
+  <a class="front-in" href="app/">open your desk</a>
+</header>
+
+<main class="front front-prose">
+  <h1>What it stores</h1>
+
+  <h2>Without an account</h2>
+  <p>Everything stays in your browser. Your tasks, your days, your settings and
+  your session history are kept in that browser's local storage and go nowhere
+  else. Clearing site data removes them, so export a copy if they matter.</p>
+
+  <h2>With an account</h2>
+  <p>Your email address, and the same data as above: lists, tags, tasks, day
+  blocks and finished sessions. That is the whole of it. There is no tracking,
+  no analytics, no advertising, and nothing is shared with anyone.</p>
+  <p>It is stored in a Supabase project, and row-level security means each
+  account can only ever read and write its own rows.</p>
+
+  <h2>Taking it with you</h2>
+  <p><strong>Export</strong> in settings writes the lot to a JSON file you
+  keep. It works signed in or out and depends on nothing but your browser.</p>
+
+  <h2>Deleting it</h2>
+  <p><strong>Delete account</strong> in the account panel removes your account
+  and everything attached to it. It cannot be undone, so export first if you
+  want a copy. Without an account, clearing your browser's site data is the
+  same thing.</p>
+
+  <h2>Email</h2>
+  <p>Your address is used to sign you in and to send a reset link if you ask
+  for one. Nothing else is ever sent to it.</p>
+
+  <p class="front-small">pip is free, has no paid tier, and is not planning
+  one. The source is on <a href="https://github.com/MathCosine/zentimer">GitHub</a>.</p>
+</main>
+</body>
+</html>
