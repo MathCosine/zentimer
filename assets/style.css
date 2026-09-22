@@ -181,7 +181,12 @@ body {
 
 /* ---------- the bar: clock and timer ---------- */
 
-.bar { display: grid; gap: 8px; }
+/* Grid and flex items refuse to shrink past their content unless told they
+   may. Without this the bar sets a floor on the whole app, and anything
+   narrower than that floor -- a phone, or the desk running in a frame on the
+   front page -- spills out of its own card. */
+.bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.bar > * { min-width: 0; }
 
 .bar-clock {
   display: flex;
@@ -211,7 +216,7 @@ body {
 .clock-meta { margin: 0; font-size: 0.7rem; color: var(--muted); }
 .clock-meta .dot { margin: 0 0.35em; color: var(--blue); }
 
-.bar-timer { display: flex; align-items: center; gap: 12px; }
+.bar-timer { display: flex; align-items: center; gap: 12px; min-width: 0; }
 
 .dial {
   position: relative;
@@ -311,7 +316,7 @@ body[data-mode="break"] .phase { color: var(--green); }
 .presets button:hover { border-color: var(--accent); }
 .presets button[aria-current="true"] { background: var(--accent); border-color: var(--outline); color: #fff; }
 
-.controls { display: flex; align-items: center; gap: 6px; }
+.controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 .go {
   font: inherit;
@@ -624,7 +629,7 @@ body[data-mode="break"] .phase { color: var(--green); }
   padding-bottom: 6px;
 }
 
-.task-head { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.task-head { display: flex; align-items: center; gap: 6px; justify-content: space-between; flex-wrap: wrap; min-width: 0; }
 
 .views {
   display: flex;
@@ -973,8 +978,8 @@ body[data-mode="break"] .phase { color: var(--green); }
 
 /* ---------- today + alarms ---------- */
 
-.extras { display: flex; gap: 9px; }
-.extras .card { flex: 1 1 0; min-width: 0; padding: 6px 10px; }
+.extras { display: flex; flex-wrap: wrap; gap: 9px; min-width: 0; }
+.extras .card { flex: 1 1 130px; min-width: 0; padding: 6px 10px; }
 
 /* Narrow windows need every row the task list can get, and these two hold one
    line each -- so they lie down side by side instead of stacking a heading. */

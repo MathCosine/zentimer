@@ -14,5 +14,6 @@ without a Supabase project.
     node test/offline.js             # the service worker, with the network switched off
     node test/undo.js                # undo, and the bin
     node test/findweek.js            # searching, and the week
+    node test/narrow.js              # nothing spills, 260px up, alone and in the frame
 
 Each exits non-zero on a failed check or any console error.

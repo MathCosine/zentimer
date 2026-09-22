@@ -60,7 +60,9 @@ body.landing {
   align-items: center;
 }
 @media (min-width: 900px) {
-  .front-top { grid-template-columns: minmax(0, 1fr) auto; }
+  /* an auto column sizes to content, and the frame's own width:100% then has
+     nothing to resolve against -- so the column says how wide it is */
+  .front-top { grid-template-columns: minmax(0, 1fr) minmax(330px, 400px); }
   .front { gap: clamp(56px, 7vw, 96px); }
 }
 
