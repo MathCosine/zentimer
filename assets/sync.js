@@ -106,6 +106,7 @@ window.Sync = (function () {
   var app = null;              // the adapter the store hands us
   var client = null;
   var userId = null;
+  var userEmail = null;
   var status = 'off';
   var ready = false;           // have we reconciled with the server yet?
   var config = null;
@@ -155,7 +156,7 @@ window.Sync = (function () {
           auth: { persistSession: true, autoRefreshToken: true }
         });
         client.auth.onAuthStateChange(function (event) {
-          if (event === 'SIGNED_OUT') { ready = false; userId = null; say('signed out'); }
+          if (event === 'SIGNED_OUT') { ready = false; userId = null; userEmail = null; say('signed out'); }
         });
         return client.auth.getUser();
       })
@@ -163,6 +164,7 @@ window.Sync = (function () {
         var user = res && res.data && res.data.user;
         if (!user) { say('signed out'); return false; }
         userId = user.id;
+        userEmail = user.email || null;
         return start();
       })
       .catch(function (err) {
@@ -400,6 +402,7 @@ window.Sync = (function () {
         .then(function (res) {
           if (res.error) throw res.error;
           userId = res.data.user.id;
+          userEmail = res.data.user.email || null;
           forgetCursors();            // this account's rows have never been seen here
           return start();
         });
@@ -414,6 +417,7 @@ window.Sync = (function () {
         if (res.error) throw res.error;
         if (res.data.session) {
           userId = res.data.user.id;
+          userEmail = res.data.user.email || null;
           forgetCursors();
           return start();
         }
@@ -422,10 +426,50 @@ window.Sync = (function () {
       });
     },
 
+    email: function () { return userEmail; },
+    // being signed in is having an id; an email is only how we name you
+    signedIn: function () { return !!userId; },
+
+    resetPassword: function (email) {
+      if (!client) return Promise.reject(new Error('not connected'));
+      return client.auth.resetPasswordForEmail(email, {
+        redirectTo: location.origin + location.pathname
+      }).then(function (res) {
+        if (res.error) throw res.error;
+        say('check your email for the reset link');
+        return true;
+      });
+    },
+
+    setPassword: function (password) {
+      if (!client) return Promise.reject(new Error('not connected'));
+      return client.auth.updateUser({ password: password }).then(function (res) {
+        if (res.error) throw res.error;
+        say('password changed');
+        return true;
+      });
+    },
+
+    /* Deleting the account removes the auth user, and every table cascades
+       from it. The client cannot reach auth.users directly, so this is a
+       security-definer function the schema installs. */
+    deleteAccount: function () {
+      if (!client) return Promise.reject(new Error('not connected'));
+      return client.rpc('pip_delete_me').then(function (res) {
+        if (res.error) throw res.error;
+        return client.auth.signOut();
+      }).then(function () {
+        ready = false; userId = null; userEmail = null;
+        forgetCursors();
+        say('account deleted');
+        return true;
+      });
+    },
+
     signOut: function () {
       if (!client) return Promise.resolve();
       return client.auth.signOut().then(function () {
-        ready = false; userId = null;
+        ready = false; userId = null; userEmail = null;
         forgetCursors();
         if (channel) { try { client.removeChannel(channel); } catch (e) {} channel = null; }
         say('signed out');

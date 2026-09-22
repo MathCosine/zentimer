@@ -43,17 +43,20 @@ export function createClient() {
   return {
     from: query,
     auth: {
-      getUser: async () => ({ data: { user: { id: USER } }, error: null }),
+      getUser: async () => ({ data: { user: { id: USER, email: 'you@example.com' } }, error: null }),
       getSession: async () => ({ data: { session: { user: { id: USER } } } }),
       onAuthStateChange() { return { data: { subscription: { unsubscribe() {} } } }; },
-      signInWithPassword: async () => ({ data: { user: { id: USER }, session: {} }, error: null }),
-      signUp: async () => ({ data: { user: { id: USER }, session: {} }, error: null }),
-      signOut: async () => ({ error: null })
+      signInWithPassword: async (c) => ({ data: { user: { id: USER, email: c.email }, session: {} }, error: null }),
+      signUp: async (c) => ({ data: { user: { id: USER, email: c.email }, session: {} }, error: null }),
+      signOut: async () => ({ error: null }),
+      resetPasswordForEmail: async () => ({ data: {}, error: null }),
+      updateUser: async () => ({ data: {}, error: null })
     },
     channel() {
       return { on() { return this; }, subscribe(cb) { cb && cb('SUBSCRIBED'); return this; } };
     },
-    removeChannel() {}
+    removeChannel() {},
+    rpc: async () => ({ data: null, error: null })
   };
 }
 `;

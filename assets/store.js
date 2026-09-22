@@ -546,6 +546,11 @@ window.Store = (function () {
       signIn: function (email, password) { return Sync.signIn(email, password); },
       signUp: function (email, password) { return Sync.signUp(email, password); },
       signOut: function () { return Sync.signOut(); },
+      email: function () { return window.Sync ? Sync.email() : null; },
+      signedIn: function () { return !!window.Sync && Sync.signedIn(); },
+      resetPassword: function (email) { return Sync.resetPassword(email); },
+      setPassword: function (pw) { return Sync.setPassword(pw); },
+      deleteAccount: function () { return Sync.deleteAccount(); },
 
       backup: function () {
         try { return JSON.parse(localStorage.getItem(BACKUP) || 'null'); } catch (e) { return null; }

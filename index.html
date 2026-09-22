@@ -184,14 +184,44 @@
 </div>
 
 <div class="sync-pop" id="syncPop" hidden>
-  <h3>sync</h3>
+  <h3 id="authTitle">your desk, everywhere</h3>
   <p class="sync-status" id="syncStatus">local only</p>
-  <label class="sync-field"><span>project url</span><input id="syncUrl" type="url" spellcheck="false" placeholder="https://xxxx.supabase.co"></label>
-  <label class="sync-field"><span>anon key</span><input id="syncKey" type="text" spellcheck="false" placeholder="eyJhbGci…"></label>
-  <label class="sync-field"><span>email</span><input id="syncEmail" type="email" spellcheck="false" autocomplete="username"></label>
-  <label class="sync-field"><span>password</span><input id="syncPass" type="password" autocomplete="current-password"></label>
+
+  <div id="authForm">
+    <label class="sync-field"><span>email</span>
+      <input id="syncEmail" type="email" spellcheck="false" autocomplete="username"></label>
+    <label class="sync-field"><span>password</span>
+      <input id="syncPass" type="password" autocomplete="current-password"></label>
+    <div class="sync-row">
+      <button id="syncConnect" type="button" class="go small">sign in</button>
+      <button id="authSwap" type="button" class="ghost">make an account</button>
+    </div>
+    <button id="authForgot" type="button" class="linky">forgotten your password?</button>
+  </div>
+
+  <div id="authAccount" hidden>
+    <p class="sync-who" id="authWho"></p>
+    <div class="sync-row">
+      <button id="authOut" type="button" class="ghost">sign out</button>
+      <button id="authDelete" type="button" class="ghost danger">delete account</button>
+    </div>
+    <p class="sync-warn" id="authWarn" hidden>
+      This removes your account and everything in it, everywhere, and cannot be undone.
+      Export first if you want a copy.
+      <button id="authDeleteYes" type="button" class="ghost danger">yes, delete it</button>
+      <button id="authDeleteNo" type="button" class="ghost">keep it</button>
+    </p>
+  </div>
+
+  <details class="sync-advanced" id="syncAdvanced">
+    <summary>use a different project</summary>
+    <label class="sync-field"><span>project url</span>
+      <input id="syncUrl" type="url" spellcheck="false" placeholder="https://xxxx.supabase.co"></label>
+    <label class="sync-field"><span>anon key</span>
+      <input id="syncKey" type="text" spellcheck="false" placeholder="eyJhbGci…"></label>
+  </details>
+
   <div class="sync-row">
-    <button id="syncConnect" type="button" class="go small">connect</button>
     <button id="syncExport" type="button" class="ghost">export</button>
     <button id="syncImport" type="button" class="ghost">import</button>
   </div>

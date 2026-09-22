@@ -1854,3 +1854,49 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 .tool[aria-pressed="true"]#settingsBtn { background: var(--accent); border-color: var(--outline); }
 .tool[aria-pressed="true"]#settingsBtn svg { color: #fff; stroke: #fff; }
+
+/* ---------- the account panel ---------- */
+
+.sync-who { margin: 0 0 6px; font-size: 0.76rem; }
+.sync-who b { font-weight: 700; }
+
+.linky {
+  font: inherit;
+  font-size: 0.68rem;
+  background: none;
+  border: 0;
+  padding: 4px 0 0;
+  color: var(--soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.linky:hover { color: var(--accent); }
+
+.ghost.danger { border-color: color-mix(in srgb, var(--coral) 55%, var(--hair)); color: var(--coral); }
+.ghost.danger:hover { border-color: var(--coral); background: color-mix(in srgb, var(--coral) 12%, transparent); }
+
+.sync-warn {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--coral) 12%, var(--well));
+  border: 1.5px solid color-mix(in srgb, var(--coral) 40%, var(--hair));
+  font-size: 0.7rem;
+  line-height: 1.45;
+  display: grid;
+  gap: 6px;
+}
+.sync-warn button { justify-self: start; }
+
+.sync-advanced { margin-top: 8px; }
+.sync-advanced summary {
+  font-size: 0.68rem;
+  color: var(--soft);
+  cursor: pointer;
+  list-style: none;
+  padding: 2px 0;
+}
+.sync-advanced summary::-webkit-details-marker { display: none; }
+.sync-advanced summary::before { content: "▸ "; }
+.sync-advanced[open] summary::before { content: "▾ "; }

@@ -22,7 +22,11 @@
     ringDismiss: $('ringDismiss'),
     syncBtn: $('syncBtn'), syncPop: $('syncPop'), syncStatus: $('syncStatus'),
     syncUrl: $('syncUrl'), syncKey: $('syncKey'), syncEmail: $('syncEmail'), syncPass: $('syncPass'),
-    syncConnect: $('syncConnect'), syncExport: $('syncExport'), syncImport: $('syncImport')
+    syncConnect: $('syncConnect'), syncExport: $('syncExport'), syncImport: $('syncImport'),
+    authTitle: $('authTitle'), authForm: $('authForm'), authSwap: $('authSwap'), authForgot: $('authForgot'),
+    authAccount: $('authAccount'), authWho: $('authWho'), authOut: $('authOut'),
+    authDelete: $('authDelete'), authWarn: $('authWarn'),
+    authDeleteYes: $('authDeleteYes'), authDeleteNo: $('authDeleteNo'), syncAdvanced: $('syncAdvanced')
   };
 
   var MIN = 60000, HOUR = 3600000, DAY = 86400000;
@@ -977,10 +981,33 @@
     save();
   });
 
+  var making = false;          // the form is in "create an account" mode
+
   function renderSync() {
     var status = Store.remote.status();
     var baked = Store.remote.configured();
     var waiting = Store.pending();
+    var email = Store.remote.email();
+    var inside = Store.remote.signedIn();
+
+    el.authForm.hidden = inside;
+    el.authAccount.hidden = !inside;
+    el.authTitle.textContent = inside ? 'your account' : making ? 'make an account' : 'your desk, everywhere';
+    // a project of your own is an escape hatch, and only while signed out
+    el.syncAdvanced.hidden = inside;
+    if (inside) {
+      el.authWho.textContent = '';
+      el.authWho.appendChild(document.createTextNode('signed in as '));
+      var who = document.createElement('b');
+      who.textContent = email || 'this account';
+      el.authWho.appendChild(who);
+    } else {
+      el.authWarn.hidden = true;
+      el.syncConnect.textContent = making ? 'make it' : 'sign in';
+      el.authSwap.textContent = making ? 'I already have one' : 'make an account';
+      el.syncPass.autocomplete = making ? 'new-password' : 'current-password';
+      el.authForgot.hidden = making;
+    }
     var text = status === 'synced'
       ? (waiting ? '✓ synced · ' + waiting + ' waiting' : '✓ synced')
       : status === 'syncing' ? 'syncing…'
@@ -990,11 +1017,6 @@
       : status;
     paint(el.syncStatus, 'textContent', text);
 
-    // url and key come from assets/config.js when they are set there
-    var fromConfig = baked && !el.syncUrl.value;
-    el.syncUrl.parentNode.hidden = fromConfig;
-    el.syncKey.parentNode.hidden = fromConfig;
-    el.syncConnect.textContent = status === 'synced' ? 'reconnect' : 'sign in';
   }
 
   function toggleSyncPanel(force) {
@@ -1011,29 +1033,58 @@
 
   el.syncPop.addEventListener('click', function (event) { event.stopPropagation(); });
 
+  function authTrouble(err) {
+    var why = (err && err.message) || String(err);
+    if (/not confirmed/i.test(why)) return 'check your email to confirm the address';
+    if (/already registered|already exists/i.test(why)) return 'that email already has an account — sign in instead';
+    if (/invalid login|invalid credentials/i.test(why)) return 'that email and password do not match';
+    if (/password/i.test(why) && /short|least|6/i.test(why)) return 'a password needs at least six characters';
+    if (/rate|too many/i.test(why)) return 'too many tries — wait a minute';
+    return why.slice(0, 80);
+  }
+
+  el.authSwap.addEventListener('click', function () { making = !making; renderSync(); });
+
+  el.authForgot.addEventListener('click', function () {
+    var email = el.syncEmail.value.trim();
+    if (!email) { paint(el.syncStatus, 'textContent', 'your email first, then this'); return; }
+    Store.remote.connect()
+      .then(function () { return Store.remote.resetPassword(email); })
+      .then(function () { paint(el.syncStatus, 'textContent', 'check your email for the reset link'); })
+      .catch(function (err) { paint(el.syncStatus, 'textContent', authTrouble(err)); });
+  });
+
+  el.authOut.addEventListener('click', function () {
+    Store.remote.signOut().then(function () {
+      el.syncPass.value = '';
+      paint(el.syncStatus, 'textContent', 'signed out — this browser keeps its own copy');
+      renderSync();
+    });
+  });
+
+  el.authDelete.addEventListener('click', function () { el.authWarn.hidden = false; });
+  el.authDeleteNo.addEventListener('click', function () { el.authWarn.hidden = true; });
+  el.authDeleteYes.addEventListener('click', function () {
+    paint(el.syncStatus, 'textContent', 'deleting…');
+    Store.remote.deleteAccount()
+      .then(function () { paint(el.syncStatus, 'textContent', 'account deleted'); renderSync(); })
+      .catch(function (err) { paint(el.syncStatus, 'textContent', authTrouble(err)); });
+  });
+
   el.syncConnect.addEventListener('click', function () {
     var url = el.syncUrl.value.trim(), key = el.syncKey.value.trim();
     var email = el.syncEmail.value.trim(), password = el.syncPass.value;
     var baked = Store.remote.configured();
     if ((!url || !key) && !baked) { paint(el.syncStatus, 'textContent', 'paste the project url and key'); return; }
-    if (!email || !password) { paint(el.syncStatus, 'textContent', 'an email and password, and it will make the account'); return; }
-    paint(el.syncStatus, 'textContent', 'connecting…');
+    if (!email || !password) { paint(el.syncStatus, 'textContent', 'an email and a password'); return; }
+    if (making && password.length < 6) { paint(el.syncStatus, 'textContent', 'a password needs at least six characters'); return; }
+    paint(el.syncStatus, 'textContent', making ? 'making your account…' : 'signing in…');
     (url && key ? Store.remote.save(url, key) : Store.remote.connect())
       .then(function () {
-        return Store.remote.signIn(email, password).catch(function (err) {
-          var why = err.message || '';
-          if (/not confirmed/i.test(why)) throw err;
-          // first time through, the account does not exist yet
-          if (/invalid|credentials|not found/i.test(why)) return Store.remote.signUp(email, password);
-          throw err;
-        });
+        return making ? Store.remote.signUp(email, password) : Store.remote.signIn(email, password);
       })
-      .then(function () { el.syncPass.value = ''; renderSync(); })
-      .catch(function (err) {
-        var why = err.message || String(err);
-        if (/not confirmed/i.test(why)) why = 'confirm the email, or turn confirmation off in supabase';
-        paint(el.syncStatus, 'textContent', why.slice(0, 80));
-      });
+      .then(function () { el.syncPass.value = ''; making = false; renderSync(); })
+      .catch(function (err) { paint(el.syncStatus, 'textContent', authTrouble(err)); });
   });
 
   el.syncExport.addEventListener('click', function () {
@@ -1194,6 +1245,9 @@
 
     buildMusicPanel();
     renderSync();
+    // the sync status changes on its own -- when rows arrive, when a push
+    // fails, when a session expires -- so the panel follows it
+    Store.subscribe(function () { if (!el.syncPop.hidden) renderSync(); });
     Pet.init();
     Pet.setEnabled(settings.pet);
     document.body.classList.toggle('pets-off', !settings.pet);
