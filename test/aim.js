@@ -24,6 +24,17 @@ const { chromium } = require('./browser');
   console.log('--- nothing due, nothing asked of you ---');
   check('it stays out of the way', await aim(p), null);
 
+  console.log('--- only big things are spread ---');
+  await p.evaluate(() => {
+    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    // forty minutes due in five days: nobody does eight minutes of it a day
+    Store.addTask({ title: 'MSB Worksheet', due: on(5), mins: 40 });
+  });
+  await p.waitForTimeout(800);
+  check('a small one waits for its day', await aim(p), null);
+  await p.evaluate(() => Store.tasks().forEach(t => Store.removeTask(t.id)));
+  await p.waitForTimeout(500);
+
   console.log('--- work is spread to finish two days early ---');
   await p.evaluate(() => {
     const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
@@ -32,7 +43,25 @@ const { chromium } = require('./browser');
     Store.addTask({ title: 'MSB Big project', due: on(6), mins: 360 });
   });
   await p.waitForTimeout(800);
-  check('six hours over five days is seventy minutes', (await aim(p)).lines[0].num, '1h 10m to go');
+  check('six hours over five days is seventy minutes', (await aim(p)).lines[0].num, '1h 10m');
+
+  check('and it says how many things', await p.evaluate(() =>
+    document.querySelector('.aim-count').textContent), '1 thing');
+
+  console.log('--- a big one is offered a slice at a time ---');
+  const slice = await p.evaluate(() => {
+    const q = document.getElementById('queue');
+    const row = q.querySelector('.queue-row');
+    return { mins: row.querySelector('.queue-mins').textContent }; });
+  check('the queue says what fraction of it', slice.mins, '1h 10m \u00b7 19%');
+  await p.evaluate(() => document.querySelector('.queue-row').click());
+  await p.waitForTimeout(700);
+  check('and the block is that slice, not the whole project', await p.evaluate(() => {
+    const b = Store.blocks(Store.dayKey())[0];
+    return b.end - b.start; }), 70);
+  await p.evaluate(() => {
+    Store.blocks(Store.dayKey()).forEach(b => Store.removeBlock(b.id)); });
+  await p.waitForTimeout(500);
 
   console.log('--- something due tomorrow is all today ---');
   await p.evaluate(() => {
@@ -41,7 +70,7 @@ const { chromium } = require('./browser');
     Store.addTask({ title: 'PHY Essay', due: Store.dayKey(d), mins: 90 });
   });
   await p.waitForTimeout(800);
-  check('no room to spread it, so all of it', (await aim(p)).lines[0].num, '1h 30m to go');
+  check('no room to spread it, so all of it', (await aim(p)).lines[0].num, '1h 30m');
 
   console.log('--- practice is a day’s worth, not a deadline ---');
   await p.evaluate(() => {
@@ -53,7 +82,9 @@ const { chromium } = require('./browser');
   await p.waitForTimeout(800);
   const both = await aim(p);
   check('two rows now', both.lines.map(l => l.name), ['homework','practice']);
-  check('two of the four drills is an hour', both.lines[1].num, '1h to go');
+  check('two of the four drills is an hour', both.lines[1].num, '1h');
+  check('and it counts them', await p.evaluate(() =>
+    [...document.querySelectorAll('.aim-count')].map(c => c.textContent)), ['1 thing','0 of 2']);
 
   console.log('--- doing the work fills the bar ---');
   await p.evaluate(() => {

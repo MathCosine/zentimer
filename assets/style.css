@@ -2565,3 +2565,16 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 .aim-warn { color: var(--coral); }
 .aim-clear { color: var(--green); }
+
+.aim-count {
+  flex: 0 0 auto;
+  font-size: 0.56rem;
+  color: var(--soft);
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.aim-line.is-met .aim-count { display: none; }
+
+.queue-why.is-quick { color: var(--green); font-weight: 600; }

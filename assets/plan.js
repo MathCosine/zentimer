@@ -2146,8 +2146,9 @@ window.Plan = (function () {
       });
       return !settled;
     }).map(function (task) {
-      var score = 0, why = '';
-      var length = leftOf(task);
+      var score = 0, why = '', urgent = false;
+      var whole = leftOf(task);
+      var length = shareOf(task, key) || whole;   // a slice of a big one, or all of a small one
       var tags = Store.tagsOf(task);
       var practice = tags.filter(function (t) { return t.kind === 'practice'; })[0] || null;
 
@@ -2158,6 +2159,7 @@ window.Plan = (function () {
       var promised = !!task.due;
       if (deadline) {
         var days = Math.round((new Date(deadline + 'T12:00') - new Date(key + 'T12:00')) / 86400000);
+        urgent = days <= 0;                   // wanted today, whatever else is true of it
         if (days < 0) { score += 100; why = 'overdue'; }
         else if (days === 0) {
           if (promised) { score += 70; why = 'due today'; }
@@ -2190,8 +2192,9 @@ window.Plan = (function () {
       }
 
       return {
-        task: task, score: score, fits: fits, mins: length,
-        why: why || 'nothing else pressing',
+        task: task, score: score, fits: fits, mins: length, whole: whole,
+        part: length < whole ? Math.round(length / whole * 100) : 0,
+        why: why || 'nothing else pressing', urgent: urgent,
         tagId: tags[0] ? tags[0].id : null,
         practice: !!practice
       };
@@ -2209,34 +2212,72 @@ window.Plan = (function () {
   }
 
   /* Three of the same class is not a list of what to do next, it is one thing
-     said three times. So the best of each comes first, and a tag only gets a
-     second turn once every other has had a first -- practice tags not at all,
-     because the whole point of them is that one is enough for now. */
-  function spread(ranked, want) {
-    var out = [], taken = {};
-    ranked.forEach(function (pick) {
-      if (out.length >= want) return;
-      var tag = pick.tagId || '\u0000none';
-      var had = taken[tag] || 0;
-      if (had === 0) { out.push(pick); taken[tag] = 1; }
+     said three times. But nor is the answer simply three different classes:
+     what is wanted is a shape for the next stretch -- something substantial,
+     then a change of gear, then a quick one to tick off. So the three rows are
+     three roles rather than three rankings.
+
+       now    the best thing that fits, whatever it is
+       then   the other sort: practice after work, work after practice
+       after  something quick to finish on -- unless the last thing you did was
+              also quick, because a run of small wins is how an afternoon
+              disappears without the essay moving
+
+     Each role falls back to "best of what is left" when nothing suits, so the
+     list is never short on account of being fussy. */
+  var QUICK = 20;                // a tickable-in-one-go sort of task
+
+  /* Was the last thing finished today itself a quick one? */
+  function justHadAQuickWin(key) {
+    var latest = null;
+    Store.state().logs.forEach(function (log) {
+      if (log.deletedAt || log.date !== key) return;
+      if (!latest || (log.at || 0) > (latest.at || 0)) latest = log;
     });
-    if (out.length < want) {
-      ranked.forEach(function (pick) {
-        if (out.length >= want || out.indexOf(pick) !== -1) return;
-        if (pick.practice) return;                        // one turn each, and no more
+    return !!latest && (latest.ms || 0) <= QUICK * 60000;
+  }
+
+  function spread(ranked, want) {
+    var out = [], used = {}, tags = {};
+
+    /* A second go at the same class is a last resort, never a preference: the
+       roles below all look for an untouched tag first and only then allow a
+       class its second turn, so "three suggestions" stays three subjects for
+       as long as you have three. */
+    function grab(suits, cap) {
+      for (var i = 0; i < ranked.length; i++) {
+        var pick = ranked[i];
+        if (used[pick.task.id]) continue;
         var tag = pick.tagId || '\u0000none';
-        if ((taken[tag] || 0) >= 2) return;
+        var room = pick.practice ? 1 : cap;    // practice asks once; a class twice at the very most
+        if ((tags[tag] || 0) >= room) continue;
+        if (suits && !suits(pick)) continue;
+        used[pick.task.id] = 1;
+        tags[tag] = (tags[tag] || 0) + 1;
         out.push(pick);
-        taken[tag] = (taken[tag] || 0) + 1;
-      });
+        return pick;
+      }
+      return null;
     }
-    // still short: anything left rather than an empty row
+
+    function take(suits) { return grab(suits, 1) || grab(suits, 2); }
+
+    var now = take(null);
+    if (!now) return out;
+
+    // a change of gear, if there is one to change to
     if (out.length < want) {
-      ranked.forEach(function (pick) {
-        if (out.length >= want || out.indexOf(pick) !== -1) return;
-        out.push(pick);
-      });
+      take(function (pick) { return pick.practice !== now.practice; }) || take(null);
     }
+
+    if (out.length < want) {
+      var earned = !justHadAQuickWin(Store.dayKey());
+      var last = out[out.length - 1];
+      var got = earned && take(function (pick) { return pick.mins <= QUICK && !pick.part; });
+      if (got) got.quick = true;
+      else take(function (pick) { return pick.practice !== last.practice; }) || take(null);
+    }
+
     return out;
   }
 
@@ -2274,15 +2315,25 @@ window.Plan = (function () {
         var badge = node('span', 'queue-tag tone-' + tags[0].color, tags[0].name);
         row.appendChild(badge);
       }
-      row.appendChild(node('span', 'queue-why' + (pick.why === 'overdue' ? ' is-late' : ''),
-        pick.fits ? pick.why : 'needs ' + spanLabel(pick.mins)));
-      row.appendChild(node('span', 'queue-mins', spanLabel(pick.mins) +
-        (pick.task.progress > 0 && pick.task.progress < 100 ? ' left' : '')));
+      var says = pick.fits ? pick.why : 'needs ' + spanLabel(pick.mins);
+      /* Naming it is the point -- "quick one" is why you would pick it up. But
+         not over the top of something genuinely urgent, which you need to know
+         more than you need the nudge. */
+      if (pick.quick && !pick.urgent) says = 'quick one';
+      row.appendChild(node('span', 'queue-why' + (pick.why === 'overdue' ? ' is-late' : '') +
+        (pick.quick ? ' is-quick' : ''), says));
+      /* A slice says so, because "1h 10m" on a six hour project reads like a
+         lie until you know it is today's portion of it. */
+      row.appendChild(node('span', 'queue-mins', pick.part
+        ? spanLabel(pick.mins) + ' \u00b7 ' + pick.part + '%'
+        : spanLabel(pick.mins) + (pick.task.progress > 0 && pick.task.progress < 100 ? ' left' : '')));
 
       row.addEventListener('click', function () {
         var day = viewDate();
         var from = isToday() ? Store.minutesNow() : 9 * 60;
         var start = Store.findSlot(pick.mins, from, day);
+        // the block is the slice, not the whole thing, or the day fills up with
+        // work that was never meant to happen today
         var block = Store.addBlock({
           date: day, start: start, end: Math.min(DAY_END, start + pick.mins),
           taskId: pick.task.id, title: pick.task.title
@@ -2319,13 +2370,36 @@ window.Plan = (function () {
     return out;
   }
 
+  /* How much of one task belongs to today. A six hour project due in six days
+     is not a six hour job today: it is an hour and ten minutes, six times. The
+     same number decides the size of the block a suggestion makes, so what you
+     are told to do and what lands on the day agree. */
+  /* An hour and a half is where a task stops being one sitting. Below it,
+     spreading is silly -- nobody does nine minutes of a forty minute worksheet
+     five days running -- so a small one waits for the day it is actually
+     needed and then is done whole. */
+  var BIG = 90;
+
+  function shareOf(task, key) {
+    key = key || Store.dayKey();
+    var left = leftOf(task);
+    var practising = Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
+    if (practising && !task.due) return left;   // a day's worth of practice is whole tasks
+    var deadline = Store.dueFor(task, key);
+    if (!deadline) return left;
+    var slack = Math.max(0, daysBetween(key, deadline) - EARLY_DAYS);
+    if (!slack) return left;                    // its day has come: all of it
+    if (left < BIG) return 0;                   // small, and not yet its day
+    return Math.max(5, Math.round(left / (slack + 1) / 5) * 5);
+  }
+
   function todaysAim() {
     var key = Store.dayKey();
     var work = 0, practice = 0, tightest = null;
+    var workLeft = 0, practiceDone = 0, practiceWant = 0;
 
     Store.tasks().forEach(function (task) {
       if (Store.isDone(task, key)) return;
-      var left = leftOf(task);
       var practising = Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
 
       if (practising && !task.due) return;      // counted below, by the day's worth
@@ -2333,13 +2407,11 @@ window.Plan = (function () {
       var deadline = Store.dueFor(task, key);
       if (!deadline) return;                    // no deadline, no share of today
 
-      /* Aim to be finished EARLY_DAYS before it is due, and never later than
-         the deadline itself. Everything already late is today's problem. */
-      var slack = Math.max(0, daysBetween(key, deadline) - EARLY_DAYS);
-      var over = slack + 1;                     // today counts as one of the days
-      var share = left / over;
+      var share = shareOf(task, key);
+      if (!share) return;                       // not today's problem yet
       work += share;
-      if (!tightest || daysBetween(key, deadline) < tightest) tightest = daysBetween(key, deadline);
+      workLeft++;
+      if (tightest === null || daysBetween(key, deadline) < tightest) tightest = daysBetween(key, deadline);
     });
 
     /* Practice is not a deadline, so its share is simply a day's worth of it:
@@ -2352,6 +2424,8 @@ window.Plan = (function () {
         return !Store.isDone(t, key) && (t.tags || []).indexOf(tag.id) !== -1;
       }).sort(function (a, b) { return leftOf(a) - leftOf(b); });
       left.slice(0, Math.max(0, how.want - how.done)).forEach(function (t) { practice += leftOf(t); });
+      practiceDone += how.done;
+      practiceWant += how.want;
     });
 
     var did = doneToday(key);
@@ -2359,6 +2433,9 @@ window.Plan = (function () {
       work: Math.round(work / 5) * 5,
       practice: Math.round(practice / 5) * 5,
       did: did,
+      workLeft: workLeft,
+      practiceDone: practiceDone,
+      practiceWant: practiceWant,
       tightest: tightest,
       overWork: work > caps.work,
       overPractice: practice > caps.practice
@@ -2378,8 +2455,9 @@ window.Plan = (function () {
     }
     el.aim.hidden = false;
 
-    function bar(label, want, got, over) {
-      var line = node('div', 'aim-line' + (got >= want ? ' is-met' : '') + (over ? ' is-over' : ''));
+    function bar(label, want, got, over, counted) {
+      var met = got >= want;
+      var line = node('div', 'aim-line' + (met ? ' is-met' : '') + (over ? ' is-over' : ''));
       line.appendChild(node('span', 'aim-name', label));
       var track = node('span', 'aim-track');
       var fill = node('span', 'aim-fill');
@@ -2387,14 +2465,21 @@ window.Plan = (function () {
       track.appendChild(fill);
       line.appendChild(track);
       line.appendChild(node('span', 'aim-num',
-        got >= want ? 'done \u2713' : spanLabel(Math.max(0, want - got)) + ' to go'));
+        met ? 'done \u2713' : spanLabel(Math.max(0, want - got))));
+      line.appendChild(node('span', 'aim-count', met ? '' : counted));
       line.title = spanLabel(got) + ' of ' + spanLabel(want) +
         (over ? ' \u2014 more than a day comfortably holds' : '');
       return line;
     }
 
-    if (aim.work) el.aim.appendChild(bar('homework', aim.work, aim.did.work, aim.overWork));
-    if (aim.practice) el.aim.appendChild(bar('practice', aim.practice, aim.did.practice, aim.overPractice));
+    if (aim.work) {
+      el.aim.appendChild(bar('homework', aim.work, aim.did.work, aim.overWork,
+        aim.workLeft + (aim.workLeft === 1 ? ' thing' : ' things')));
+    }
+    if (aim.practice) {
+      el.aim.appendChild(bar('practice', aim.practice, aim.did.practice, aim.overPractice,
+        aim.practiceDone + ' of ' + aim.practiceWant));
+    }
 
     if (aim.overWork || aim.overPractice) {
       el.aim.appendChild(node('p', 'aim-warn',
