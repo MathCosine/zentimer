@@ -248,6 +248,12 @@ window.Store = (function () {
 
   /* ---------- tasks ---------- */
 
+  /* A name can say what a tag is for. EXTRA is extracurricular practice --
+     daily drilling with no deadline -- and so are the other names people reach
+     for for the same thing. It is a first guess on a tag nobody has told us
+     about yet: the switch in the settings overrules it, and that is remembered. */
+  var PRACTICE_NAMES = /^(extra|extras|practice|drill|drills|comp|comps|competition|olympiad)$/i;
+
   function tagByName(name) {
     var clean = String(name || '').trim();
     if (!clean) return null;
@@ -256,7 +262,7 @@ window.Store = (function () {
     var tag = {
       id: id('g_'), name: clean,
       color: TAG_COLORS[alive(state.tags).length % TAG_COLORS.length],
-      kind: 'work', daily: null
+      kind: PRACTICE_NAMES.test(clean) ? 'practice' : 'work', daily: null
     };
     state.tags.push(tag);
     return tag;
@@ -667,7 +673,8 @@ window.Store = (function () {
       if (!t.mins) t.mins = 30;
     });
     state.tags.forEach(function (t) {
-      if (!t.kind) t.kind = 'work';
+      // a tag from before there were kinds gets the same guess a new one would
+      if (!t.kind) t.kind = PRACTICE_NAMES.test(t.name || '') ? 'practice' : 'work';
       if (typeof t.daily === 'undefined') t.daily = null;
     });
     ROW_TABLES.forEach(function (table) {

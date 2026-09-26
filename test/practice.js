@@ -31,22 +31,22 @@ const { chromium } = require('./browser');
   const before = await queue(p);
   check('one per tag, even before any of this', before.map(r => r.tag).sort(), ['EXTRA','MSB','TAA']);
   check('and a date you wrote down outranks a daily repeat', before[0].title, 'MSB WA1');
-  check('the repeat says "today", not "due today"', before.find(r => r.tag === 'EXTRA').why, 'today');
 
-  console.log('\n--- a tag can say what it is for ---');
+  console.log('\n--- the name already says what it is for ---');
+  check('EXTRA came in as practice, unasked', await p.evaluate(() => {
+    const t = Store.tags().find(x => x.name === 'EXTRA'); return t.kind; }), 'practice');
+  check('a class did not', await p.evaluate(() =>
+    Store.tags().filter(t => t.name !== 'EXTRA').map(t => t.kind)), ['work','work']);
+  check('and a day’s worth defaults to most of it', await p.evaluate(() => {
+    const t = Store.tags().find(x => x.name === 'EXTRA'); return Store.practiceToday(t.id); }),
+    { done: 0, want: 3, enough: false, of: 5 });
   await p.click('#settingsBtn'); await p.waitForTimeout(600);
-  check('every tag starts as a subject', await p.evaluate(() =>
-    [...document.querySelectorAll('.tag-kind')].map(k => k.textContent)), ['subject','subject','subject']);
+  check('the settings say so too', await p.evaluate(() =>
+    [...document.querySelectorAll('.tag-kind')].map(k => k.textContent)), ['practice','subject','subject']);
   const flipExtra = () => p.evaluate(() => {
     const row = [...document.querySelectorAll('.tag-row')]
       .find(r => r.querySelector('.tag-name') && r.querySelector('.tag-name').value === 'EXTRA');
     row.querySelector('.tag-kind').click(); });
-  await flipExtra(); await p.waitForTimeout(500);
-  check('EXTRA is practice now', await p.evaluate(() => {
-    const t = Store.tags().find(x => x.name === 'EXTRA'); return t.kind; }), 'practice');
-  check('and a day’s worth defaults to most of it', await p.evaluate(() => {
-    const t = Store.tags().find(x => x.name === 'EXTRA'); return Store.practiceToday(t.id); }),
-    { done: 0, want: 3, enough: false, of: 5 });
   await p.click('#settingsClose'); await p.waitForTimeout(600);
 
   console.log('\n--- so the queue stops repeating itself ---');
@@ -75,11 +75,26 @@ const { chromium } = require('./browser');
   check('an overdue one comes back to the top', (await queue(p))[0].title, 'EXTRA Competition entry');
   check('and says so', (await queue(p))[0].why, 'overdue');
 
-  console.log('\n--- turning it back off ---');
+  console.log('\n--- and the guess is only a guess ---');
   await p.click('#settingsBtn'); await p.waitForTimeout(600);
   await flipExtra(); await p.waitForTimeout(500);
-  check('it is a subject again', await p.evaluate(() => {
+  check('one tap makes it a subject', await p.evaluate(() => {
     const t = Store.tags().find(x => x.name === 'EXTRA'); return [t.kind, t.daily]; }), ['work', null]);
+  await p.click('#settingsClose'); await p.waitForTimeout(700);
+  await p.reload(); await p.waitForTimeout(1100);
+  check('and the choice outlives a reload', await p.evaluate(() =>
+    Store.tags().find(x => x.name === 'EXTRA').kind), 'work');
+  /* As a subject its daily repeat is an ordinary thing due by the end of today,
+     which is the wording a repeat had before any of this existed. */
+  await p.evaluate(() => {
+    Store.removeTask(Store.tasks().find(x => x.title === 'EXTRA Competition entry').id);
+    ['EXTRA SAT','EXTRA HMMT'].forEach(title => {
+      const t = Store.tasks().find(x => x.title === title);
+      if (Store.isDone(t, Store.dayKey())) Store.toggleDone(t.id, Store.dayKey()); }); });
+  await p.waitForTimeout(800);
+  const back = await queue(p);
+  check('the repeat says "today", not "due today"',
+    (back.find(r => /^EXTRA (SAT|HMMT)$/.test(r.title)) || {}).why, 'today');
 
   console.log(`\n${pass} passed, ${fail} failed, ${errs.length} console errors`);
   errs.slice(0,5).forEach(e => console.log('  !', e));
