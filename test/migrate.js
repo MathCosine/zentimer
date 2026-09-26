@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./browser');
 const { start } = require('./fakedb.js');
 const makeClient = require('./fakeclient.js');
 

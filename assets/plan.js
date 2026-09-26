@@ -15,12 +15,15 @@ window.Plan = (function () {
     editing: null,           // task id open for editing
     selected: null,          // block id open in the block bar
     adding: null,            // 'paste' | 'list' | null
+    dueFor: null,            // the task whose deadline picker is open
     split: false,            // show two panes instead of one list
     top: [],                 // tag ids that belong in the upper pane
     find: '',                // what you are looking for
     week: false,             // the seven days, instead of one
     sort: 'due',             // due | added | tag | name | at
-    desc: false              // the other way round
+    desc: false,             // the other way round
+    times: false,            // the hours, rather than a line saying where you are
+    tagsView: false          // every tag at once, instead of the list
   };
 
   /* Which tags sit up top is a way of looking, not data, so it stays on this
@@ -33,12 +36,13 @@ window.Plan = (function () {
       ui.top = Array.isArray(saved.top) ? saved.top : [];
       if (saved.sort) ui.sort = saved.sort;
       ui.desc = !!saved.desc;
+      ui.times = !!saved.times;
     } catch (e) { /* private mode, or nothing saved yet */ }
   }
   function savePrefs() {
     try {
       localStorage.setItem(PREF, JSON.stringify({
-        split: ui.split, top: ui.top, sort: ui.sort, desc: ui.desc
+        split: ui.split, top: ui.top, sort: ui.sort, desc: ui.desc, times: ui.times
       }));
     } catch (e) {}
   }
@@ -83,6 +87,7 @@ window.Plan = (function () {
       return;
     }
 
+    if (!ui.times) { el.timelineWrap.style.height = ''; boxTarget = 0; return; }
     var lists = el.taskList.clientHeight;
     var floor = ui.expanded ? OPEN_FLOOR : TASK_FLOOR;
     /* The day gives up room whenever the list needs it more: while a task
@@ -222,6 +227,46 @@ window.Plan = (function () {
 
   var WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
+  /* Adjacent letters swapped is the commonest typo by a distance -- firday,
+     tuseday, mondya -- and plain edit distance scores a swap as two, so it is
+     counted as one here. */
+  function nearness(a, b) {
+    var rows = [];
+    for (var i = 0; i <= a.length; i++) rows.push([i]);
+    for (var j = 0; j <= b.length; j++) rows[0][j] = j;
+    for (i = 1; i <= a.length; i++) {
+      for (j = 1; j <= b.length; j++) {
+        var cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        rows[i][j] = Math.min(rows[i - 1][j] + 1, rows[i][j - 1] + 1, rows[i - 1][j - 1] + cost);
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+          rows[i][j] = Math.min(rows[i][j], rows[i - 2][j - 2] + 1);
+        }
+      }
+    }
+    return rows[a.length][b.length];
+  }
+
+  var SHORT_DAYS = { sun: 0, mon: 1, tue: 2, tues: 2, wed: 3, weds: 3, thu: 4, thur: 4, thurs: 4, fri: 5, sat: 6 };
+
+  /* An abbreviation has to be exact -- "man" is one letter from "mon" and is
+     usually just a word. A full day name may be misspelt by one. */
+  function weekdayFrom(word) {
+    var w = String(word || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!w) return -1;
+    if (SHORT_DAYS[w] !== undefined) return SHORT_DAYS[w];
+    var found = WEEKDAYS.indexOf(w);
+    if (found !== -1) return found;
+    if (w.length < 5) return -1;
+    // a longer word can afford a looser guess: there are few real words within
+    // two edits of "wednesday", and plenty within one of "mon"
+    var best = -1, score = w.length >= 7 ? 3 : 2;
+    WEEKDAYS.forEach(function (name, index) {
+      var d = nearness(w, name);
+      if (d < score) { score = d; best = index; }
+    });
+    return best;
+  }
+
   function dayKeyFrom(date) { return Store.dayKey(date); }
 
   function nextWeekday(index) {
@@ -247,12 +292,12 @@ window.Plan = (function () {
     }
 
     // repeats first: "every day", "weekdays", "every tuesday"
-    take(/\b(every\s+day|daily|weekdays|every\s+week(?:day)?|every\s+(sun|sunday|mon|monday|tue|tues|tuesday|wed|weds|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday))\b/i, function (hit) {
+    take(/\b(every\s+day|daily|weekdays|every\s+week(?:day)?|every\s+(\w{3,10}))\b/i, function (hit) {
       var word = hit[0].toLowerCase();
       if (/every\s+day|daily/.test(word)) { out.repeat = 'daily'; out.found.push('every day'); return; }
       if (/weekdays|every\s+weekday/.test(word)) { out.repeat = 'weekdays'; out.found.push('weekdays'); return; }
       if (hit[2]) {
-        var index = WEEKDAYS.map(function (d) { return d.slice(0, 3); }).indexOf(hit[2].toLowerCase().slice(0, 3));
+        var index = weekdayFrom(hit[2]);
         if (index === -1) return false;
         out.repeat = 'weekly';
         out.weekday = index;
@@ -317,7 +362,7 @@ window.Plan = (function () {
         return;
       }
       if (hit[1]) {
-        var index = WEEKDAYS.map(function (d) { return d.slice(0, 3); }).indexOf(hit[1].toLowerCase().slice(0, 3));
+        var index = weekdayFrom(hit[1]);
         if (index === -1) return false;
         // a weekday only sets a due date when it is not already the repeat
         if (out.repeat === 'weekly' && out.weekday === index) return false;
@@ -328,10 +373,34 @@ window.Plan = (function () {
       return false;
     });
 
+    /* No pattern can enumerate the ways a day gets misspelt, so whatever is
+       left is read word by word: "mondya" is a Monday, "monitor" is not. */
+    if (!out.due && out.repeat === 'none') {
+      var words = text.match(/[a-z]{5,10}/gi) || [];
+      for (var w = 0; w < words.length; w++) {
+        var guess = weekdayFrom(words[w]);
+        if (guess === -1) continue;
+        out.due = dayKeyFrom(nextWeekday(guess));
+        out.found.push('due ' + WEEKDAYS[guess]);
+        text = text.replace(new RegExp('\\b' + words[w] + '\\b', 'i'), ' ').replace(/\s{2,}/g, ' ').trim();
+        break;
+      }
+    }
+
     out.title = text.replace(/\s{2,}/g, ' ').trim();
     var sniffed = Store.sniffTag ? Store.sniffTag(out.title) : null;
     if (sniffed) out.found.unshift(sniffed);
     return out;
+  }
+
+  /* "friday", "mondya", "tomorrow", "12/3", or nothing at all. The same
+     reading the add box does, on a field of its own. */
+  function readDue(text) {
+    var clean = String(text || '').trim();
+    if (!clean || /^(none|no|never|-)$/i.test(clean)) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+    var read = parseAdd('x ' + clean);
+    return read.due || null;
   }
 
   /* what it understood, shown under the box before you commit to it */
@@ -509,6 +578,15 @@ window.Plan = (function () {
     title.textContent = task.title;
     body.appendChild(title);
 
+    if (task.progress > 0 && task.progress < 100) {
+      var bar = node('span', 'task-bar');
+      var fill = node('span', 'task-fill');
+      fill.style.width = task.progress + '%';
+      bar.appendChild(fill);
+      bar.title = task.progress + '% done';
+      body.appendChild(bar);
+    }
+
     var meta = document.createElement('span');
     meta.className = 'task-meta';
     Store.tagsOf(task).forEach(function (tag) {
@@ -533,12 +611,6 @@ window.Plan = (function () {
         (typeof task.at === 'number' ? ' ' + label(task.at) : '');
       meta.appendChild(rep);
     }
-    if (task.due) {
-      var due = document.createElement('span');
-      due.className = 'task-flag' + (task.due < key ? ' is-late' : '');
-      due.textContent = dueLabel(task.due);
-      meta.appendChild(due);
-    }
     var slot = scheduled[task.id];
     if (slot) {
       var when = document.createElement('span');
@@ -548,6 +620,18 @@ window.Plan = (function () {
     }
     if (meta.children.length) body.appendChild(meta);
     item.appendChild(body);
+
+    var when = document.createElement('button');
+    when.type = 'button';
+    when.className = 'task-due' + (task.due ? (task.due < key ? ' is-late' : ' is-set') : '');
+    when.textContent = task.due ? dueLabel(task.due) : 'due';
+    when.title = 'Set a deadline';
+    when.addEventListener('click', function (event) {
+      event.stopPropagation();
+      ui.dueFor = ui.dueFor === task.id ? null : task.id;
+      render();
+    });
+    item.appendChild(when);
 
     var plan = document.createElement('button');
     plan.type = 'button';
@@ -576,7 +660,58 @@ window.Plan = (function () {
       peek();
     });
     item.appendChild(plan);
+    if (ui.dueFor === task.id) item.appendChild(duePicker(task));
     return item;
+  }
+
+  /* Today, tomorrow, the next of each weekday, and a date for anything else.
+     Deadlines are days, never times -- "friday" is the whole answer. */
+  function duePicker(task) {
+    var box = node('div', 'due-pick');
+    var today = new Date();
+
+    function set(value) {
+      Store.updateTask(task.id, { due: value });
+      ui.dueFor = null;
+      render();
+    }
+
+    function chip(label, value, extra) {
+      var b = node('button', 'pick' + (extra || ''), label);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(task.due === value));
+      b.addEventListener('click', function (event) { event.stopPropagation(); set(value); });
+      return b;
+    }
+
+    var soon = node('div', 'pick-row');
+    soon.appendChild(chip('today', Store.dayKey()));
+    var t = new Date(); t.setDate(t.getDate() + 1);
+    soon.appendChild(chip('tomorrow', Store.dayKey(t)));
+    box.appendChild(soon);
+
+    var days = node('div', 'pick-row');
+    for (var i = 1; i <= 7; i++) {
+      var d = new Date();
+      d.setDate(d.getDate() + i);
+      if (i <= 1) continue;                       // today and tomorrow are above
+      days.appendChild(chip(d.toLocaleDateString(undefined, { weekday: 'short' }).toLowerCase(), Store.dayKey(d)));
+    }
+    box.appendChild(days);
+
+    var rest = node('div', 'pick-row');
+    var exact = document.createElement('input');
+    exact.type = 'date';
+    exact.className = 'due-exact';
+    exact.value = task.due || '';
+    exact.addEventListener('click', function (event) { event.stopPropagation(); });
+    exact.addEventListener('change', function () { set(exact.value || null); });
+    rest.appendChild(exact);
+    if (task.due) rest.appendChild(chip('no deadline', null, ' is-clear'));
+    box.appendChild(rest);
+
+    box.addEventListener('click', function (event) { event.stopPropagation(); });
+    return box;
   }
 
   /* When does a repeat next come round? Walk forward a fortnight; nothing we
@@ -634,10 +769,34 @@ window.Plan = (function () {
     grid.appendChild(field('tags', tags, true));
 
     var due = document.createElement('input');
-    due.type = 'date';
-    due.value = task.due || '';
-    due.addEventListener('change', function () { Store.updateTask(task.id, { due: due.value || null }); });
+    due.type = 'text';
+    due.className = 'due-words';
+    due.dataset.focusKey = 'task-due:' + task.id;
+    due.placeholder = 'friday, 12/3, none';
+    due.value = task.due ? dueLabel(task.due) : '';
+    due.title = 'A day in words, or a date';
+    due.addEventListener('change', function () {
+      var read = readDue(due.value);
+      Store.updateTask(task.id, { due: read });
+      render();
+    });
     grid.appendChild(field('due', due));
+
+    var doneRow = node('div', 'pick-row');
+    [0, 25, 50, 75].forEach(function (step) {
+      var chip = node('pick-tmp', 'pick', step ? step + '%' : 'not started');
+      var real = document.createElement('button');
+      real.type = 'button';
+      real.className = 'pick';
+      real.textContent = chip.textContent;
+      real.setAttribute('aria-pressed', String((task.progress || 0) === step));
+      real.addEventListener('click', function () {
+        Store.updateTask(task.id, { progress: step });
+        render();
+      });
+      doneRow.appendChild(real);
+    });
+    grid.appendChild(field('how far in', doneRow, true));
 
     var repeatRow = document.createElement('div');
     repeatRow.className = 'pick-row';
@@ -1296,6 +1455,7 @@ window.Plan = (function () {
     document.addEventListener('pointerup', function () { pressed = false; });
 
     el.timelineWrap.addEventListener('pointermove', function (event) {
+      if (!ui.times) return;
       if (event.pointerType === 'touch' || ui.pinned || ui.expanded || dragging || pressed) return;
       if (dwellAt && Math.abs(event.clientY - dwellAt.y) < 7 && Math.abs(event.clientX - dwellAt.x) < 7) return;
       dwellAt = { x: event.clientX, y: event.clientY };
@@ -1326,6 +1486,11 @@ window.Plan = (function () {
 
     /* Clicking away is the other way out of the block bar. */
     document.addEventListener('pointerdown', function (event) {
+      if (ui.dueFor && !event.target.closest('.due-pick, .task-due')) {
+        ui.dueFor = null;
+        render();
+        return;
+      }
       if (!ui.selected || dragging) return;
       if (el.planCard.contains(event.target)) return;
       ui.selected = null;
@@ -1500,6 +1665,11 @@ window.Plan = (function () {
       setFind('');
     });
 
+    el.tagsBtn.addEventListener('click', function () {
+      ui.tagsView = !ui.tagsView;
+      render();
+    });
+
     el.sortBtn.addEventListener('click', function () {
       ui.sorting = !ui.sorting;
       render();
@@ -1509,6 +1679,15 @@ window.Plan = (function () {
       ui.desc = !ui.desc;
       savePrefs();
       render();
+    });
+
+    el.timesBtn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      ui.times = !ui.times;
+      if (!ui.times) openTimeline(false, false);
+      savePrefs();
+      render();
+      if (ui.times) { sizeTimeline(); renderTimeline(); scrollToNow(); }
     });
 
     el.weekBtn.addEventListener('click', function () {
@@ -1524,6 +1703,225 @@ window.Plan = (function () {
       ui.tags = [];
       savePrefs();
       render();
+    });
+  }
+
+  /* ---------- every tag at once ---------- */
+
+  /* The point is seeing all of them together, so this never scrolls: the
+     tiles get smaller as there are more of them, and drop what they cannot
+     fit -- the count survives longest, because it is the thing you are
+     scanning for. */
+  function renderTagGrid() {
+    if (!el.tagGrid) return;
+    el.tagGrid.hidden = !ui.tagsView;
+    el.taskList.hidden = ui.tagsView;
+    el.tagsBtn.setAttribute('aria-pressed', String(!!ui.tagsView));
+    if (!ui.tagsView) return;
+
+    var key = Store.dayKey();
+    var tags = Store.tags();
+    var seen = recentByTag();
+    var open = Store.tasks().filter(function (t) { return !Store.isDone(t, key); });
+
+    var tiles = tags.map(function (tag) {
+      var mine = open.filter(function (t) { return (t.tags || []).indexOf(tag.id) !== -1; });
+      var dated = mine.filter(function (t) { return t.due; }).sort(function (a, b) { return a.due < b.due ? -1 : 1; });
+      return {
+        tag: tag,
+        count: mine.length,
+        next: dated[0] ? dated[0].due : null,
+        late: dated.filter(function (t) { return t.due < key; }).length,
+        mins: Math.round(seen[tag.id] || 0)
+      };
+    });
+
+    var loose = open.filter(function (t) { return !(t.tags || []).length; });
+    if (loose.length) {
+      tiles.push({ tag: { id: null, name: 'no tag', color: 'blue' }, count: loose.length, next: null, late: 0, mins: 0 });
+    }
+
+    // more tiles, smaller tiles: three across from seven, two below that
+    var across = tiles.length > 6 ? 3 : 2;
+    el.tagGrid.style.setProperty('--across', across);
+    el.tagGrid.classList.toggle('is-tight', tiles.length > 6);
+    el.tagGrid.textContent = '';
+
+    if (!tiles.length) {
+      el.tagGrid.appendChild(node('p', 'set-empty', 'no tags yet \u2014 start a task with a word like PHY'));
+      return;
+    }
+
+    tiles.forEach(function (tile) {
+      var cell = node('button', 'tag-tile tone-' + tile.tag.color + (tile.late ? ' is-late' : ''));
+      cell.type = 'button';
+      cell.appendChild(node('b', 'tile-name', tile.tag.name));
+      cell.appendChild(node('span', 'tile-count', String(tile.count)));
+      cell.appendChild(node('span', 'tile-when',
+        tile.late ? tile.late + ' late' : tile.next ? dueLabel(tile.next) : tile.count ? 'no deadline' : 'clear'));
+      var bar = node('span', 'tile-bar');
+      var fill = node('span', 'tile-fill');
+      fill.style.width = Math.min(100, Math.round(tile.mins / 180 * 100)) + '%';
+      bar.appendChild(fill);
+      cell.appendChild(bar);
+      cell.title = tile.tag.name + ' \u00b7 ' + tile.count + ' open \u00b7 ' +
+        (tile.mins ? spanLabel(tile.mins) + ' this week' : 'nothing logged this week');
+
+      cell.addEventListener('click', function () {
+        // a tile is a way in: it takes you to that tag's tasks
+        ui.tagsView = false;
+        ui.tags = tile.tag.id ? [tile.tag.id] : [];
+        ui.find = '';
+        render();
+      });
+      el.tagGrid.appendChild(cell);
+    });
+  }
+
+  /* ---------- what to do now ---------- */
+
+  /* What a task still needs, rather than what it needed at the start. Three
+     quarters through an hour is fifteen minutes, and fifteen minutes fits a
+     gap an hour never would. */
+  function leftOf(task) {
+    var whole = task.mins || 30;
+    var done = Math.min(100, Math.max(0, task.progress || 0));
+    return Math.max(5, Math.round(whole * (1 - done / 100) / 5) * 5);
+  }
+
+  /* How long you have before something else is supposed to start. No next
+     block means the rest of the day, capped so it stays a useful number. */
+  function gapNow() {
+    if (!isToday()) return 120;
+    var at = Store.minutesNow();
+    var next = Store.nextBlock(at);
+    var until = next ? next.start - at : DAY_END - at;
+    return clamp(until, 0, 180);
+  }
+
+  /* Minutes logged against each tag over the last seven days, so a class that
+     has been quietly ignored can be nudged up. */
+  function recentByTag() {
+    var out = {}, since = Date.now() - 7 * 86400000;
+    Store.state().logs.forEach(function (log) {
+      if (log.deletedAt || (log.at || 0) < since) return;
+      var task = log.taskId ? Store.taskById(log.taskId) : null;
+      if (!task) return;
+      Store.tagsOf(task).forEach(function (tag) {
+        out[tag.id] = (out[tag.id] || 0) + (log.ms || 0) / 60000;
+      });
+    });
+    return out;
+  }
+
+  /* The ranking, in the order the four things were asked for:
+       - what is closest to due, overdue hardest of all;
+       - whether it fits the time there actually is;
+       - a class left alone all week, so one does not swallow everything;
+       - and none of it matters if the plan already says what to do.        */
+  function suggestions() {
+    var key = Store.dayKey();
+    var gap = gapNow();
+    var seen = recentByTag();
+    var planned = {};
+    Store.blocks(viewDate()).forEach(function (b) { if (b.taskId) planned[b.taskId] = true; });
+
+    var ranked = Store.tasks().filter(function (task) {
+      if (Store.isDone(task, key)) return false;
+      if (planned[task.id]) return false;                 // already on the day
+      if (Store.repeats(task) && !Store.dueOn(task, new Date())) return false;
+      return true;
+    }).map(function (task) {
+      var score = 0, why = '';
+      var length = leftOf(task);
+
+      if (task.due) {
+        var days = Math.round((new Date(task.due + 'T12:00') - new Date(key + 'T12:00')) / 86400000);
+        if (days < 0) { score += 100; why = 'overdue'; }
+        else if (days === 0) { score += 70; why = 'due today'; }
+        else if (days === 1) { score += 45; why = 'due tomorrow'; }
+        else if (days <= 7) { score += 30 - days; why = 'due ' + dueLabel(task.due); }
+        else { score += 4; why = 'due ' + dueLabel(task.due); }
+      }
+
+      var fits = gap === 0 || length <= gap + 5;
+
+      var quiet = Store.tagsOf(task).some(function (tag) { return (seen[tag.id] || 0) < 30; });
+      if (quiet) {
+        score += 12;
+        if (!why) why = 'not touched this week';
+      }
+
+      // something already begun is worth finishing before something begun
+      if (task.progress > 0 && task.progress < 100) {
+        score += 10 + task.progress / 10;
+        why = task.progress + '% done';
+      }
+
+      return { task: task, score: score, why: why || 'nothing else pressing', fits: fits, mins: length };
+    }).sort(function (a, b) {
+      /* Fitting the gap is not one consideration among several -- a four hour
+         essay is not the answer to twenty minutes, however overdue it is. So
+         anything that fits is ranked above anything that does not, and only
+         then does urgency decide. */
+      if (a.fits !== b.fits) return a.fits ? -1 : 1;
+      if (b.score !== a.score) return b.score - a.score;
+      return (a.task.order || 0) - (b.task.order || 0);
+    });
+
+    return { gap: gap, list: ranked };
+  }
+
+  function renderQueue() {
+    if (!el.queue) return;
+    var now = isToday() ? Store.currentBlock() : null;
+    var made = suggestions();
+
+    // the plan already answered the question
+    if (now || !made.list.length || ui.week) {
+      el.queue.hidden = true;
+      el.queue.textContent = '';
+      return;
+    }
+
+    var head = node('p', 'queue-head', '');
+    head.appendChild(node('b', null, 'up next'));
+    head.appendChild(node('span', null, made.gap
+      ? made.gap >= 180 ? 'the rest of the day' : spanLabel(made.gap) + ' free'
+      : 'no gap right now'));
+
+    el.queue.textContent = '';
+    el.queue.appendChild(head);
+    el.queue.hidden = false;
+
+    made.list.slice(0, 3).forEach(function (pick) {
+      var row = node('button', 'queue-row' + (pick.fits ? '' : ' is-long'));
+      row.type = 'button';
+      row.title = 'Put it on the day now';
+
+      var name = node('span', 'queue-title', pick.task.title);
+      row.appendChild(name);
+      var tags = Store.tagsOf(pick.task);
+      if (tags.length) {
+        var badge = node('span', 'queue-tag tone-' + tags[0].color, tags[0].name);
+        row.appendChild(badge);
+      }
+      row.appendChild(node('span', 'queue-why' + (pick.why === 'overdue' ? ' is-late' : ''),
+        pick.fits ? pick.why : 'needs ' + spanLabel(pick.mins)));
+      row.appendChild(node('span', 'queue-mins', spanLabel(pick.mins) +
+        (pick.task.progress > 0 && pick.task.progress < 100 ? ' left' : '')));
+
+      row.addEventListener('click', function () {
+        var day = viewDate();
+        var from = isToday() ? Store.minutesNow() : 9 * 60;
+        var start = Store.findSlot(pick.mins, from, day);
+        var block = Store.addBlock({
+          date: day, start: start, end: Math.min(DAY_END, start + pick.mins),
+          taskId: pick.task.id, title: pick.task.title
+        });
+        selectBlock(block.id);
+      });
+      el.queue.appendChild(row);
     });
   }
 
@@ -1547,7 +1945,14 @@ window.Plan = (function () {
   function renderWeek() {
     if (!el.week) return;
     el.weekWrap.hidden = !ui.week;
-    el.timelineWrap.hidden = ui.week;
+    /* The hours are a detail. Most of the time the line above -- free until
+       four, next thing at four -- is the whole answer, and the room the strip
+       was taking goes to what to do with the gap. */
+    el.timelineWrap.hidden = ui.week || !ui.times;
+    el.timesBtn.hidden = ui.week;
+    el.timesBtn.setAttribute('aria-pressed', String(ui.times));
+    el.timesBtn.textContent = ui.times ? 'times \u25b4' : 'times \u25be';
+    el.pinBtn.hidden = ui.week || !ui.times;
     el.weekBtn.setAttribute('aria-pressed', String(ui.week));
     if (!ui.week) return;
 
@@ -1745,8 +2150,10 @@ window.Plan = (function () {
       renderSort();
       renderAdders();
       renderTasks();
+      renderTagGrid();
       renderTimeline();
       renderWeek();
+      renderQueue();
       renderBlockBar();
       renderNow();
     });
@@ -1768,6 +2175,8 @@ window.Plan = (function () {
       findBtn: $('findBtn'), findRow: $('findRow'), findInput: $('findInput'), findClear: $('findClear'),
       sortBtn: $('sortBtn'), sortRow: $('sortRow'), sortPicks: $('sortPicks'), sortDir: $('sortDir'),
       weekBtn: $('weekBtn'), weekWrap: $('weekWrap'), week: $('week'),
+      timesBtn: $('timesBtn'), queue: $('queue'),
+      tagsBtn: $('tagsBtn'), tagGrid: $('tagGrid'),
       timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'), blockBar: $('blockBar'),
       nowStrip: $('nowStrip'), nowTitle: $('nowTitle'), nowWhen: $('nowWhen'), nowShift: $('nowShift'),
       dayPrev: $('dayPrev'), dayNext: $('dayNext'), dayLabel: $('dayLabel'), daySum: $('daySum'),

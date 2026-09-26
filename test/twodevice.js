@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./browser');
 const { start } = require('./fakedb.js');
 const makeClient = require('./fakeclient.js');
 
@@ -79,6 +79,17 @@ const reload = async p => { await p.reload(); await p.waitForTimeout(1400); };
   await b.waitForTimeout(1000);
   await reload(a);
   check('A receives it once B is back', (await titles(a)).includes('CHEM Lab'), true);
+
+  console.log('\n--- how far in a task is travels with it ---');
+  await a.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'CHEM Lab');
+    Store.updateTask(t.id, { progress: 50 });
+  });
+  await a.waitForTimeout(1200);
+  await reload(b);
+  check('the other device sees it', await b.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'CHEM Lab');
+    return t ? t.progress : 'missing'; }), 50);
 
   console.log('\n--- the same task edited on both: the later one wins, nothing vanishes ---');
   await a.evaluate(() => {

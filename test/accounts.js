@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./browser');
 const { start } = require('./fakedb.js');
 const makeClient = require('./fakeclient.js');
 const CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';

@@ -299,6 +299,7 @@ window.Store = (function () {
       at: typeof fields.at === 'number' ? fields.at : null,    // minutes past midnight
       mins: fields.mins || 30,
       done: false,
+      progress: 0,            // 0, 25, 50, 75 -- how much of it is behind you
       completions: {},
       skips: {},
       created: Date.now(),
@@ -361,6 +362,8 @@ window.Store = (function () {
     } else {
       task.done = !task.done;
       task.doneAt = task.done ? Date.now() : null;
+      if (task.done) task.progress = 100;
+      else if (task.progress === 100) task.progress = 75;
     }
     changed();
   }
@@ -642,6 +645,7 @@ window.Store = (function () {
     state.tasks.forEach(function (t) {
       if (!t.skips) t.skips = {};
       if (!t.completions) t.completions = {};
+      if (typeof t.progress !== 'number') t.progress = 0;
       if (typeof t.at === 'undefined') t.at = null;
       if (!t.mins) t.mins = 30;
     });

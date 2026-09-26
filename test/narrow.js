@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./browser');
 const WIDTHS = [260, 280, 300, 320, 360, 380, 412, 430];
 (async () => {
   const b = await chromium.launch();
@@ -18,6 +18,8 @@ const WIDTHS = [260, 280, 300, 320, 360, 380, 412, 430];
       document.querySelectorAll('.app *').forEach(n => {
         const cs = getComputedStyle(n);
         if (cs.overflowX === 'auto' || cs.overflowX === 'scroll' || cs.position === 'fixed') return;
+        // text clipped on purpose is not a layout fault
+        if (cs.textOverflow === 'ellipsis') return;
         if (n.scrollWidth > n.clientWidth + 1 && n.clientWidth > 0)
           spill.push((n.id || String(n.className).split(' ')[0]) + ' ' + n.clientWidth + '<' + n.scrollWidth);
       });

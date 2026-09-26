@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./browser');
 (async () => {
   const b = await chromium.launch();
   const errs = []; let pass = 0, fail = 0;

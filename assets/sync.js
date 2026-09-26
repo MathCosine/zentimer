@@ -46,6 +46,7 @@ window.Sync = (function () {
           weekday: typeof r.weekday === 'number' ? r.weekday : null,
           at: typeof r.at === 'number' ? r.at : null,
           mins: r.mins || 30, done: !!r.done, done_at: r.doneAt || null,
+          progress: r.progress || 0,
           completions: r.completions || {}, skips: r.skips || {},
           ord: r.order || 0, created: r.created || null
         });
@@ -57,6 +58,7 @@ window.Sync = (function () {
           weekday: typeof r.weekday === 'number' ? r.weekday : null,
           at: typeof r.at === 'number' ? r.at : null,
           mins: r.mins || 30, done: !!r.done, doneAt: r.done_at || null,
+          progress: r.progress || 0,
           completions: r.completions || {}, skips: r.skips || {},
           order: r.ord || 0, created: r.created || null
         };
@@ -353,7 +355,12 @@ window.Sync = (function () {
       })
       .catch(function (err) {
         // leave the ids in the outbox: they go up on the next try
-        say('waiting to sync — ' + String(err && err.message || err).slice(0, 40));
+        var why = String(err && err.message || err);
+        if (/column .* does not exist|schema cache/i.test(why)) {
+          say('run supabase/schema.sql again — this version added a column');
+        } else {
+          say('waiting to sync — ' + why.slice(0, 40));
+        }
       });
   }
 

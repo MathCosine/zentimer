@@ -367,9 +367,13 @@ body[data-mode="break"] .phase { color: var(--green); }
 
 /* ---------- now + timeline ---------- */
 
-.plan-card { display: grid; gap: 7px; }
+/* Same as the bar: a grid track is as wide as its widest item's content
+   unless the items are told they may shrink, and one long line inside then
+   sets a floor on the whole card. */
+.plan-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
+.plan-card > * { min-width: 0; }
 
-.plan-head { display: flex; align-items: center; gap: 4px; }
+.plan-head { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
 
 .day-step, .day-label {
   font: inherit;
@@ -2121,3 +2125,237 @@ body.dragging-task .task-list { pointer-events: none; }
   white-space: nowrap;
 }
 .sort-dir:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- a deadline without opening anything ---------- */
+
+.task-due {
+  flex: 0 0 auto;
+  align-self: center;
+  font: inherit;
+  font-size: 0.6rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1.5px dashed var(--hair);
+  background: none;
+  color: var(--soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.task-due:hover { border-color: var(--accent); color: var(--accent); }
+.task-due.is-set { border-style: solid; border-color: var(--hair); color: var(--muted); }
+.task-due.is-late { border-style: solid; border-color: var(--coral); color: var(--coral); font-weight: 600; }
+
+.due-pick {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 2px;
+  padding: 8px;
+  border-radius: 11px;
+  background: var(--well);
+  border: 1.5px solid var(--hair);
+  animation: pop-in 160ms var(--ease) both;
+}
+.due-pick .pick.is-clear { border-style: dashed; color: var(--coral); }
+.due-exact {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1.5px solid var(--hair);
+  background: var(--card);
+  color: var(--ink);
+}
+.due-words {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  border-radius: 9px;
+  border: 1.5px solid var(--hair);
+  background: var(--well);
+  color: var(--ink);
+  width: 100%;
+  min-width: 0;
+}
+.due-words:focus { outline: none; border-color: var(--accent); }
+
+/* ---------- up next ---------- */
+
+.now-times {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.6rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1.5px solid var(--hair);
+  background: none;
+  color: var(--soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.now-times:hover { border-color: var(--accent); color: var(--accent); }
+.now-times[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+.queue { display: flex; flex-direction: column; gap: 3px; }
+
+.queue-head {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 2px 1px;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+.queue-head b { font-weight: 700; color: var(--ink); letter-spacing: 0.05em; }
+.queue-head span { margin-left: auto; letter-spacing: 0; text-transform: none; font-size: 0.66rem; }
+
+.queue-row {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  padding: 5px 9px;
+  border-radius: 10px;
+  border: 1.5px solid var(--hair);
+  background: var(--well);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 150ms var(--ease), transform 150ms var(--bounce);
+}
+.queue-row:hover { border-color: var(--accent); transform: translateX(2px); }
+.queue-row.is-long { opacity: 0.6; }
+
+.queue-title {
+  flex: 1 1 auto;
+  font-size: 0.78rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.queue-tag {
+  flex: 0 0 auto;
+  font-size: 0.55rem;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone, var(--blue)) 30%, var(--card));
+}
+.queue-why {
+  /* "not touched this week" must not set a floor on how narrow the card can
+     be -- it gives way before the title does */
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  font-size: 0.6rem;
+  color: var(--soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-why.is-late { color: var(--coral); font-weight: 600; }
+.queue-mins {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.2em;
+  text-align: right;
+}
+
+/* ---------- every tag at once ---------- */
+
+/* It never scrolls. The tiles share whatever the card has left between them,
+   so six classes or twelve, they are all on screen together. */
+.tag-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--across, 2), minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 5px;
+  overflow: hidden;
+}
+
+.tag-tile {
+  font: inherit;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  gap: 1px 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 9px;
+  border-radius: 11px;
+  border: 1.5px solid var(--hair);
+  background: color-mix(in srgb, var(--tone, var(--blue)) 16%, var(--card));
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 150ms var(--bounce), border-color 150ms var(--ease);
+}
+.tag-tile:hover { transform: translateY(-2px); border-color: var(--outline); }
+.tag-tile.is-late { border-color: var(--coral); }
+
+.tile-name {
+  grid-column: 1;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-count {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 1.1rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.tile-when {
+  grid-column: 1;
+  font-size: 0.56rem;
+  color: var(--soft);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-tile.is-late .tile-when { color: var(--coral); font-weight: 600; }
+.tile-bar {
+  grid-column: 1 / -1;
+  height: 3px;
+  margin-top: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  overflow: hidden;
+}
+.tile-fill { display: block; height: 100%; background: var(--tone, var(--blue)); }
+
+/* packed tighter once there are a lot of them */
+.tag-grid.is-tight .tag-tile { padding: 4px 6px; gap: 0 4px; }
+.tag-grid.is-tight .tile-name { font-size: 0.6rem; }
+.tag-grid.is-tight .tile-count { font-size: 0.88rem; }
+.tag-grid.is-tight .tile-when { font-size: 0.5rem; }
+
+/* how far into a task you are */
+.task-bar {
+  display: block;
+  width: 100%;
+  max-width: 130px;
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  overflow: hidden;
+}
+.task-fill { display: block; height: 100%; background: var(--green); }

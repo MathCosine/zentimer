@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./browser');
 (async () => {
   const b = await chromium.launch();
   const errs = []; let pass = 0, fail = 0;
@@ -63,10 +63,11 @@ const { chromium } = require('playwright');
   check('dropping moves it to that day', await p.evaluate(() => {
     const b = Store.state().blocks.find(x => !x.deletedAt); return b.date; }), target);
 
+  const monday = await p.evaluate(() => document.querySelector('.week-day').dataset.date);
   await p.locator('.week-head').first().click(); await p.waitForTimeout(500);
-  check('a day heading takes you to that day', await p.evaluate(() => ({
-    week: !document.getElementById('weekWrap').hidden === false,
-    day: !document.getElementById('timelineWrap').hidden })), { week:true, day:true });
+  check('a day heading leaves the week for that day', await p.evaluate(() => ({
+    weekGone: document.getElementById('weekWrap').hidden,
+    showing: Plan.day() })), { weekGone: true, showing: monday });
 
   console.log(`\n${pass} passed, ${fail} failed, ${errs.length} console errors`);
   errs.slice(0,6).forEach(e => console.log('  !', e));

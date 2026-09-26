@@ -75,7 +75,9 @@
         <span id="nowWhen"></span>
       </div>
       <button class="now-shift" id="nowShift" type="button" hidden></button>
+      <button class="now-times" id="timesBtn" type="button" aria-pressed="false" title="Show the hours">times ▾</button>
     </div>
+    <div class="queue" id="queue" hidden></div>
     <div class="timeline-wrap" id="timelineWrap">
       <div class="timeline" id="timeline"></div>
     </div>
@@ -93,6 +95,7 @@
         <button id="bulkBtn" type="button" title="Paste many tasks">paste</button>
         <button id="findBtn" type="button" aria-pressed="false" title="Find a task">find</button>
         <button id="sortBtn" type="button" aria-pressed="false" title="What order the list comes in">sort</button>
+        <button id="tagsBtn" type="button" aria-pressed="false" title="Every tag at once">tags</button>
         <button id="splitBtn" type="button" aria-pressed="false" title="Two panes, split by tag">split</button>
         <button id="doneBtn" type="button" aria-pressed="false" title="Show finished">done</button>
       </div>
@@ -114,6 +117,7 @@
     </form>
     <p class="add-hint" id="addHint" aria-live="polite" hidden></p>
     <ul class="task-list" id="taskList"></ul>
+    <div class="tag-grid" id="tagGrid" hidden></div>
     <p class="task-foot"><span id="taskCount">0 open</span></p>
   </section>
 

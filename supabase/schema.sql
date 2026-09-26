@@ -108,6 +108,10 @@ create table if not exists public.prefs (
   updated  bigint not null default 0
 );
 
+-- Columns added after the first release. Separate so that re-running this file
+-- over an existing project adds them without touching anything else.
+alter table public.tasks add column if not exists progress int not null default 0;
+
 -- ---------------------------------------------------------------------------
 -- stamps, indexes and row security, applied to every table the same way
 -- ---------------------------------------------------------------------------
