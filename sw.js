@@ -6,7 +6,9 @@
    A new version is never swapped in underneath someone mid-session: it waits
    until the page asks. The page asks after telling them. */
 
-var VERSION = 'pip-v1';
+/* Bump this whenever anything in SHELL changes: it is what makes the new
+   version install, sweep the old cache and offer itself to the open page. */
+var VERSION = 'pip-v2';
 var SHELL = [
   './',
   './index.html',

@@ -27,9 +27,9 @@ const { chromium } = require('./browser');
         await frame.press('#taskInput','Enter'); await p.waitForTimeout(500);
         check('you can type in it', await frame.evaluate(() => document.querySelectorAll('.task').length), 1);
       }
-      await p.screenshot({ path:'./landing-wide.png', fullPage:true });
+      await p.screenshot({ path:'./test/shots/landing-wide.png', fullPage:true });
     } else {
-      await p.screenshot({ path:'./landing-narrow.png' });
+      await p.screenshot({ path:'./test/shots/landing-narrow.png' });
     }
     await p.close();
   }

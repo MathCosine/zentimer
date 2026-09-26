@@ -13,6 +13,20 @@ const WIDTHS = [260, 280, 300, 320, 360, 380, 412, 430];
     p.on('pageerror', e => errs.push(w+': '+e.message));
     await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(700);
     await p.fill('#taskInput','PHY Mastering Week 5'); await p.press('#taskInput','Enter'); await p.waitForTimeout(250);
+    /* Deadlines, a practice tag and some long titles, so the day's aim, the
+       queue and the tag tiles are all on screen at this width -- one task with
+       no deadline leaves most of the card empty and measures nothing. */
+    await p.evaluate(() => {
+      const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+      Store.addTask({ title: 'TAA Research essay on the causes of the war', due: on(6), mins: 360 });
+      Store.addTask({ title: 'MSB WA1', due: on(1), mins: 45 });
+      Store.addTask({ title: 'LATIN Email the teacher about the test', due: on(2), mins: 10 });
+      ['USACO Prep', 'OTIS problem set'].forEach(n =>
+        Store.addTask({ title: 'EXTRA ' + n, repeat: 'daily', mins: 30 }));
+      const t = Store.tags().find(x => x.name === 'EXTRA');
+      Store.setTagKind(t.id, 'practice');
+    });
+    await p.waitForTimeout(800);
     const r = await p.evaluate(() => {
       const spill = [];
       document.querySelectorAll('.app *').forEach(n => {
@@ -26,9 +40,12 @@ const WIDTHS = [260, 280, 300, 320, 360, 380, 412, 430];
       const card = document.querySelector('.bar').getBoundingClientRect();
       return { page: document.documentElement.scrollWidth <= innerWidth,
                barInside: card.right <= innerWidth + 1,
+               aim: document.querySelectorAll('.aim-line').length,
+               queue: document.querySelectorAll('.queue-row').length,
                spill: spill.slice(0, 3) };
     });
-    check(w + 'px: nothing runs off the side', r, { page: true, barInside: true, spill: [] });
+    check(w + 'px: nothing runs off the side, and today still fits on it', r,
+      { page: true, barInside: true, aim: 2, queue: 3, spill: [] });
     await p.close();
   }
 
@@ -47,7 +64,7 @@ const WIDTHS = [260, 280, 300, 320, 360, 380, 412, 430];
       barInside: document.querySelector('.bar').getBoundingClientRect().right <= innerWidth + 1
     }));
     check(w + 'px page: the desk fits its frame (' + r.width + 'px)', { fits: r.fits, barInside: r.barInside }, { fits: true, barInside: true });
-    if (w === 430) await p.screenshot({ path:'./frame-narrow.png' });
+    if (w === 430) await p.screenshot({ path:'./test/shots/frame-narrow.png' });
     await p.close();
   }
 
