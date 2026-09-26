@@ -214,8 +214,9 @@ window.Plan = (function () {
         if (ha !== hb) return ha ? -1 : 1;
         side = ha ? a.at - b.at : 0;
       } else {
-        if (!!a.due !== !!b.due) return a.due ? -1 : 1;
-        side = a.due && b.due ? (a.due < b.due ? -1 : a.due > b.due ? 1 : 0) : 0;
+        var da = Store.dueFor(a, key), db = Store.dueFor(b, key);
+        if (!!da !== !!db) return da ? -1 : 1;
+        side = da && db ? (da < db ? -1 : da > db ? 1 : 0) : 0;
       }
 
       if (side) return side * flip;
@@ -1720,31 +1721,32 @@ window.Plan = (function () {
     if (!ui.tagsView) return;
 
     var key = Store.dayKey();
-    var tags = Store.tags();
     var seen = recentByTag();
     var open = Store.tasks().filter(function (t) { return !Store.isDone(t, key); });
 
-    var tiles = tags.map(function (tag) {
-      var mine = open.filter(function (t) { return (t.tags || []).indexOf(tag.id) !== -1; });
-      var dated = mine.filter(function (t) { return t.due; }).sort(function (a, b) { return a.due < b.due ? -1 : 1; });
+    function pile(tag, mine) {
+      mine = mine.slice().sort(function (a, b) {
+        var da = Store.dueFor(a, key), db = Store.dueFor(b, key);
+        if (!!da !== !!db) return da ? -1 : 1;
+        if (da && db && da !== db) return da < db ? -1 : 1;
+        return (a.order || 0) - (b.order || 0);
+      });
+      var dated = mine.filter(function (t) { return Store.dueFor(t, key); });
       return {
         tag: tag,
-        count: mine.length,
-        next: dated[0] ? dated[0].due : null,
-        late: dated.filter(function (t) { return t.due < key; }).length,
+        tasks: mine,
+        next: dated[0] ? Store.dueFor(dated[0], key) : null,
+        late: dated.filter(function (t) { return Store.dueFor(t, key) < key; }).length,
         mins: Math.round(seen[tag.id] || 0)
       };
-    });
-
-    var loose = open.filter(function (t) { return !(t.tags || []).length; });
-    if (loose.length) {
-      tiles.push({ tag: { id: null, name: 'no tag', color: 'blue' }, count: loose.length, next: null, late: 0, mins: 0 });
     }
 
-    // more tiles, smaller tiles: three across from seven, two below that
-    var across = tiles.length > 6 ? 3 : 2;
-    el.tagGrid.style.setProperty('--across', across);
-    el.tagGrid.classList.toggle('is-tight', tiles.length > 6);
+    var tiles = Store.tags().map(function (tag) {
+      return pile(tag, open.filter(function (t) { return (t.tags || []).indexOf(tag.id) !== -1; }));
+    });
+    var loose = open.filter(function (t) { return !(t.tags || []).length; });
+    if (loose.length) tiles.push(pile({ id: null, name: 'no tag', color: 'blue' }, loose));
+
     el.tagGrid.textContent = '';
 
     if (!tiles.length) {
@@ -1752,29 +1754,164 @@ window.Plan = (function () {
       return;
     }
 
-    tiles.forEach(function (tile) {
-      var cell = node('button', 'tag-tile tone-' + tile.tag.color + (tile.late ? ' is-late' : ''));
-      cell.type = 'button';
-      cell.appendChild(node('b', 'tile-name', tile.tag.name));
-      cell.appendChild(node('span', 'tile-count', String(tile.count)));
-      cell.appendChild(node('span', 'tile-when',
-        tile.late ? tile.late + ' late' : tile.next ? dueLabel(tile.next) : tile.count ? 'no deadline' : 'clear'));
-      var bar = node('span', 'tile-bar');
-      var fill = node('span', 'tile-fill');
-      fill.style.width = Math.min(100, Math.round(tile.mins / 180 * 100)) + '%';
-      bar.appendChild(fill);
-      cell.appendChild(bar);
-      cell.title = tile.tag.name + ' \u00b7 ' + tile.count + ' open \u00b7 ' +
-        (tile.mins ? spanLabel(tile.mins) + ' this week' : 'nothing logged this week');
+    tiles.forEach(function (tile) { el.tagGrid.appendChild(tagTile(tile, key)); });
+    shapeGrid(tiles.length);
+    fitTiles();
+  }
 
-      cell.addEventListener('click', function () {
-        // a tile is a way in: it takes you to that tag's tasks
-        ui.tagsView = false;
-        ui.tags = tile.tag.id ? [tile.tag.id] : [];
-        ui.find = '';
-        render();
+  /* A tall window should get bigger tiles, not the same small ones with more
+     air around them; a short one needs more columns to fit the same tags.
+     So the count follows the room rather than the number of tags. */
+  var WANT_TALL = 132;    // a tile worth reading: a heading and a few tasks
+  var WANT_WIDE = 104;    // narrower than this and the titles are all ellipsis
+
+  var NEED_TALL = 62;     // below this a tile cannot show a task, only itself
+
+  function shapeGrid(count) {
+    var tall = el.tagGrid.clientHeight || 240;
+    var wide = el.tagGrid.clientWidth || 360;
+    var most = Math.max(1, Math.floor(wide / WANT_WIDE));
+    var rows = Math.max(1, Math.floor(tall / WANT_TALL));
+    var across = clamp(Math.ceil(count / rows), 1, Math.min(most, 4));
+
+    /* With the columns settled, see what height that actually leaves. If it is
+       too little to show a task, spread wider; and if even the widest is too
+       thin, the tiles drop back to a name and a number -- every tag still on
+       screen, which is the part that matters, rather than a row of slivers. */
+    function heightAt(cols) {
+      var lines = Math.ceil(count / cols);
+      return (tall - (lines - 1) * 5) / lines;
+    }
+    while (across < Math.min(most, 4) && heightAt(across) < NEED_TALL) across++;
+
+    /* A tile showing only a name and a number can be much narrower than one
+       showing tasks, so once it comes to that, columns are cheaper than the
+       squashing that would otherwise happen. */
+    var mini = heightAt(across) < NEED_TALL;
+    if (mini) {
+      var thin = Math.max(1, Math.floor(wide / 74));
+      while (across < Math.min(thin, 6) && heightAt(across) < 40) across++;
+    }
+
+    el.tagGrid.style.setProperty('--across', across);
+    el.tagGrid.classList.toggle('is-tight', across >= 3);
+    el.tagGrid.classList.toggle('is-mini', mini);
+  }
+
+  /* The tag's own name at the front of every one of its tasks is noise inside
+     its own tile. */
+  function trimmed(title, tagName) {
+    var first = String(title || '').trim().split(/\s+/)[0] || '';
+    if (first.toLowerCase() === String(tagName || '').toLowerCase() && title.length > first.length + 1) {
+      return title.slice(first.length).trim();
+    }
+    return title;
+  }
+
+  function tagTile(tile, key) {
+    var cell = node('div', 'tag-tile tone-' + tile.tag.color + (tile.late ? ' is-late' : ''));
+
+    var head = node('button', 'tile-head');
+    head.type = 'button';
+    head.appendChild(node('b', 'tile-name', tile.tag.name));
+    head.appendChild(node('span', 'tile-count', String(tile.tasks.length)));
+    head.title = 'Show only ' + tile.tag.name;
+    head.addEventListener('click', function () {
+      ui.tagsView = false;
+      ui.tags = tile.tag.id ? [tile.tag.id] : [];
+      ui.find = '';
+      render();
+    });
+    cell.appendChild(head);
+
+    var body = node('div', 'tile-tasks');
+    if (!tile.tasks.length) {
+      body.appendChild(node('p', 'tile-clear', 'nothing open'));
+    } else {
+      tile.tasks.forEach(function (task) {
+        var line = node('div', 'tile-task');
+
+        var tick = document.createElement('button');
+        tick.type = 'button';
+        tick.className = 'tile-tick';
+        tick.setAttribute('aria-label', 'Mark ' + task.title + ' done');
+        tick.title = 'Done';
+        tick.addEventListener('click', function (event) {
+          event.stopPropagation();
+          Store.toggleDone(task.id, key);
+        });
+        line.appendChild(tick);
+
+        var open = document.createElement('button');
+        open.type = 'button';
+        open.className = 'tile-open';
+        open.appendChild(node('span', 'tile-task-name', trimmed(task.title, tile.tag.name)));
+        var deadline = Store.dueFor(task, key);
+        if (deadline) {
+          open.appendChild(node('span', 'tile-task-due' + (deadline < key ? ' is-late' : ''),
+            Store.repeats(task) && deadline === key ? 'today' : dueLabel(deadline)));
+        }
+        open.title = task.title + (deadline ? ' \u00b7 ' + dueLabel(deadline) : '');
+        open.addEventListener('click', function () {
+          // straight to it: the tag's list, with this one open
+          ui.tagsView = false;
+          ui.tags = tile.tag.id ? [tile.tag.id] : [];
+          ui.find = '';
+          ui.editing = task.id;
+          ui.focusTask = task.id;
+          reveal = task.id;
+          render();
+        });
+        line.appendChild(open);
+        body.appendChild(line);
       });
-      el.tagGrid.appendChild(cell);
+    }
+    cell.appendChild(body);
+
+    var more = node('span', 'tile-more', '');
+    more.hidden = true;
+    cell.appendChild(more);
+
+    var bar = node('span', 'tile-bar');
+    var fill = node('span', 'tile-fill');
+    fill.style.width = Math.min(100, Math.round(tile.mins / 180 * 100)) + '%';
+    bar.appendChild(fill);
+    bar.title = tile.mins ? spanLabel(tile.mins) + ' this week' : 'nothing logged this week';
+    cell.appendChild(bar);
+    return cell;
+  }
+
+  /* Nothing here scrolls, so a tile that cannot show all of its tasks hides
+     the ones that do not fit and says how many went. Measured rather than
+     guessed, because how many fit depends on the window. */
+  function fitTiles() {
+    Array.prototype.forEach.call(el.tagGrid.children, function (cell) {
+      var body = cell.querySelector('.tile-tasks');
+      var more = cell.querySelector('.tile-more');
+      if (!body || !more) return;
+
+      Array.prototype.forEach.call(body.children, function (line) { line.hidden = false; });
+      more.hidden = true;
+
+      var lines = Array.prototype.filter.call(body.children, function (n) { return n.classList.contains('tile-task'); });
+      if (!lines.length) return;
+
+      var room = body.clientHeight;
+      var hidden = 0;
+      while (lines.length - hidden > 0 && body.scrollHeight > room + 1) {
+        hidden++;
+        lines[lines.length - hidden].hidden = true;
+      }
+      if (hidden) {
+        more.textContent = '+' + hidden + ' more';
+        more.hidden = false;
+        // the line saying so needs room of its own
+        while (lines.length - hidden > 0 && body.scrollHeight > body.clientHeight + 1) {
+          hidden++;
+          lines[lines.length - hidden].hidden = true;
+          more.textContent = '+' + hidden + ' more';
+        }
+      }
     });
   }
 
@@ -1835,13 +1972,15 @@ window.Plan = (function () {
       var score = 0, why = '';
       var length = leftOf(task);
 
-      if (task.due) {
-        var days = Math.round((new Date(task.due + 'T12:00') - new Date(key + 'T12:00')) / 86400000);
+      var deadline = Store.dueFor(task, key);
+      if (deadline) {
+        var days = Math.round((new Date(deadline + 'T12:00') - new Date(key + 'T12:00')) / 86400000);
+        var repeating = Store.repeats(task);
         if (days < 0) { score += 100; why = 'overdue'; }
-        else if (days === 0) { score += 70; why = 'due today'; }
+        else if (days === 0) { score += 70; why = repeating ? 'today' : 'due today'; }
         else if (days === 1) { score += 45; why = 'due tomorrow'; }
-        else if (days <= 7) { score += 30 - days; why = 'due ' + dueLabel(task.due); }
-        else { score += 4; why = 'due ' + dueLabel(task.due); }
+        else if (days <= 7) { score += 30 - days; why = 'due ' + dueLabel(deadline); }
+        else { score += 4; why = 'due ' + dueLabel(deadline); }
       }
 
       var fits = gap === 0 || length <= gap + 5;
@@ -2191,7 +2330,11 @@ window.Plan = (function () {
     wireHover();
     wireAdding();
     sizeTimeline();
-    window.addEventListener('resize', function () { sizeTimeline(); renderTimeline(); });
+    window.addEventListener('resize', function () {
+      sizeTimeline();
+      renderTimeline();
+      if (ui.tagsView) { shapeGrid(el.tagGrid.children.length); fitTiles(); }
+    });
     render();
   }
 

@@ -2283,56 +2283,122 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 
 .tag-tile {
-  font: inherit;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto auto;
-  align-content: center;
-  gap: 1px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
   min-height: 0;
-  padding: 6px 9px;
+  padding: 6px 8px 7px;
   border-radius: 11px;
   border: 1.5px solid var(--hair);
-  background: color-mix(in srgb, var(--tone, var(--blue)) 16%, var(--card));
+  background: color-mix(in srgb, var(--tone, var(--blue)) 14%, var(--card));
+  overflow: hidden;
+}
+.tag-tile.is-late { border-color: var(--coral); }
+
+.tile-head {
+  font: inherit;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 0 3px;
+  border: 0;
+  border-bottom: 1.5px solid color-mix(in srgb, var(--tone, var(--blue)) 34%, transparent);
+  background: none;
   color: var(--ink);
   cursor: pointer;
   text-align: left;
-  transition: transform 150ms var(--bounce), border-color 150ms var(--ease);
+  min-width: 0;
 }
-.tag-tile:hover { transform: translateY(-2px); border-color: var(--outline); }
-.tag-tile.is-late { border-color: var(--coral); }
+.tile-head:hover .tile-name { color: var(--accent); }
 
 .tile-name {
-  grid-column: 1;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tile-count {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
-  font-size: 1.1rem;
+  margin-left: auto;
+  font-size: 0.82rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
-.tile-when {
-  grid-column: 1;
-  font-size: 0.56rem;
-  color: var(--soft);
+
+/* the tasks themselves, which is the point of the tile */
+.tile-tasks {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+.tile-task {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+  border-radius: 6px;
+}
+.tile-task:hover { background: color-mix(in srgb, var(--tone, var(--blue)) 30%, transparent); }
+
+/* ticking one off without leaving the tiles */
+.tile-tick {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1.5px solid color-mix(in srgb, var(--ink) 34%, transparent);
+  background: var(--card);
+  cursor: pointer;
+}
+.tile-tick:hover { border-color: var(--green); background: var(--green); }
+
+.tile-open {
+  font: inherit;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  padding: 3px 4px 3px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.tile-task-name {
+  font-size: 0.62rem;
+  line-height: 1.25;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tag-tile.is-late .tile-when { color: var(--coral); font-weight: 600; }
+.tile-task-due {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 0.52rem;
+  color: var(--soft);
+  white-space: nowrap;
+}
+.tile-task-due.is-late { color: var(--coral); font-weight: 700; }
+
+.tile-clear { margin: 2px 4px; font-size: 0.58rem; color: var(--soft); }
+.tile-more { flex: 0 0 auto; margin: 0 4px; font-size: 0.54rem; color: var(--soft); }
+
 .tile-bar {
-  grid-column: 1 / -1;
+  flex: 0 0 auto;
   height: 3px;
   margin-top: 3px;
   border-radius: 999px;
@@ -2342,10 +2408,13 @@ body.dragging-task .task-list { pointer-events: none; }
 .tile-fill { display: block; height: 100%; background: var(--tone, var(--blue)); }
 
 /* packed tighter once there are a lot of them */
-.tag-grid.is-tight .tag-tile { padding: 4px 6px; gap: 0 4px; }
-.tag-grid.is-tight .tile-name { font-size: 0.6rem; }
-.tag-grid.is-tight .tile-count { font-size: 0.88rem; }
-.tag-grid.is-tight .tile-when { font-size: 0.5rem; }
+.tag-grid.is-tight .tag-tile { padding: 5px 6px 6px; }
+.tag-grid.is-tight .tile-name { font-size: 0.58rem; }
+.tag-grid.is-tight .tile-count { font-size: 0.72rem; }
+.tag-grid.is-tight .tile-task-name { font-size: 0.56rem; }
+.tag-grid.is-tight .tile-task-due { font-size: 0.48rem; }
+.tag-grid.is-tight .tile-open { padding: 1px 3px 1px 0; }
+.tag-grid.is-tight .tile-tick { width: 11px; height: 11px; }
 
 /* how far into a task you are */
 .task-bar {
@@ -2359,3 +2428,12 @@ body.dragging-task .task-list { pointer-events: none; }
   overflow: hidden;
 }
 .task-fill { display: block; height: 100%; background: var(--green); }
+
+/* No room for tasks: every tag still on screen, as a name and a number */
+.tag-grid.is-mini .tile-tasks,
+.tag-grid.is-mini .tile-more,
+.tag-grid.is-mini .tile-clear { display: none; }
+.tag-grid.is-mini .tag-tile { justify-content: center; padding: 4px 7px; }
+.tag-grid.is-mini .tile-head { border-bottom: 0; padding-bottom: 0; }
+.tag-grid.is-mini .tile-name { font-size: 0.6rem; }
+.tag-grid.is-mini .tile-count { font-size: 0.8rem; color: var(--ink); }

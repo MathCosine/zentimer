@@ -49,19 +49,86 @@ const { chromium } = require('./browser');
   const tiles = await p.evaluate(() => [...document.querySelectorAll('.tag-tile')].map(t => ({
     name: t.querySelector('.tile-name').textContent,
     count: t.querySelector('.tile-count').textContent,
-    when: t.querySelector('.tile-when').textContent,
+    tasks: [...t.querySelectorAll('.tile-task:not([hidden]) .tile-task-name')].map(x => x.textContent),
+    dues: [...t.querySelectorAll('.tile-task:not([hidden]) .tile-task-due')].map(x => x.textContent),
     late: t.classList.contains('is-late') })));
   check('a tile per tag, plus the untagged ones', tiles.map(t => t.name), ['PHY','MSB','no tag']);
   check('it counts what is open', tiles.map(t => t.count), ['3','1','1']);
-  check('an overdue tag says so and is marked', { when: tiles[1].when, late: tiles[1].late }, { when: '1 late', late: true });
-  check('and one with no deadlines says that', tiles[0].when, 'no deadline');
+  check('and lists them, not just the number', tiles[0].tasks.sort(), ['one','three','two']);
+  check('the tag is not repeated inside its own tile', tiles[0].tasks.some(t => t.startsWith('PHY')), false);
+  check('an overdue one is shown and the tile is marked', { due: tiles[1].dues[0], late: tiles[1].late },
+    { due: 'overdue', late: true });
+
+  console.log('\n--- a repeat is due by the end of today ---');
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'PHY two');
+    Store.updateTask(t.id, { repeat: 'daily' });
+  });
+  await p.waitForTimeout(600);
+  check('and the tile says so, with no date written on it', await p.evaluate(() => {
+    const tile = [...document.querySelectorAll('.tag-tile')].find(t => t.querySelector('.tile-name').textContent === 'PHY');
+    const line = [...tile.querySelectorAll('.tile-task')].find(l => l.textContent.includes('two'));
+    return line.querySelector('.tile-task-due').textContent; }), 'today');
+
+  console.log('\n--- too many to show ---');
+  await seed(p, ['PHY four','PHY five','PHY six','PHY seven','PHY eight','PHY nine','PHY ten',
+                 'PHY eleven','PHY twelve','PHY thirteen','PHY fourteen']);
+  await p.waitForTimeout(700);
+  const packed = await p.evaluate(() => {
+    const tile = [...document.querySelectorAll('.tag-tile')].find(t => t.querySelector('.tile-name').textContent === 'PHY');
+    const body = tile.querySelector('.tile-tasks');
+    return { shown: tile.querySelectorAll('.tile-task:not([hidden])').length,
+             more: tile.querySelector('.tile-more').hidden ? null : tile.querySelector('.tile-more').textContent,
+             spills: body.scrollHeight > body.clientHeight + 1,
+             gridScrolls: (() => { const g = document.getElementById('tagGrid');
+               return g.scrollHeight > g.clientHeight + 1; })() }; });
+  check('it shows what fits and says how many it could not', packed.more !== null, true);
+  check('nothing spills out of the tile', packed.spills, false);
+  check('and the grid still does not scroll', packed.gridScrolls, false);
+
+  console.log('\n--- ticking one off without leaving ---');
+  const before = await p.evaluate(() => {
+    const tile = [...document.querySelectorAll('.tag-tile')].find(t => t.querySelector('.tile-name').textContent === 'PHY');
+    const line = tile.querySelector('.tile-task:not([hidden])');
+    const name = line.querySelector('.tile-task-name').textContent;
+    // the tick says which task by aria-label, so there is no title to reconstruct
+    const label = line.querySelector('.tile-tick').getAttribute('aria-label');
+    const title = label.replace(/^Mark /, '').replace(/ done$/, '');
+    const id = Store.tasks().find(t => t.title === title).id;
+    line.querySelector('.tile-tick').click();
+    return { count: +tile.querySelector('.tile-count').textContent, name: name, id: id }; });
+  await p.waitForTimeout(600);
+  check('the count drops by one', await p.evaluate(() => {
+    const tile = [...document.querySelectorAll('.tag-tile')].find(t => t.querySelector('.tile-name').textContent === 'PHY');
+    return +tile.querySelector('.tile-count').textContent; }), before.count - 1);
+  check('and it has left the tile', await p.evaluate((name) => {
+    const tile = [...document.querySelectorAll('.tag-tile')].find(t => t.querySelector('.tile-name').textContent === 'PHY');
+    return [...tile.querySelectorAll('.tile-task-name')].some(n => n.textContent === name); }, before.name), false);
+  // a repeat records today rather than a done flag, so ask the question properly
+  check('the task really is done for today', await p.evaluate((id) => {
+    const t = Store.state().tasks.find(x => x.id === id);
+    return Store.isDone(t, Store.dayKey()); }, before.id), true);
+  check('and you stayed in the tiles', await p.evaluate(() =>
+    !document.getElementById('tagGrid').hidden), true);
 
   console.log('\n--- a tile is a way in ---');
-  await p.locator('.tag-tile', { hasText: 'PHY' }).first().click(); await p.waitForTimeout(600);
-  check('it goes back to the list, filtered to that tag', await p.evaluate(() => ({
+  await p.evaluate(() => {
+    const tile = [...document.querySelectorAll('.tag-tile')].find(t => t.querySelector('.tile-name').textContent === 'MSB');
+    tile.querySelector('.tile-head').click(); });
+  await p.waitForTimeout(600);
+  check('the header filters to that tag', await p.evaluate(() => ({
     grid: document.getElementById('tagGrid').hidden,
-    titles: [...document.querySelectorAll('.task-title')].map(t => t.textContent).sort() })),
-    { grid: true, titles: ['PHY one','PHY three','PHY two'] });
+    titles: [...document.querySelectorAll('.task-title')].map(t => t.textContent) })),
+    { grid: true, titles: ['MSB only one'] });
+
+  await p.click('#tagsBtn'); await p.waitForTimeout(500);
+  await p.evaluate(() => {
+    const tile = [...document.querySelectorAll('.tag-tile')].find(t => t.querySelector('.tile-name').textContent === 'MSB');
+    tile.querySelector('.tile-task:not([hidden]) .tile-open').click(); });
+  await p.waitForTimeout(600);
+  check('and a task goes straight to that task, open', await p.evaluate(() => ({
+    grid: document.getElementById('tagGrid').hidden,
+    editing: !!document.querySelector('.task.is-editing') })), { grid: true, editing: true });
 
   console.log(`\n${pass} passed, ${fail} failed, ${errs.length} console errors`);
   errs.slice(0,5).forEach(e => console.log('  !', e));

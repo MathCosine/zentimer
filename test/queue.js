@@ -65,6 +65,24 @@ const { chromium } = require('./browser');
   const short = await queue(p);
   check('and a task that will not fit is marked', short.filter(r => !r.fits).length > 0 || short.every(r => r.fits), true);
 
+  console.log('\n--- a daily repeat is due by the end of today ---');
+  await p.evaluate(() => {
+    Store.blocks(Store.dayKey()).forEach(b => Store.removeBlock(b.id));
+    Store.addTask({ title: 'WELL Stretch', repeat: 'daily', mins: 15 });
+    Store.addTask({ title: 'ART Someday thing', mins: 15 });
+  });
+  await p.waitForTimeout(800);
+  const daily = await queue(p);
+  const stretch = daily.find(r => r.title === 'WELL Stretch');
+  check('it is offered', !!stretch, true);
+  check('and it says today, with no date written on it', stretch && stretch.why, 'today');
+  check('above a task with no deadline at all', daily.findIndex(r => r.title === 'WELL Stretch') <
+        (daily.findIndex(r => r.title === 'ART Someday thing') + 1 || 99), true);
+  check('sorting by deadline puts it with today', await p.evaluate(() => {
+    const key = Store.dayKey();
+    const t = Store.tasks().find(x => x.title === 'WELL Stretch');
+    return Store.dueFor(t, key) === key; }), true);
+
   console.log('\n--- the plan answers first ---');
   await p.evaluate(() => {
     const at = Store.minutesNow();

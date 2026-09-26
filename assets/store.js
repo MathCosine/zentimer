@@ -348,6 +348,19 @@ window.Store = (function () {
     return true;
   }
 
+  /* A daily or weekly task that is due today is due by the end of today --
+     there is no date written on it, but it is every bit as pressing as one
+     that says so. Anything that ranks or sorts by deadline asks for this
+     rather than reading task.due straight off. */
+  function dueFor(task, key) {
+    if (!task) return null;
+    var when = key || dayKey();
+    if (task.repeat && task.repeat !== 'none') {
+      if (dueOn(task, new Date(when + 'T12:00'))) return when;
+    }
+    return task.due || null;
+  }
+
   function isDone(task, key) {
     return repeats(task) ? !!task.completions[key || dayKey()] : !!task.done;
   }
@@ -737,6 +750,7 @@ window.Store = (function () {
     tasks: function () { return alive(state.tasks); },
     addTask: addTask, updateTask: updateTask, removeTask: removeTask,
     taskById: taskById, toggleDone: toggleDone, isDone: isDone, repeats: repeats, dueOn: dueOn,
+    dueFor: dueFor,
 
     blocks: blocksOn, addBlock: addBlock, updateBlock: updateBlock, removeBlock: removeBlock,
     blockById: blockById, currentBlock: currentBlock, nextBlock: nextBlock, daySummary: daySummary,
