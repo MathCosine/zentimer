@@ -2008,9 +2008,18 @@ window.Plan = (function () {
         tick.className = 'tile-tick';
         tick.setAttribute('aria-label', 'Mark ' + task.title + ' done');
         tick.title = 'Done';
+        /* A thirteen-pixel target beside the name it belongs to: sooner or
+           later it gets hit by a thumb aiming at the task, and a task that
+           quietly finishes itself is how a day's work ends up counted before
+           it is done. So it says what it did, and offers it back. */
         tick.addEventListener('click', function (event) {
           event.stopPropagation();
           Store.toggleDone(task.id, key);
+          if (Store.isDone(task, key)) {
+            sayUndo('\u201c' + task.title + '\u201d ticked off', function () {
+              Store.toggleDone(task.id, key);
+            });
+          }
         });
         line.appendChild(tick);
 
@@ -2442,6 +2451,12 @@ window.Plan = (function () {
      for, and how much of it you have done. Work you finished is on both sides
      of that -- it was asked for, and you did it -- so the bar fills as you
      tick things off, whether or not a timer was running. */
+  /* Minutes past midnight for a moment in time, so the clock can name it. */
+  function minutesOf(stamp) {
+    var when = new Date(stamp);
+    return when.getHours() * 60 + when.getMinutes();
+  }
+
   function todaysAim() {
     var key = Store.dayKey();
     var did = doneToday(key);
@@ -2464,7 +2479,8 @@ window.Plan = (function () {
         var credit = creditFor(task, did);
         work += credit;
         gotWork += credit - (did.byTask[task.id] || 0);   // the timer already had its share
-        counted.push({ title: task.title, mins: credit, how: 'ticked off' });
+        counted.push({ id: task.id, title: task.title, mins: credit, how: 'ticked off',
+          when: Store.repeats(task) ? task.completions[key] : task.doneAt });
         credited[task.id] = true;
         return;
       }
@@ -2496,7 +2512,8 @@ window.Plan = (function () {
           var credit = creditFor(t, did);
           practice += credit;
           gotPractice += credit - (did.byTask[t.id] || 0);
-          counted.push({ title: t.title, mins: credit, how: 'ticked off' });
+          counted.push({ id: t.id, title: t.title, mins: credit, how: 'ticked off',
+            when: Store.repeats(t) ? t.completions[key] : t.doneAt });
           credited[t.id] = true;
         });
 
@@ -2523,7 +2540,7 @@ window.Plan = (function () {
       attached += did.byTask[id];
       if (credited[id]) return;
       var task = Store.taskById(id);
-      counted.push({ title: task ? task.title : 'a task since deleted',
+      counted.push({ id: id, title: task ? task.title : 'a task since deleted',
         mins: Math.round(did.byTask[id]), how: 'timed' });
     });
     var loose = Math.round(did.work + did.practice - attached);
@@ -2604,10 +2621,26 @@ window.Plan = (function () {
         what.appendChild(node('p', 'aim-none', 'nothing yet today \u2014 the bar is empty'));
       } else {
         aim.counted.forEach(function (bit) {
-          var line = node('div', 'aim-bit');
+          /* When, not just what. "Ticked off" on something you know you have
+             not touched is an accusation with no evidence; the time it says it
+             happened is the evidence, and it is how you find out what did it. */
+          var says = bit.how;
+          if (bit.when) says += ' ' + label(minutesOf(bit.when));
+          var line = node('button', 'aim-bit');
+          line.type = 'button';
+          line.title = 'Open it';
           line.appendChild(node('span', 'aim-bit-name', bit.title));
-          line.appendChild(node('span', 'aim-bit-how', bit.how));
+          line.appendChild(node('span', 'aim-bit-how', says));
           line.appendChild(node('span', 'aim-bit-mins', spanLabel(bit.mins)));
+          line.addEventListener('click', function () {
+            if (!bit.id || !Store.taskById(bit.id)) return;
+            ui.tagsView = false;
+            ui.showDone = true;                 // it is finished, so it is in the finished half
+            ui.editing = bit.id;
+            ui.focusTask = bit.id;
+            reveal = bit.id;
+            render();
+          });
           what.appendChild(line);
         });
       }
@@ -2771,28 +2804,31 @@ window.Plan = (function () {
   /* A line that appears where you were looking, says what went, and offers it
      back. It leaves on its own, because a bar that needs dismissing is a
      second thing to do after the thing you just did. */
-  function offerUndo() {
-    var last = Store.undoable();
-    if (!last) return;
+  function sayUndo(what, back) {
     clearTimeout(undoTimer);
     var old = document.querySelector('.undo-bar');
     if (old) old.remove();
 
     var bar = document.createElement('div');
     bar.className = 'undo-bar';
-    var said = node('span', 'undo-what', last.label ? '\u201c' + last.label + '\u201d deleted' : 'deleted');
-    bar.appendChild(said);
-    var back = document.createElement('button');
-    back.type = 'button';
-    back.className = 'undo-go';
-    back.textContent = 'undo';
-    back.addEventListener('click', function () {
-      Store.undo();
+    bar.appendChild(node('span', 'undo-what', what));
+    var go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'undo-go';
+    go.textContent = 'undo';
+    go.addEventListener('click', function () {
+      back();
       bar.remove();
     });
-    bar.appendChild(back);
+    bar.appendChild(go);
     document.body.appendChild(bar);
     undoTimer = setTimeout(function () { bar.remove(); }, 7000);
+  }
+
+  function offerUndo() {
+    var last = Store.undoable();
+    if (!last) return;
+    sayUndo(last.label ? '\u201c' + last.label + '\u201d deleted' : 'deleted', Store.undo);
   }
 
   /* ---------- api ---------- */

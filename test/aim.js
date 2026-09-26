@@ -222,9 +222,11 @@ const { chromium } = require('./browser');
     const l = Store.tasks().find(x => x.title === 'LATIN Unit Test');
     Store.logTime(l.id, null, 25 * 60000); });
   await p.waitForTimeout(800);
-  check('and otherwise names every piece of it', await p.evaluate(() =>
-    [...document.querySelectorAll('.aim-bit')].map(n => [...n.children].map(c => c.textContent))),
-    [['PHY Workbook', 'ticked off', '30m'], ['LATIN Unit Test', 'timed', '25m']]);
+  const bits = await p.evaluate(() =>
+    [...document.querySelectorAll('.aim-bit')].map(n => [...n.children].map(c => c.textContent)));
+  check('and otherwise names every piece of it',
+    [[bits[0][0], /^ticked off \d/.test(bits[0][1]), bits[0][2]], bits[1]],
+    [['PHY Workbook', true, '30m'], ['LATIN Unit Test', 'timed', '25m']]);
 
   await p.evaluate(() => Store.logTime(null, null, 15 * 60000));   // a session against nothing
   await p.waitForTimeout(800);

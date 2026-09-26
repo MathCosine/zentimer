@@ -2635,9 +2635,17 @@ body.dragging-task .task-list { pointer-events: none; }
   display: flex;
   align-items: baseline;
   gap: 6px;
+  width: 100%;
   min-width: 0;
+  padding: 1px 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 0.58rem;
+  text-align: left;
+  cursor: pointer;
 }
+.aim-bit:hover .aim-bit-name { text-decoration: underline; }
 .aim-bit-name {
   flex: 1 1 auto;
   min-width: 0;

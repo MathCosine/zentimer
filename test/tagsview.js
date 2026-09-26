@@ -111,6 +111,20 @@ const { chromium } = require('./browser');
   check('and you stayed in the tiles', await p.evaluate(() =>
     !document.getElementById('tagGrid').hidden), true);
 
+  console.log('\n--- a tick in a tile can be taken back ---');
+  await p.evaluate(() => Store.tasks().forEach(t => {
+    if (Store.isDone(t, Store.dayKey())) Store.toggleDone(t.id, Store.dayKey()); }));
+  await p.waitForTimeout(500);
+  await p.locator('.tile-tick').first().click(); await p.waitForTimeout(500);
+  check('it says what it just did', await p.evaluate(() => {
+    const bar = document.querySelector('.undo-bar');
+    return bar ? /ticked off/.test(bar.textContent) : false; }), true);
+  check('and one of them is finished', await p.evaluate(() =>
+    Store.tasks().filter(t => Store.isDone(t, Store.dayKey())).length), 1);
+  await p.locator('.undo-go').click(); await p.waitForTimeout(600);
+  check('undo puts it back', await p.evaluate(() =>
+    Store.tasks().filter(t => Store.isDone(t, Store.dayKey())).length), 0);
+
   console.log('\n--- a tile is a way in ---');
   await p.evaluate(() => {
     const tile = [...document.querySelectorAll('.tag-tile')].find(t => t.querySelector('.tile-name').textContent === 'MSB');
