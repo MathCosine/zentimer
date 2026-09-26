@@ -313,7 +313,7 @@ window.Store = (function () {
       completions: {},
       skips: {},
       created: Date.now(),
-      order: state.tasks.length
+      order: state.tasks.length, rank: null
     };
     if (!task.title) return null;
     state.tasks.push(task);
@@ -669,6 +669,7 @@ window.Store = (function () {
       if (!t.skips) t.skips = {};
       if (!t.completions) t.completions = {};
       if (typeof t.progress !== 'number') t.progress = 0;
+      if (typeof t.rank !== 'number') t.rank = null;
       if (typeof t.at === 'undefined') t.at = null;
       if (!t.mins) t.mins = 30;
     });
@@ -736,7 +737,16 @@ window.Store = (function () {
       var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
       if (!tag) return;
       tag.kind = kind === 'practice' ? 'practice' : 'work';
-      if (tag.kind !== 'practice') { tag.daily = null; tag.rank = null; }
+      if (tag.kind !== 'practice') {
+        tag.daily = null;
+        tag.rank = null;
+        /* The order of its tasks is set from the practice row in the settings,
+           so leaving the places on a tag that is no longer practice would gate
+           the queue with nothing on screen to undo it. */
+        alive(state.tasks).forEach(function (t) {
+          if ((t.tags || [])[0] === tagId) t.rank = null;
+        });
+      }
       else if (typeof daily === 'number') tag.daily = Math.max(1, Math.min(20, Math.round(daily)));
       else if (typeof tag.daily !== 'number') {
         // most of them, by default, since that is what "most days" means
@@ -753,6 +763,24 @@ window.Store = (function () {
        place off whoever held it: ask for second and whoever was second becomes
        third. Otherwise walking a tag down to second would quietly unplace the
        tag it passed on the way. */
+    /* And which of a tag's own tasks comes first, by the same rules: a place
+       moves the task into the tag's order rather than pushing another task
+       out of it, and no place at all means "any of these will do". */
+    setTaskRank: function (taskId, rank) {
+      var task = taskById(taskId);
+      if (!task) return;
+      var mine = (task.tags || [])[0] || null;
+      var place = typeof rank === 'number' && rank > 0 ? Math.round(rank) : null;
+      var order = alive(state.tasks).filter(function (t) {
+        return t.id !== taskId && ((t.tags || [])[0] || null) === mine && typeof t.rank === 'number';
+      }).sort(function (a, b) { return a.rank - b.rank; });
+
+      task.rank = null;
+      if (place) order.splice(Math.min(place - 1, order.length), 0, task);
+      order.forEach(function (t, i) { t.rank = i + 1; });
+      changed();
+    },
+
     setTagRank: function (tagId, rank) {
       var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
       if (!tag) return;

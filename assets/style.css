@@ -2509,6 +2509,30 @@ body.dragging-task .task-list { pointer-events: none; }
 .tag-sub .tag-daily { width: 50px; font-size: 0.7rem; padding: 2px 6px; margin: 0; }
 .tag-of { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* the tasks inside one practice tag, in the order they are asked for */
+.tag-order {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 6px 26px;
+}
+.tag-order-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tag-order .tag-rank { min-width: 42px; text-align: center; }
+.tag-order-name {
+  min-width: 0;
+  font-size: 0.66rem;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-order-name.is-done { color: var(--soft); text-decoration: line-through; }
+
 /* which practice comes first */
 .tag-sub .tag-rank { flex: 0 0 auto; font-size: 0.62rem; padding: 2px 7px; }
 .tag-rank.is-ranked {

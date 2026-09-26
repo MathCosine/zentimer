@@ -296,6 +296,43 @@ window.Panel = (function () {
         note.appendChild(node('span', 'tag-of', 'of ' + how.of +
           ' \u00b7 ' + how.done + ' done today' + (how.enough ? ' \u2713' : '')));
         list.appendChild(note);
+
+        /* And the same question one level down: which of these, first. The
+           tag's own tasks, in the order they will be asked for, each with a
+           place of its own. */
+        var mine = Store.tasks().filter(function (t) {
+          return (t.tags || [])[0] === tag.id;
+        }).sort(function (a, b) {
+          var ra = typeof a.rank === 'number' ? a.rank : 99;
+          var rb = typeof b.rank === 'number' ? b.rank : 99;
+          if (ra !== rb) return ra - rb;
+          return (a.order || 0) - (b.order || 0);
+        });
+
+        if (mine.length > 1) {
+          var seats = mine.filter(function (t) { return typeof t.rank === 'number'; }).length;
+          var order = node('div', 'tag-order');
+          mine.forEach(function (task) {
+            var row = node('div', 'tag-order-row');
+            var spot = node('button', 'tag-act tag-rank' + (task.rank ? ' is-ranked' : ''),
+              task.rank ? ordinal(task.rank) : 'any');
+            spot.type = 'button';
+            spot.title = task.rank
+              ? 'Asked for ' + ordinal(task.rank) + ' of this tag'
+              : 'No fixed place among these';
+            spot.addEventListener('click', function () {
+              var next = (task.rank || 0) + 1;
+              var room = Math.min(mine.length, seats + (task.rank ? 0 : 1));
+              Store.setTaskRank(task.id, next > room ? null : next);
+              draw();
+            });
+            row.appendChild(spot);
+            row.appendChild(node('span', 'tag-order-name' +
+              (Store.isDone(task, Store.dayKey()) ? ' is-done' : ''), task.title));
+            order.appendChild(row);
+          });
+          list.appendChild(order);
+        }
       }
     });
 

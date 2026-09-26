@@ -143,6 +143,75 @@ const { chromium } = require('./browser');
   });
   await p.waitForTimeout(800);
 
+  console.log('\n--- and inside a tag, which drill comes first ---');
+  await p.click('#settingsBtn'); await p.waitForTimeout(600);
+  const order = () => p.evaluate(() => [...document.querySelectorAll('.tag-order-row')].map(r =>
+    r.querySelector('.tag-rank').textContent + ' ' + r.querySelector('.tag-order-name').textContent));
+  const tapTask = title => p.evaluate(t => {
+    const row = [...document.querySelectorAll('.tag-order-row')]
+      .find(r => r.querySelector('.tag-order-name').textContent === t);
+    row.querySelector('.tag-rank').click(); }, title);
+
+  check('the tag lists its own tasks', (await order()).length, 5);
+  check('none of them has a place yet', (await order()).every(r => r.indexOf('any ') === 0), true);
+  await tapTask('EXTRA SAT'); await p.waitForTimeout(400);
+  check('one tap puts it first', (await order())[0], '1st EXTRA SAT');
+  await tapTask('EXTRA OTIS'); await p.waitForTimeout(400);
+  await tapTask('EXTRA OTIS'); await p.waitForTimeout(400);
+  check('and another second', (await order())[1], '2nd EXTRA OTIS');
+  check('without unplacing the first', (await order())[0], '1st EXTRA SAT');
+  await p.click('#settingsClose'); await p.waitForTimeout(700);
+
+  check('the queue asks for the first one', (await titles()).filter(t => /^EXTRA/.test(t)), ['EXTRA SAT']);
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'EXTRA SAT');
+    Store.toggleDone(t.id, Store.dayKey()); });
+  await p.waitForTimeout(800);
+  check('then the second', (await titles()).filter(t => /^EXTRA/.test(t)), ['EXTRA OTIS']);
+
+  await p.evaluate(() => {
+    ['EXTRA SAT','EXTRA OTIS'].forEach(title => {
+      const t = Store.tasks().find(x => x.title === title);
+      Store.setTaskRank(t.id, null);
+      if (Store.isDone(t, Store.dayKey())) Store.toggleDone(t.id, Store.dayKey()); }); });
+  await p.waitForTimeout(800);
+  check('taking the places off lets the rest back in', await p.evaluate(() =>
+    Store.tasks().filter(t => typeof t.rank === 'number').length), 0);
+
+  /* An order is not a dead end: with ten minutes free, a first-place drill that
+     needs an hour and a half steps aside for one that fits. */
+  await p.evaluate(() => {
+    Store.tasks().forEach(t => Store.removeTask(t.id));
+    Store.addTask({ title: 'EXTRA Long drill', repeat: 'daily', mins: 90 });
+    Store.addTask({ title: 'EXTRA Short drill', repeat: 'daily', mins: 10 });
+    const t = Store.tasks().find(x => /Long/.test(x.title));
+    Store.setTaskRank(t.id, 1);
+  });
+  await p.waitForTimeout(800);
+  check('with the day free, first place goes first', (await titles())[0], 'EXTRA Long drill');
+  await p.evaluate(() => {
+    const at = Store.minutesNow();
+    Store.addBlock({ date: Store.dayKey(), start: at + 15, end: at + 60, title: 'something else' }); });
+  await p.waitForTimeout(800);
+  check('with a quarter of an hour, the one that fits', (await titles())[0], 'EXTRA Short drill');
+  await p.evaluate(() => Store.blocks(Store.dayKey()).forEach(x => Store.removeBlock(x.id)));
+  await p.waitForTimeout(600);
+
+  /* Places live on the practice row in the settings, so a tag that stops being
+     practice must not leave them behind with nothing on screen to undo them. */
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'EXTRA Short drill');
+    Store.setTaskRank(t.id, 1);
+    const g = Store.tags().find(x => x.name === 'EXTRA');
+    Store.setTagKind(g.id, 'work');
+  });
+  await p.waitForTimeout(700);
+  check('and a tag that stops being practice drops them', await p.evaluate(() =>
+    Store.tasks().filter(t => typeof t.rank === 'number').length), 0);
+  await p.evaluate(() => {
+    const g = Store.tags().find(x => x.name === 'EXTRA'); Store.setTagKind(g.id, 'practice', 3); });
+  await p.waitForTimeout(700);
+
   console.log('\n--- and the guess is only a guess ---');
   await p.click('#settingsBtn'); await p.waitForTimeout(600);
   await flipExtra(); await p.waitForTimeout(500);

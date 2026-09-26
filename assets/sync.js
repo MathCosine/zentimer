@@ -58,7 +58,7 @@ window.Sync = (function () {
           weekday: typeof r.weekday === 'number' ? r.weekday : null,
           at: typeof r.at === 'number' ? r.at : null,
           mins: r.mins || 30, done: !!r.done, done_at: r.doneAt || null,
-          progress: r.progress || 0,
+          progress: r.progress || 0, rank: typeof r.rank === 'number' ? r.rank : null,
           completions: r.completions || {}, skips: r.skips || {},
           ord: r.order || 0, created: r.created || null
         });
@@ -70,7 +70,7 @@ window.Sync = (function () {
           weekday: typeof r.weekday === 'number' ? r.weekday : null,
           at: typeof r.at === 'number' ? r.at : null,
           mins: r.mins || 30, done: !!r.done, doneAt: r.done_at || null,
-          progress: r.progress || 0,
+          progress: r.progress || 0, rank: typeof r.rank === 'number' ? r.rank : null,
           completions: r.completions || {}, skips: r.skips || {},
           order: r.ord || 0, created: r.created || null
         };

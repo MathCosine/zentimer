@@ -2123,6 +2123,27 @@ window.Plan = (function () {
     return out;
   }
 
+  /* Is something ahead of this task in its own tag's order? A placed task is
+     offered only when everything placed before it is done, and a task with no
+     place waits until the placed ones are out of the way -- "these first, in
+     this order, then the rest as they come". */
+  function waitingBehind(task, key, gap) {
+    var mine = (task.tags || [])[0];
+    if (!mine) return false;
+    var ahead = Store.tasks().filter(function (other) {
+      if (other.id === task.id) return false;
+      if ((other.tags || [])[0] !== mine) return false;
+      if (typeof other.rank !== 'number') return false;
+      if (Store.isDone(other, key)) return false;
+      if (Store.repeats(other) && !Store.dueOn(other, new Date())) return false;
+      // an order is not a dead end: one that will not fit the time you have
+      // does not hold up the ones that would
+      if (gap && leftOf(other) > gap + 5) return false;
+      return typeof task.rank !== 'number' || other.rank < task.rank;
+    });
+    return ahead.length > 0;
+  }
+
   /* The ranking, in the order the four things were asked for:
        - what is closest to due, overdue hardest of all;
        - whether it fits the time there actually is;
@@ -2154,7 +2175,11 @@ window.Plan = (function () {
         var how = practiceState[tag.id];
         return how && how.enough;
       });
-      return !settled;
+      if (settled) return false;
+      /* If you have put a tag's tasks in an order, that order is the answer:
+         only the next one still to do is offered, and the unplaced rest of
+         the tag waits its turn behind them. */
+      return !waitingBehind(task, key, gap);
     }).map(function (task) {
       var score = 0, why = '', urgent = false;
       var whole = leftOf(task);
@@ -2429,15 +2454,18 @@ window.Plan = (function () {
       var practising = Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
       if (practising && !task.due) return;      // counted below, by the day's worth
 
-      var deadline = Store.dueFor(task, key);
-      if (!deadline) return;                    // no deadline, no share of today
-
+      /* Work you did is work you did, whether or not it was what was asked
+         for: a task finished today counts even with no deadline on it and
+         even if today was never going to be its day. */
       if (Store.isDone(task, key)) {
         var credit = creditFor(task, did);
         work += credit;
         gotWork += credit - (did.byTask[task.id] || 0);   // the timer already had its share
         return;
       }
+
+      var deadline = Store.dueFor(task, key);
+      if (!deadline) return;                    // no deadline, no share of today
 
       var share = shareOf(task, key);
       if (!share) return;                       // not today's problem yet
@@ -2467,7 +2495,13 @@ window.Plan = (function () {
 
       if (!how.enough) {
         mine.filter(function (t) { return !Store.isDone(t, key); })
-          .sort(function (a, b) { return leftOf(a) - leftOf(b); })
+          .sort(function (a, b) {
+            // the order you put them in first, then the shortest of the rest
+            var ra = typeof a.rank === 'number' ? a.rank : 99;
+            var rb = typeof b.rank === 'number' ? b.rank : 99;
+            if (ra !== rb) return ra - rb;
+            return leftOf(a) - leftOf(b);
+          })
           .slice(0, Math.max(0, how.want - how.done))
           .forEach(function (t) { practice += leftOf(t); stillPractice += leftOf(t); });
       }

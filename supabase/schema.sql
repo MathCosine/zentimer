@@ -119,8 +119,10 @@ alter table public.tags add column if not exists kind text not null default 'wor
 alter table public.tags add column if not exists daily int;
 
 -- Which practice comes first when there is not time for all of it: 1 is first,
--- 2 next, null means mix it in with the rest.
-alter table public.tags add column if not exists rank int;
+-- 2 next, null means mix it in with the rest. Tasks carry the same thing for
+-- the order within one tag.
+alter table public.tags  add column if not exists rank int;
+alter table public.tasks add column if not exists rank int;
 
 -- ---------------------------------------------------------------------------
 -- stamps, indexes and row security, applied to every table the same way

@@ -143,6 +143,33 @@ const { chromium } = require('./browser');
   check('finishing it does not count the timer twice', finished.lines[0].fill, '100%');
   check('and the day is done', finished.lines[0].num, 'done \u2713');
 
+  console.log('--- work you were not asked for counts too ---');
+  await p.evaluate(() => {
+    Store.tasks().forEach(t => Store.removeTask(t.id));
+    Store.state().logs.length = 0;
+    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    Store.addTask({ title: 'MSB WA1', due: on(1), mins: 45 });          // what today is asking for
+    Store.addTask({ title: 'TAA Reading', mins: 30 });                  // no deadline at all
+    Store.addTask({ title: 'PHY Later worksheet', due: on(6), mins: 40 });   // not today's problem
+  });
+  await p.waitForTimeout(800);
+  check('today asks for the one thing', (await aim(p)).lines[0].num, '45m');
+
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'TAA Reading');
+    Store.toggleDone(t.id, Store.dayKey()); });
+  await p.waitForTimeout(800);
+  const off = await aim(p);
+  check('doing something with no deadline still counts', off.lines[0].fill, '40%');
+  check('and what today asks for has not changed', off.lines[0].num, '45m');
+
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'PHY Later worksheet');
+    Store.toggleDone(t.id, Store.dayKey()); });
+  await p.waitForTimeout(800);
+  check('nor does getting ahead on next week', (await aim(p)).lines[0].num, '45m');
+  check('but it is on the bar', (await aim(p)).lines[0].fill, '61%');
+
   console.log('--- and when the day is asking too much ---');
   await p.evaluate(() => {
     Store.tasks().forEach(t => Store.removeTask(t.id));
