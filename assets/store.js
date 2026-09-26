@@ -375,6 +375,16 @@ window.Store = (function () {
     return repeats(task) ? !!task.completions[key || dayKey()] : !!task.done;
   }
 
+  /* Finished, and finished on this day in particular. "Done" on a one-off task
+     carries no date with it, so asking isDone what you did today answers with
+     everything you have ever ticked off -- which is how a bar for today's work
+     filled itself up overnight. */
+  function finishedOn(task, key) {
+    var when = key || dayKey();
+    if (repeats(task)) return !!task.completions[when];
+    return !!task.done && !!task.doneAt && dayKey(new Date(task.doneAt)) === when;
+  }
+
   function toggleDone(taskId, key) {
     var task = taskById(taskId);
     if (!task) return;
@@ -801,7 +811,7 @@ window.Store = (function () {
       var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
       if (!tag || tag.kind !== 'practice') return null;
       var mine = alive(state.tasks).filter(function (t) { return (t.tags || []).indexOf(tagId) !== -1; });
-      var done = mine.filter(function (t) { return isDone(t, when); }).length;
+      var done = mine.filter(function (t) { return finishedOn(t, when); }).length;
       var want = typeof tag.daily === 'number' ? tag.daily : Math.max(1, Math.ceil(mine.length / 2));
       return { done: done, want: want, enough: done >= want, of: mine.length };
     },
@@ -841,7 +851,8 @@ window.Store = (function () {
 
     tasks: function () { return alive(state.tasks); },
     addTask: addTask, updateTask: updateTask, removeTask: removeTask,
-    taskById: taskById, toggleDone: toggleDone, isDone: isDone, repeats: repeats, dueOn: dueOn,
+    taskById: taskById, toggleDone: toggleDone, isDone: isDone, finishedOn: finishedOn,
+    repeats: repeats, dueOn: dueOn,
     dueFor: dueFor,
 
     blocks: blocksOn, addBlock: addBlock, updateBlock: updateBlock, removeBlock: removeBlock,

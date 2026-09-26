@@ -143,6 +143,33 @@ const { chromium } = require('./browser');
   check('finishing it does not count the timer twice', finished.lines[0].fill, '100%');
   check('and the day is done', finished.lines[0].num, 'done \u2713');
 
+  console.log('--- yesterday\u2019s work is not today\u2019s ---');
+  await p.evaluate(() => {
+    Store.tasks().forEach(t => Store.removeTask(t.id));
+    Store.state().logs.length = 0;
+    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    // three finished days ago, and two still to do
+    ['MSB Old one','PHY Old two','LATIN Old three'].forEach(title => {
+      const t = Store.addTask({ title: title, due: on(1), mins: 60 });
+      Store.toggleDone(t.id, Store.dayKey());
+      t.doneAt = Date.now() - 3 * 86400000;
+    });
+    Store.addTask({ title: 'MSB WA1', due: on(1), mins: 45 });
+    Store.addTask({ title: 'PHY Workbook', due: on(2), mins: 30 });
+    Store.quiet();
+  });
+  await p.reload(); await p.waitForTimeout(1200);
+  const morning = await aim(p);
+  check('the day starts empty however much is behind you', morning.lines[0].fill, '0%');
+  check('with only what is still to do on it', morning.lines[0].num, '1h 15m');
+  check('and only those counted', morning.lines[0].count, '2 things');
+
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'MSB WA1');
+    Store.toggleDone(t.id, Store.dayKey()); });
+  await p.waitForTimeout(800);
+  check('and doing one today moves it', (await aim(p)).lines[0].fill, '60%');
+
   console.log('--- work you were not asked for counts too ---');
   await p.evaluate(() => {
     Store.tasks().forEach(t => Store.removeTask(t.id));

@@ -2458,6 +2458,8 @@ window.Plan = (function () {
          for: a task finished today counts even with no deadline on it and
          even if today was never going to be its day. */
       if (Store.isDone(task, key)) {
+        // finished on some other day: today is neither asking for it nor owed it
+        if (!Store.finishedOn(task, key)) return;
         var credit = creditFor(task, did);
         work += credit;
         gotWork += credit - (did.byTask[task.id] || 0);   // the timer already had its share
@@ -2485,7 +2487,7 @@ window.Plan = (function () {
       if (!how) return;
       var mine = Store.tasks().filter(function (t) { return (t.tags || []).indexOf(tag.id) !== -1; });
 
-      mine.filter(function (t) { return Store.isDone(t, key); })
+      mine.filter(function (t) { return Store.finishedOn(t, key); })
         .slice(0, how.want)
         .forEach(function (t) {
           var credit = creditFor(t, did);

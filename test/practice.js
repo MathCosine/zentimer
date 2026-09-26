@@ -56,6 +56,19 @@ const { chromium } = require('./browser');
   check('the real deadline comes first', after[0].title, 'MSB WA1');
   check('and the drill says what it is', after.find(r => r.tag === 'EXTRA').why, 'practice · 0 of 3 today');
 
+  console.log('\n--- and a drill ticked off last week is not today\u2019s ---');
+  await p.evaluate(() => {
+    const t = Store.addTask({ title: 'EXTRA Old contest', mins: 30 });   // no repeat: a one-off
+    Store.toggleDone(t.id, Store.dayKey());
+    t.doneAt = Date.now() - 6 * 86400000;
+    Store.quiet();
+  });
+  await p.reload(); await p.waitForTimeout(1200);
+  check('nothing counts as done today', await p.evaluate(() => {
+    const t = Store.tags().find(x => x.name === 'EXTRA'); return Store.practiceToday(t.id).done; }), 0);
+  await p.evaluate(() => Store.removeTask(Store.tasks().find(x => x.title === 'EXTRA Old contest').id));
+  await p.waitForTimeout(600);
+
   console.log('\n--- doing most of it is enough ---');
   await p.evaluate(() => {
     ['EXTRA USACO','EXTRA OTIS','EXTRA Physics'].forEach(title => {
