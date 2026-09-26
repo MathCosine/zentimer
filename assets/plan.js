@@ -2449,6 +2449,7 @@ window.Plan = (function () {
     var workLeft = 0, practiceDone = 0, practiceWant = 0;
     var gotWork = did.work, gotPractice = did.practice;
     var still = 0;                              // what is left to do, for the ceiling
+    var counted = [], credited = {};            // and what exactly went on the bar
 
     Store.tasks().forEach(function (task) {
       var practising = Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
@@ -2463,6 +2464,8 @@ window.Plan = (function () {
         var credit = creditFor(task, did);
         work += credit;
         gotWork += credit - (did.byTask[task.id] || 0);   // the timer already had its share
+        counted.push({ title: task.title, mins: credit, how: 'ticked off' });
+        credited[task.id] = true;
         return;
       }
 
@@ -2493,6 +2496,8 @@ window.Plan = (function () {
           var credit = creditFor(t, did);
           practice += credit;
           gotPractice += credit - (did.byTask[t.id] || 0);
+          counted.push({ title: t.title, mins: credit, how: 'ticked off' });
+          credited[t.id] = true;
         });
 
       if (!how.enough) {
@@ -2511,7 +2516,22 @@ window.Plan = (function () {
       practiceWant += how.want;
     });
 
+    /* Whatever the timer measured that a tick has not already accounted for --
+       including a session run against nothing in particular. */
+    var attached = 0;
+    Object.keys(did.byTask).forEach(function (id) {
+      attached += did.byTask[id];
+      if (credited[id]) return;
+      var task = Store.taskById(id);
+      counted.push({ title: task ? task.title : 'a task since deleted',
+        mins: Math.round(did.byTask[id]), how: 'timed' });
+    });
+    var loose = Math.round(did.work + did.practice - attached);
+    if (loose > 0) counted.push({ title: 'a session on nothing in particular', mins: loose, how: 'timed' });
+    counted.sort(function (a, b) { return b.mins - a.mins; });
+
     return {
+      counted: counted,
       work: Math.round(work / 5) * 5,
       practice: Math.round(practice / 5) * 5,
       did: { work: Math.round(gotWork), practice: Math.round(gotPractice) },
@@ -2569,6 +2589,29 @@ window.Plan = (function () {
         'more than a day holds \u2014 push something back or accept a late one'));
     } else if (aim.did.work >= aim.work && aim.did.practice >= aim.practice) {
       el.aim.appendChild(node('p', 'aim-clear', 'deadlines are covered \u2014 the rest is yours'));
+    }
+
+    /* And what exactly is on the bar. A filled bar you cannot account for is
+       worse than no bar: it says the thing is wrong without saying how. */
+    var show = node('button', 'aim-why', ui.aimWhy ? 'what counted \u25b4' : 'what counted \u25be');
+    show.type = 'button';
+    show.addEventListener('click', function () { ui.aimWhy = !ui.aimWhy; render(); });
+    el.aim.appendChild(show);
+
+    if (ui.aimWhy) {
+      var what = node('div', 'aim-what');
+      if (!aim.counted.length) {
+        what.appendChild(node('p', 'aim-none', 'nothing yet today \u2014 the bar is empty'));
+      } else {
+        aim.counted.forEach(function (bit) {
+          var line = node('div', 'aim-bit');
+          line.appendChild(node('span', 'aim-bit-name', bit.title));
+          line.appendChild(node('span', 'aim-bit-how', bit.how));
+          line.appendChild(node('span', 'aim-bit-mins', spanLabel(bit.mins)));
+          what.appendChild(line);
+        });
+      }
+      el.aim.appendChild(what);
     }
   }
 

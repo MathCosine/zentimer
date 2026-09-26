@@ -52,6 +52,9 @@ const TYPES = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
   await p.evaluate(() => navigator.serviceWorker.ready);
   check('a worker is in charge', await p.evaluate(() => !!navigator.serviceWorker.controller), true);
   check('the app is running', await p.evaluate(() => typeof window.Plan), 'object');
+  // the first worker is not news: it is the code the page already loaded
+  check('and it does not announce itself as an update', await p.evaluate(() =>
+    !!document.querySelector('.update-bar')), false);
 
   console.log('\n--- then a fix is pushed ---');
   const plan = path.join(root, 'assets', 'plan.js');
@@ -77,6 +80,61 @@ const TYPES = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
   check('with its styles', await p.evaluate(() =>
     getComputedStyle(document.body).getPropertyValue('--ink').trim().length > 0), true);
   await ctx.setOffline(false);
+
+  /* And the trap this was found in: a browser already carrying the old
+     cache-first worker. That worker keeps answering while a tab stays open, so
+     the new one sits waiting and every reload comes back with the same old
+     code. Escaping it must not need anyone to notice a bar and click it. */
+  console.log('\n--- a browser stuck on the old worker gets out by itself ---');
+  const OLD_SW = `
+    var VERSION = 'pip-old';
+    var SHELL = ['./', './app/', './app/index.html', './assets/plan.js', './assets/store.js',
+                 './assets/style.css', './assets/app.js', './assets/offline.js', './assets/sync.js',
+                 './assets/settings.js', './assets/pet.js', './assets/music.js', './assets/config.js'];
+    self.addEventListener('install', function (e) {
+      e.waitUntil(caches.open(VERSION).then(function (c) {
+        return Promise.all(SHELL.map(function (u) {
+          return c.add(new Request(u, { cache: 'reload' })).catch(function () {}); })); }));
+    });
+    self.addEventListener('activate', function (e) { e.waitUntil(self.clients.claim()); });
+    self.addEventListener('message', function (e) { if (e.data === 'skip-waiting') self.skipWaiting(); });
+    self.addEventListener('fetch', function (e) {
+      if (e.request.method !== 'GET') return;
+      if (new URL(e.request.url).origin !== self.location.origin) return;
+      e.respondWith(caches.match(e.request).then(function (hit) {
+        if (hit) { fetch(e.request).then(function (r) {
+          if (r && r.ok) caches.open(VERSION).then(function (c) { c.put(e.request, r); }); }).catch(function () {});
+          return hit; }
+        return fetch(e.request); }));
+    });`;
+
+  const realSw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+  const realPlan = fs.readFileSync(plan, 'utf8').replace("window.PIP_FIX = 'the new one';\n", '');
+  fs.writeFileSync(path.join(root, 'sw.js'), OLD_SW);
+  fs.writeFileSync(plan, realPlan);
+
+  const stuck = await b.newContext({ viewport: { width: 430, height: 950 } });
+  const q = await stuck.newPage();
+  q.on('pageerror', e => errs.push('STUCK: ' + e.message));
+  await q.goto(base + '/app/'); await q.waitForTimeout(1500);
+  await q.evaluate(() => navigator.serviceWorker.ready);
+  await q.reload(); await q.waitForTimeout(1200);
+  check('the old worker is the one answering', await q.evaluate(() => !!navigator.serviceWorker.controller), true);
+  check('and there is no fix in sight', await q.evaluate(() => window.PIP_FIX || null), null);
+
+  // the deploy: the new worker, and a fix in the code it serves
+  fs.writeFileSync(path.join(root, 'sw.js'), realSw);
+  fs.writeFileSync(plan, "window.PIP_FIX = 'the new one';\n" + realPlan);
+
+  let arrived = null;
+  for (let go = 1; go <= 2 && !arrived; go++) {
+    await q.reload(); await q.waitForTimeout(2000);
+    arrived = await q.evaluate(() => window.PIP_FIX || null);
+    if (arrived) console.log('        (it arrived on reload ' + go + ', with nothing clicked)');
+  }
+  check('two reloads and it is current, untouched', arrived, 'the new one');
+  check('nothing was broken getting there', await q.evaluate(() => typeof window.Store), 'object');
+  await q.close(); await stuck.close();
 
   console.log(`\n${pass} passed, ${fail} failed, ${errs.length} console errors`);
   errs.slice(0, 5).forEach(e => console.log('  !', e));

@@ -62,7 +62,14 @@ var SHELL = [
   './assets/fonts/fredoka-latin.woff2'
 ];
 
+/* Take over as soon as the new copy is installed, rather than waiting for
+   every tab to close. Waiting sounds polite and is how an app gets stuck: the
+   old worker keeps answering while a tab stays open, and if the old worker is
+   the one with the bug, no amount of reloading escapes it. Nothing on screen
+   changes underneath anyone -- the page keeps the code it loaded with; it is
+   the next load that is new. */
 self.addEventListener('install', function (event) {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(VERSION).then(function (cache) {
       // one missing file must not fail the whole install

@@ -2611,3 +2611,41 @@ body.dragging-task .task-list { pointer-events: none; }
 .aim-line.is-met .aim-count { display: none; }
 
 .queue-why.is-quick { color: var(--green); font-weight: 600; }
+
+/* what is on the bar, and how it got there */
+.aim-why {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.56rem;
+  color: var(--soft);
+  cursor: pointer;
+}
+.aim-why:hover { color: var(--ink); }
+.aim-what {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+}
+.aim-bit {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.58rem;
+}
+.aim-bit-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aim-bit-how { flex: 0 0 auto; color: var(--soft); }
+.aim-bit-mins { flex: 0 0 auto; color: var(--soft); font-variant-numeric: tabular-nums; }
+.aim-none { margin: 0; font-size: 0.58rem; color: var(--soft); }

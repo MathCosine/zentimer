@@ -197,6 +197,43 @@ const { chromium } = require('./browser');
   check('nor does getting ahead on next week', (await aim(p)).lines[0].num, '45m');
   check('but it is on the bar', (await aim(p)).lines[0].fill, '61%');
 
+  console.log('--- and it will say what is on the bar ---');
+  await p.evaluate(() => {
+    Store.tasks().forEach(t => Store.removeTask(t.id));
+    Store.state().logs.length = 0;
+    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    for (let i = 0; i < 4; i++) {                   // finished, but not today
+      const t = Store.addTask({ title: 'MSB Old ' + i, due: on(-2), mins: 60 });
+      Store.toggleDone(t.id, Store.dayKey());
+      t.doneAt = Date.now() - (2 + i) * 86400000;
+    }
+    Store.addTask({ title: 'PHY Workbook', due: on(2), mins: 30 });
+    Store.addTask({ title: 'LATIN Unit Test', due: on(2), mins: 60 });
+    Store.quiet();
+  });
+  await p.reload(); await p.waitForTimeout(1300);
+  await p.locator('.aim-why').click(); await p.waitForTimeout(500);
+  check('with nothing done it says so', await p.evaluate(() =>
+    document.querySelector('.aim-what').textContent), 'nothing yet today \u2014 the bar is empty');
+
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'PHY Workbook');
+    Store.toggleDone(t.id, Store.dayKey());
+    const l = Store.tasks().find(x => x.title === 'LATIN Unit Test');
+    Store.logTime(l.id, null, 25 * 60000); });
+  await p.waitForTimeout(800);
+  check('and otherwise names every piece of it', await p.evaluate(() =>
+    [...document.querySelectorAll('.aim-bit')].map(n => [...n.children].map(c => c.textContent))),
+    [['PHY Workbook', 'ticked off', '30m'], ['LATIN Unit Test', 'timed', '25m']]);
+
+  await p.evaluate(() => Store.logTime(null, null, 15 * 60000));   // a session against nothing
+  await p.waitForTimeout(800);
+  check('a session on nothing in particular is named too', await p.evaluate(() =>
+    [...document.querySelectorAll('.aim-bit-name')].map(n => n.textContent)
+      .indexOf('a session on nothing in particular') > -1), true);
+  await p.locator('.aim-why').click(); await p.waitForTimeout(400);
+  check('and it folds away again', await p.evaluate(() => !document.querySelector('.aim-what')), true);
+
   console.log('--- and when the day is asking too much ---');
   await p.evaluate(() => {
     Store.tasks().forEach(t => Store.removeTask(t.id));
