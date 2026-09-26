@@ -14,6 +14,7 @@ without a Supabase project.
     node test/accounts.js     sign in, sign up, sign out, delete account
     node test/landing.js      the front page, and the app at its new address
     node test/offline.js      the service worker, with the network switched off
+    node test/update.js       a pushed fix reaching a browser that already has it
     node test/undo.js         undo, and the bin
     node test/findweek.js     searching, and the week
     node test/sorting.js      the five orders, both directions, inside a split

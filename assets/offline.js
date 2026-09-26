@@ -36,6 +36,30 @@
     document.body.appendChild(bar);
   }
 
+  /* What the app knows about itself: which version is running, and a way to go
+     and look for a newer one without waiting for the browser to wonder. */
+  window.PipVersion = {
+    running: function () {
+      return new Promise(function (resolve) {
+        var worker = navigator.serviceWorker.controller;
+        if (!worker) { resolve(null); return; }
+        var channel = new MessageChannel();
+        var done = false;
+        channel.port1.onmessage = function (e) { done = true; resolve(e.data || null); };
+        try { worker.postMessage('version', [channel.port2]); } catch (e) { resolve(null); }
+        setTimeout(function () { if (!done) resolve(null); }, 1200);
+      });
+    },
+    look: function () {
+      return navigator.serviceWorker.getRegistration().then(function (reg) {
+        if (!reg) return 'not installed';
+        return reg.update().then(function () {
+          return reg.waiting || reg.installing ? 'a new version is on its way' : 'this is the latest';
+        });
+      }).catch(function () { return 'could not look just now'; });
+    }
+  };
+
   window.addEventListener('load', function () {
     navigator.serviceWorker.register(root).then(function (reg) {
       if (reg.waiting) offerReload(reg.waiting);

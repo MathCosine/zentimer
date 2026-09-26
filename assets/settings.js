@@ -520,6 +520,29 @@ window.Panel = (function () {
     data.appendChild(buttons);
     data.appendChild(node('p', 'set-note', api.syncStatus()));
 
+    /* Which version is actually running, and a button to go and look for a
+       newer one. Without this, "I fixed that" and "it is still doing it" can
+       both be true and there is no way to tell from the outside. */
+    if (window.PipVersion) {
+      var line = node('div', 'set-row');
+      var name = node('div', 'set-label');
+      name.appendChild(node('span', null, 'version'));
+      var says = node('small', 'app-version', 'checking\u2026');
+      name.appendChild(says);
+      line.appendChild(name);
+      var look = node('button', 'ghost', 'check for updates');
+      look.type = 'button';
+      look.addEventListener('click', function () {
+        says.textContent = 'looking\u2026';
+        window.PipVersion.look().then(function (word) { says.textContent = word; });
+      });
+      line.appendChild(look);
+      data.appendChild(line);
+      window.PipVersion.running().then(function (v) {
+        says.textContent = v || 'running from the network';
+      });
+    }
+
     /* If syncing ever replaced what was on this device, the old copy is still
        here and can be put back. */
     /* Daily snapshots, plus whatever syncing replaced. A backup you have to
