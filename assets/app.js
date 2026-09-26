@@ -39,6 +39,8 @@
     focusMs: 30 * MIN, breakMs: 10 * MIN,
     presets: [15, 30, 45, 60, 90, 120],
     dayStart: 5 * 60, dayEnd: 24 * 60,
+    capWork: 330, capPractice: 240,     // when a day is asking too much
+
     music: { track: 0, volume: 0.35 }
   };
   var timer = { mode: 'focus', duration: settings.focusMs, remaining: settings.focusMs, endAt: null, status: 'idle' };
@@ -851,6 +853,13 @@
         save();
       },
 
+      setLoad: function (work, practice) {
+        settings.capWork = work;
+        settings.capPractice = practice;
+        if (window.Plan) Plan.setCaps(work, practice);
+        save();
+      },
+
       exportData: function () { el.syncExport.click(); },
       importData: function () { el.syncImport.click(); },
       openSync: function () { Panel.show(false); el.syncBtn.click(); },
@@ -1194,6 +1203,8 @@
             .map(function (n) { return Math.max(1, Math.min(600, Math.round(+n) || 30)); })
             .slice(0, 8);
         }
+        if (typeof stored.settings.capWork === 'number') settings.capWork = stored.settings.capWork;
+        if (typeof stored.settings.capPractice === 'number') settings.capPractice = stored.settings.capPractice;
         if (typeof stored.settings.dayStart === 'number') settings.dayStart = stored.settings.dayStart;
         if (typeof stored.settings.dayEnd === 'number') settings.dayEnd = stored.settings.dayEnd;
         if (typeof stored.settings.breakMs === 'number') settings.breakMs = stored.settings.breakMs;
@@ -1235,6 +1246,7 @@
     if (window.Plan) {
       Plan.init({ hour12: settings.hour12 });   // before the first render reaches into it
       Plan.setDay(settings.dayStart, settings.dayEnd);
+      Plan.setCaps(settings.capWork, settings.capPractice);
     }
     wirePanel();
     el.soundBtn.setAttribute('aria-pressed', String(settings.sound));

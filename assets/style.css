@@ -2508,3 +2508,60 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 .tag-sub .tag-daily { width: 50px; font-size: 0.7rem; padding: 2px 6px; margin: 0; }
 .tag-of { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- how much today needs to hold ---------- */
+
+/* It sits with what to do next, because "how much" and "which" are the same
+   question asked twice. */
+.aim {
+  display: grid;
+  gap: 3px;
+  padding: 6px 9px;
+  border-radius: 10px;
+  background: var(--well);
+  border: 1.5px solid var(--hair);
+}
+
+.aim-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.aim-name {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--soft);
+  min-width: 4.6em;
+}
+.aim-track {
+  flex: 1 1 auto;
+  min-width: 18px;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  overflow: hidden;
+}
+.aim-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 320ms var(--ease);
+}
+.aim-num {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.aim-line.is-met .aim-fill { background: var(--green); }
+.aim-line.is-met .aim-num { color: var(--green); font-weight: 600; }
+.aim-line.is-over .aim-fill { background: var(--coral); }
+.aim-line.is-over .aim-name { color: var(--coral); }
+
+.aim-warn, .aim-clear {
+  margin: 2px 0 0;
+  font-size: 0.6rem;
+  line-height: 1.35;
+}
+.aim-warn { color: var(--coral); }
+.aim-clear { color: var(--green); }

@@ -23,6 +23,7 @@ without a Supabase project.
     node test/tagsview.js     every tag on screen at once, at five sizes
     node test/progress.js     how far in a task is, and what that changes
     node test/practice.js     practice tags, and the queue not repeating itself
+    node test/aim.js          how much today needs to hold, and when it is too much
     node test/sweep.js        every control, once, looking for console errors
 
 Each exits non-zero on a failed check or any console error.

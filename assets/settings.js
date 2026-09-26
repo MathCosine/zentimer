@@ -136,6 +136,23 @@ window.Panel = (function () {
       'a system notification too');
   }
 
+  function drawLoad() {
+    var box = section('a full day', 'the point at which today is asking too much');
+    var caps = window.Plan ? Plan.caps() : { work: 330, practice: 240 };
+
+    row(box, 'homework', number(caps.work / 60, 0.5, 15, 0.5, function (h) {
+      api.setLoad(Math.round(h * 60), Plan.caps().practice);
+    }), 'hours in a day');
+
+    row(box, 'practice', number(caps.practice / 60, 0, 15, 0.5, function (h) {
+      api.setLoad(Plan.caps().work, Math.round(h * 60));
+    }), 'hours in a day');
+
+    box.appendChild(node('p', 'set-note',
+      'Work is spread to finish two days before it is due. When that asks for ' +
+      'more than this, today says so rather than pretending.'));
+  }
+
   function drawDay() {
     var box = section('your day', 'the hours the timeline covers');
     var starts = node('input', 'set-time');
@@ -482,6 +499,7 @@ window.Panel = (function () {
     drawStats();
     drawTimer();
     drawDay();
+    drawLoad();
     drawTags();
     drawLists();
     drawBin();

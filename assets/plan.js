@@ -2293,6 +2293,117 @@ window.Plan = (function () {
     });
   }
 
+  /* ---------- how much today needs to hold ---------- */
+
+  /* Finishing on the deadline is finishing late, in practice: something always
+     goes wrong the night before. So work is spread to land a couple of days
+     early, and today's share is what that spreading asks for. */
+  var EARLY_DAYS = 2;
+
+  function daysBetween(fromKey, toKey) {
+    return Math.round((new Date(toKey + 'T12:00') - new Date(fromKey + 'T12:00')) / 86400000);
+  }
+
+  /* Minutes logged today, split by what the tag is for. */
+  function doneToday(key) {
+    var out = { work: 0, practice: 0 };
+    Store.state().logs.forEach(function (log) {
+      if (log.deletedAt || log.date !== key) return;
+      var task = log.taskId ? Store.taskById(log.taskId) : null;
+      var mins = (log.ms || 0) / 60000;
+      var practice = task && Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
+      out[practice ? 'practice' : 'work'] += mins;
+    });
+    out.work = Math.round(out.work);
+    out.practice = Math.round(out.practice);
+    return out;
+  }
+
+  function todaysAim() {
+    var key = Store.dayKey();
+    var work = 0, practice = 0, tightest = null;
+
+    Store.tasks().forEach(function (task) {
+      if (Store.isDone(task, key)) return;
+      var left = leftOf(task);
+      var practising = Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
+
+      if (practising && !task.due) return;      // counted below, by the day's worth
+
+      var deadline = Store.dueFor(task, key);
+      if (!deadline) return;                    // no deadline, no share of today
+
+      /* Aim to be finished EARLY_DAYS before it is due, and never later than
+         the deadline itself. Everything already late is today's problem. */
+      var slack = Math.max(0, daysBetween(key, deadline) - EARLY_DAYS);
+      var over = slack + 1;                     // today counts as one of the days
+      var share = left / over;
+      work += share;
+      if (!tightest || daysBetween(key, deadline) < tightest) tightest = daysBetween(key, deadline);
+    });
+
+    /* Practice is not a deadline, so its share is simply a day's worth of it:
+       the tasks you have said make a day, as long as they take. */
+    Store.tags().forEach(function (tag) {
+      if (tag.kind !== 'practice') return;
+      var how = Store.practiceToday(tag.id, key);
+      if (!how || how.enough) return;
+      var left = Store.tasks().filter(function (t) {
+        return !Store.isDone(t, key) && (t.tags || []).indexOf(tag.id) !== -1;
+      }).sort(function (a, b) { return leftOf(a) - leftOf(b); });
+      left.slice(0, Math.max(0, how.want - how.done)).forEach(function (t) { practice += leftOf(t); });
+    });
+
+    var did = doneToday(key);
+    return {
+      work: Math.round(work / 5) * 5,
+      practice: Math.round(practice / 5) * 5,
+      did: did,
+      tightest: tightest,
+      overWork: work > caps.work,
+      overPractice: practice > caps.practice
+    };
+  }
+
+  var caps = { work: 330, practice: 240 };      // the point at which a day is too full
+
+  function renderAim() {
+    if (!el.aim) return;
+    var aim = todaysAim();
+    el.aim.textContent = '';
+
+    if (!aim.work && !aim.practice) {
+      el.aim.hidden = true;
+      return;
+    }
+    el.aim.hidden = false;
+
+    function bar(label, want, got, over) {
+      var line = node('div', 'aim-line' + (got >= want ? ' is-met' : '') + (over ? ' is-over' : ''));
+      line.appendChild(node('span', 'aim-name', label));
+      var track = node('span', 'aim-track');
+      var fill = node('span', 'aim-fill');
+      fill.style.width = Math.min(100, want ? Math.round(got / want * 100) : 100) + '%';
+      track.appendChild(fill);
+      line.appendChild(track);
+      line.appendChild(node('span', 'aim-num',
+        got >= want ? 'done \u2713' : spanLabel(Math.max(0, want - got)) + ' to go'));
+      line.title = spanLabel(got) + ' of ' + spanLabel(want) +
+        (over ? ' \u2014 more than a day comfortably holds' : '');
+      return line;
+    }
+
+    if (aim.work) el.aim.appendChild(bar('homework', aim.work, aim.did.work, aim.overWork));
+    if (aim.practice) el.aim.appendChild(bar('practice', aim.practice, aim.did.practice, aim.overPractice));
+
+    if (aim.overWork || aim.overPractice) {
+      el.aim.appendChild(node('p', 'aim-warn',
+        'more than a day holds \u2014 push something back or accept a late one'));
+    } else if (aim.did.work >= aim.work && aim.did.practice >= aim.practice) {
+      el.aim.appendChild(node('p', 'aim-clear', 'deadlines are covered \u2014 the rest is yours'));
+    }
+  }
+
   /* ---------- the week ---------- */
 
   function weekDays() {
@@ -2523,6 +2634,7 @@ window.Plan = (function () {
       renderTimeline();
       renderWeek();
       renderQueue();
+      renderAim();
       renderBlockBar();
       renderNow();
     });
@@ -2545,7 +2657,7 @@ window.Plan = (function () {
       addHelp: $('addHelp'), addSheet: $('addSheet'),
       sortBtn: $('sortBtn'), sortRow: $('sortRow'), sortPicks: $('sortPicks'), sortDir: $('sortDir'),
       weekBtn: $('weekBtn'), weekWrap: $('weekWrap'), week: $('week'),
-      timesBtn: $('timesBtn'), queue: $('queue'),
+      timesBtn: $('timesBtn'), queue: $('queue'), aim: $('aim'),
       tagsBtn: $('tagsBtn'), tagGrid: $('tagGrid'),
       timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'), blockBar: $('blockBar'),
       nowStrip: $('nowStrip'), nowTitle: $('nowTitle'), nowWhen: $('nowWhen'), nowShift: $('nowShift'),
@@ -2574,6 +2686,12 @@ window.Plan = (function () {
     setDay: function (start, end) {
       DAY_START = clamp(start, 0, 1380);
       DAY_END = clamp(end, DAY_START + 120, 1440);
+      render();
+    },
+    caps: function () { return { work: caps.work, practice: caps.practice }; },
+    setCaps: function (work, practice) {
+      caps.work = clamp(work, 30, 900);
+      caps.practice = clamp(practice, 0, 900);
       render();
     },
     dayStart: function () { return DAY_START; },
