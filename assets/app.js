@@ -80,7 +80,10 @@
     write(KEY_ALARMS, alarms);
   }
 
+  /* The same day the planner is on, so a session finished at half past twelve
+     is filed with the evening it belonged to rather than the morning after. */
   function dayKey(d) {
+    if (window.Store) return Store.dayKey(d);
     d = d || new Date();
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   }
@@ -847,6 +850,7 @@
         settings.dayEnd = end;
         if (window.Plan) {
           Plan.setDay(start, end);
+          if (window.Store) Store.setDayStart(start);
           settings.dayStart = Plan.dayStart();
           settings.dayEnd = Plan.dayEnd();
         }
@@ -1243,6 +1247,8 @@
     }
 
     applyTheme();
+    // before anything asks what day it is
+    if (window.Store) Store.setDayStart(settings.dayStart);
     if (window.Plan) {
       Plan.init({ hour12: settings.hour12 });   // before the first render reaches into it
       Plan.setDay(settings.dayStart, settings.dayEnd);

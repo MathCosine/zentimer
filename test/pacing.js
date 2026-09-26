@@ -20,7 +20,7 @@ const { chromium } = require('./browser');
   await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(1100);
 
   await p.evaluate(() => {
-    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
     // plenty of homework, some practice, and one thing you can tick off fast
     Store.addTask({ title: 'MSB Problem set', due: on(1), mins: 60 });
     Store.addTask({ title: 'MSB Reading', due: on(2), mins: 50 });

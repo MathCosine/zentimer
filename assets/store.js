@@ -190,9 +190,32 @@ window.Store = (function () {
     return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   }
 
-  function dayKey(d) {
-    d = d || new Date();
+  /* When your day turns over. Midnight is the calendar's answer, not a
+     student's: work finished at half past twelve belongs to the evening it
+     was part of, not to the morning that has not happened yet. So the day
+     rolls at the hour your day starts -- the same hour the timeline begins,
+     which you set in the settings -- and anything before it counts to the day
+     before. */
+  var dayStartMin = 0;
+
+  function setDayStart(min) {
+    dayStartMin = Math.max(0, Math.min(12 * 60, Math.round(min || 0)));
+  }
+
+  function calendarKey(d) {
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  /* Which day a moment in time belongs to. */
+  function dayOf(stamp) {
+    var at = typeof stamp === 'number' ? stamp : (stamp ? +stamp : Date.now());
+    return calendarKey(new Date(at - dayStartMin * 60000));
+  }
+
+  /* No date means now, and now is a moment, so it gets the same treatment. A
+     date handed in is a date on the calendar and stays one. */
+  function dayKey(d) {
+    return d ? calendarKey(d) : dayOf(Date.now());
   }
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -382,7 +405,7 @@ window.Store = (function () {
   function finishedOn(task, key) {
     var when = key || dayKey();
     if (repeats(task)) return !!task.completions[when];
-    return !!task.done && !!task.doneAt && dayKey(new Date(task.doneAt)) === when;
+    return !!task.done && !!task.doneAt && dayOf(task.doneAt) === when;
   }
 
   function toggleDone(taskId, key) {
@@ -716,6 +739,8 @@ window.Store = (function () {
     quiet: save,      // save it, but do not make the whole planner redraw
 
     dayKey: dayKey,
+    dayOf: dayOf,
+    setDayStart: setDayStart,
     minutesNow: minutesNow,
     clockLabel: clockLabel,
 

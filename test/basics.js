@@ -35,7 +35,7 @@ const CONTRAST = `(() => {
     ok ? pass++ : fail++; };
 
   const seed = p => p.evaluate(() => {
-    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
     Store.addTask({ title: 'PHY Mastering Week 5', due: on(1), mins: 45 });
     Store.addTask({ title: 'TAA Research essay', due: on(6), mins: 360 });
     Store.addTask({ title: 'EXTRA OTIS', repeat: 'daily', mins: 30 });

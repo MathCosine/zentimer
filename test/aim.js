@@ -28,7 +28,7 @@ const { chromium } = require('./browser');
 
   console.log('--- only big things are spread ---');
   await p.evaluate(() => {
-    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
     // forty minutes due in five days: nobody does eight minutes of it a day
     Store.addTask({ title: 'MSB Worksheet', due: on(5), mins: 40 });
   });
@@ -39,7 +39,7 @@ const { chromium } = require('./browser');
 
   console.log('--- work is spread to finish two days early ---');
   await p.evaluate(() => {
-    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
     /* Six hours due in six days. Finishing two days early means it has to be
        done by day four, and today is one of those days, so five days share it. */
     Store.addTask({ title: 'MSB Big project', due: on(6), mins: 360 });
@@ -68,7 +68,7 @@ const { chromium } = require('./browser');
   console.log('--- something due tomorrow is all today ---');
   await p.evaluate(() => {
     Store.tasks().forEach(t => Store.removeTask(t.id));
-    const d = new Date(); d.setDate(d.getDate() + 1);
+    const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + 1);
     Store.addTask({ title: 'PHY Essay', due: Store.dayKey(d), mins: 90 });
   });
   await p.waitForTimeout(800);
@@ -108,7 +108,7 @@ const { chromium } = require('./browser');
   await p.evaluate(() => {
     Store.tasks().forEach(t => Store.removeTask(t.id));
     Store.state().logs.length = 0;
-    const d = new Date(); d.setDate(d.getDate() + 1);
+    const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + 1);
     Store.addTask({ title: 'MSB WA1', due: Store.dayKey(d), mins: 45 });
     Store.addTask({ title: 'PHY Mastering', due: Store.dayKey(d), mins: 60 });
   });
@@ -147,7 +147,7 @@ const { chromium } = require('./browser');
   await p.evaluate(() => {
     Store.tasks().forEach(t => Store.removeTask(t.id));
     Store.state().logs.length = 0;
-    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
     // three finished days ago, and two still to do
     ['MSB Old one','PHY Old two','LATIN Old three'].forEach(title => {
       const t = Store.addTask({ title: title, due: on(1), mins: 60 });
@@ -174,7 +174,7 @@ const { chromium } = require('./browser');
   await p.evaluate(() => {
     Store.tasks().forEach(t => Store.removeTask(t.id));
     Store.state().logs.length = 0;
-    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
     Store.addTask({ title: 'MSB WA1', due: on(1), mins: 45 });          // what today is asking for
     Store.addTask({ title: 'TAA Reading', mins: 30 });                  // no deadline at all
     Store.addTask({ title: 'PHY Later worksheet', due: on(6), mins: 40 });   // not today's problem
@@ -197,11 +197,44 @@ const { chromium } = require('./browser');
   check('nor does getting ahead on next week', (await aim(p)).lines[0].num, '45m');
   check('but it is on the bar', (await aim(p)).lines[0].fill, '61%');
 
+  console.log('--- the small hours belong to the night before ---');
+  check('the day starts when the timeline does', await p.evaluate(() => Plan.dayStart()), 300);
+  check('half past midnight is yesterday', await p.evaluate(() => {
+    const at = new Date(); at.setHours(0, 34, 0, 0);
+    return Store.dayOf(+at) !== Store.dayKey(); }), true);
+  check('and half past six this morning is today', await p.evaluate(() => {
+    const at = new Date(); at.setHours(6, 30, 0, 0);
+    return Store.dayOf(+at) === Store.dayKey(); }), true);
+
+  await p.evaluate(() => {
+    Store.tasks().forEach(t => Store.removeTask(t.id));
+    Store.state().logs.length = 0;
+    const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    const t = Store.addTask({ title: 'PHY Workbook', due: on(1), mins: 30 });
+    Store.toggleDone(t.id, Store.dayKey());
+    const at = new Date(); at.setHours(0, 34, 0, 0);
+    t.doneAt = +at;                                  // finished at half past twelve
+    Store.addTask({ title: 'MSB WA1', due: on(1), mins: 45 });
+    Store.quiet();
+  });
+  await p.reload(); await p.waitForTimeout(1200);
+  check('so last night\u2019s work is not on this morning\u2019s bar',
+    (await aim(p)).lines[0].fill, '0%');
+
+  /* Set the day to start at midnight and the same tick is today's again --
+     which is what the old behaviour was, for anyone who wants it. */
+  await p.evaluate(() => { Store.setDayStart(0); Plan.render(); });
+  await p.waitForTimeout(600);
+  check('unless your day really does start at midnight',
+    (await aim(p)).lines[0].fill !== '0%', true);
+  await p.evaluate(() => { Store.setDayStart(300); Plan.render(); });
+  await p.waitForTimeout(500);
+
   console.log('--- and it will say what is on the bar ---');
   await p.evaluate(() => {
     Store.tasks().forEach(t => Store.removeTask(t.id));
     Store.state().logs.length = 0;
-    const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+    const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
     for (let i = 0; i < 4; i++) {                   // finished, but not today
       const t = Store.addTask({ title: 'MSB Old ' + i, due: on(-2), mins: 60 });
       Store.toggleDone(t.id, Store.dayKey());
@@ -239,7 +272,7 @@ const { chromium } = require('./browser');
   console.log('--- and when the day is asking too much ---');
   await p.evaluate(() => {
     Store.tasks().forEach(t => Store.removeTask(t.id));
-    const d = new Date(); d.setDate(d.getDate() + 1);
+    const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + 1);
     Store.addTask({ title: 'MSB Enormous', due: Store.dayKey(d), mins: 480 });
   });
   await p.waitForTimeout(800);

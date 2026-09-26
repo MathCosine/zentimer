@@ -17,7 +17,7 @@ const WIDTHS = [260, 280, 300, 320, 360, 380, 412, 430];
        queue and the tag tiles are all on screen at this width -- one task with
        no deadline leaves most of the card empty and measures nothing. */
     await p.evaluate(() => {
-      const on = n => { const d = new Date(); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+      const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
       Store.addTask({ title: 'TAA Research essay on the causes of the war', due: on(6), mins: 360 });
       Store.addTask({ title: 'MSB WA1', due: on(1), mins: 45 });
       Store.addTask({ title: 'LATIN Email the teacher about the test', due: on(2), mins: 10 });

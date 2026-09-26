@@ -82,7 +82,7 @@ const { chromium } = require('./browser');
 
   console.log('\n--- but a real deadline on a practice tag is still real ---');
   await p.evaluate(() => {
-    const y = new Date(); y.setDate(y.getDate() - 1);
+    const y = new Date(Store.dayKey() + 'T12:00'); y.setDate(y.getDate() - 1);
     Store.addTask({ title: 'EXTRA Competition entry', due: Store.dayKey(y), mins: 20 }); });
   await p.waitForTimeout(800);
   check('an overdue one comes back to the top', (await queue(p))[0].title, 'EXTRA Competition entry');

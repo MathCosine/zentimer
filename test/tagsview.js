@@ -39,7 +39,7 @@ const { chromium } = require('./browser');
   await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(900);
   await seed(p, ['PHY one','PHY two','PHY three','MSB only one','a task with no tag at all']);
   await p.evaluate(() => {
-    const late = new Date(); late.setDate(late.getDate() - 3);
+    const late = new Date(Store.dayKey() + 'T12:00'); late.setDate(late.getDate() - 3);
     const t = Store.tasks().find(x => x.title === 'MSB only one');
     Store.updateTask(t.id, { due: Store.dayKey(late) });
   });

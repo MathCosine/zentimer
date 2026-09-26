@@ -35,8 +35,8 @@ const { chromium } = require('./browser');
 
   console.log('\n--- what it suggests ---');
   await p.evaluate(() => {
-    const y = new Date(); y.setDate(y.getDate() - 2);
-    const soon = new Date(); soon.setDate(soon.getDate() + 5);
+    const y = new Date(Store.dayKey() + 'T12:00'); y.setDate(y.getDate() - 2);
+    const soon = new Date(Store.dayKey() + 'T12:00'); soon.setDate(soon.getDate() + 5);
     const key = d => Store.dayKey(d);
     Store.addTask({ title: 'TAA Overdue essay', due: key(y), mins: 30 });
     Store.addTask({ title: 'PHY Due today', due: Store.dayKey(), mins: 20 });
