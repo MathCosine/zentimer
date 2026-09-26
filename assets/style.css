@@ -2437,3 +2437,55 @@ body.dragging-task .task-list { pointer-events: none; }
 .tag-grid.is-mini .tile-head { border-bottom: 0; padding-bottom: 0; }
 .tag-grid.is-mini .tile-name { font-size: 0.6rem; }
 .tag-grid.is-mini .tile-count { font-size: 0.8rem; color: var(--ink); }
+
+/* ---------- what the add box understands ---------- */
+
+.add-help {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  align-self: center;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 50%;
+  border: 1.5px solid var(--hair);
+  background: none;
+  color: var(--soft);
+  cursor: pointer;
+}
+.add-help:hover { border-color: var(--accent); color: var(--accent); }
+.add-help[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+.add-sheet {
+  display: grid;
+  gap: 2px;
+  margin: -2px 2px 0;
+  padding: 8px 9px;
+  border-radius: 11px;
+  background: var(--well);
+  border: 1.5px solid var(--hair);
+  animation: pop-in 160ms var(--ease) both;
+}
+.sheet-line { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.sheet-bit {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.64rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1.5px solid var(--hair);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sheet-bit:hover { border-color: var(--accent); color: var(--accent); }
+.sheet-says {
+  font-size: 0.62rem;
+  color: var(--soft);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

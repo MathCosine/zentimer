@@ -25,6 +25,54 @@ const { chromium } = require('./browser');
     await p.press('#taskInput','Enter'); await p.waitForTimeout(140);
     return hint.some(h => h.startsWith('due')); })(), false);
 
+  console.log('\n--- a month and a number, in any order ---');
+  for (const [text, want] of [['PHY essay october 12','oct 12'],['MSB WA1 oct 12th','oct 12'],
+                              ['TAA notes 12 october','oct 12'],['LATIN drill 3rd november','nov 3'],
+                              ['ART project octber 5','oct 5'],['CHEM lab dec 1','dec 1']]) {
+    await p.fill('#taskInput', text); await p.waitForTimeout(170);
+    const hint = await p.evaluate(() => [...document.querySelectorAll('#addHint .add-bit')].map(x=>x.textContent));
+    check(JSON.stringify(text), hint.includes('due ' + want), true);
+  }
+  check('a month with no number beside it is just a word', await (async () => {
+    await p.fill('#taskInput','PHY may notes'); await p.waitForTimeout(180);
+    return p.evaluate(() => [...document.querySelectorAll('#addHint .add-bit')].some(x => x.textContent.startsWith('due'))); })(), false);
+  check('a bare ordinal is the next one of those', await (async () => {
+    await p.fill('#taskInput','BIO revision 20th'); await p.waitForTimeout(180);
+    return p.evaluate(() =>
+      [...document.querySelectorAll('#addHint .add-bit')].some(x => x.textContent.startsWith('due')));
+  })(), true);
+
+  console.log('\n--- roughly how long ---');
+  for (const [text, want] of [['PHY essay high','long · 1h'],['MSB reading low','quick · 15m'],
+                              ['TAA notes med','medium · 30m'],['HIST essay medium','medium · 30m']]) {
+    await p.fill('#taskInput', text); await p.waitForTimeout(170);
+    const hint = await p.evaluate(() => [...document.querySelectorAll('#addHint .add-bit')].map(x=>x.textContent));
+    check(JSON.stringify(text), hint.includes(want), true);
+  }
+  check('an exact length wins over a rough one', await (async () => {
+    await p.fill('#taskInput','ART sketch 45m high'); await p.waitForTimeout(180);
+    return p.evaluate(() => [...document.querySelectorAll('#addHint .add-bit')].map(x=>x.textContent)); })(),
+    ['ART','45m']);
+  await p.fill('#taskInput','PHY roughly long essay'); await p.press('#taskInput','Enter'); await p.waitForTimeout(250);
+  check('and it is really stored', await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title.includes('roughly')); return t.mins; }), 60);
+
+  console.log('\n--- the cheat sheet ---');
+  await p.fill('#taskInput',''); await p.waitForTimeout(150);
+  await p.click('#addHelp'); await p.waitForTimeout(400);
+  check('it opens', await p.evaluate(() => !document.getElementById('addSheet').hidden), true);
+  check('and lists what it knows', await p.evaluate(() =>
+    [...document.querySelectorAll('.sheet-bit')].map(b => b.textContent)),
+    ['PHY','friday','october 12','tomorrow','4pm','45m','low','every day']);
+  await p.locator('.sheet-bit', { hasText: /^october 12$/ }).click(); await p.waitForTimeout(350);
+  check('tapping a line puts it in the box', await p.evaluate(() =>
+    document.getElementById('taskInput').value), 'october 12 ');
+  check('and the box read it', await p.evaluate(() =>
+    [...document.querySelectorAll('#addHint .add-bit')].some(x => x.textContent.startsWith('due'))), true);
+  await p.click('#addHelp'); await p.waitForTimeout(300);
+  check('it closes again', await p.evaluate(() => document.getElementById('addSheet').hidden), true);
+  await p.fill('#taskInput',''); await p.waitForTimeout(150);
+
   console.log('\n--- the due button on the row ---');
   check('an undated task says "due"', await p.evaluate(() => {
     const rows = [...document.querySelectorAll('.task')];

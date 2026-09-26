@@ -15,6 +15,7 @@ window.Plan = (function () {
     editing: null,           // task id open for editing
     selected: null,          // block id open in the block bar
     adding: null,            // 'paste' | 'list' | null
+    helping: false,          // the cheat sheet under the add box
     dueFor: null,            // the task whose deadline picker is open
     split: false,            // show two panes instead of one list
     top: [],                 // tag ids that belong in the upper pane
@@ -249,6 +250,38 @@ window.Plan = (function () {
 
   var SHORT_DAYS = { sun: 0, mon: 1, tue: 2, tues: 2, wed: 3, weds: 3, thu: 4, thur: 4, thurs: 4, fri: 5, sat: 6 };
 
+  var MONTHS = ['january', 'february', 'march', 'april', 'may', 'june',
+                'july', 'august', 'september', 'october', 'november', 'december'];
+  var SHORT_MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+                       jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11 };
+
+  /* Same rule as the days: an abbreviation is exact, a full name may be a
+     letter or two out. */
+  function monthFrom(word) {
+    var w = String(word || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!w) return -1;
+    if (SHORT_MONTHS[w] !== undefined) return SHORT_MONTHS[w];
+    var found = MONTHS.indexOf(w);
+    if (found !== -1) return found;
+    if (w.length < 5) return -1;
+    var best = -1, score = w.length >= 7 ? 3 : 2;
+    MONTHS.forEach(function (name, index) {
+      var d = nearness(w, name);
+      if (d < score) { score = d; best = index; }
+    });
+    return best;
+  }
+
+  /* The next time that day-of-month comes round, this month or next. */
+  function onDay(month, day) {
+    var now = new Date();
+    var year = now.getFullYear();
+    var made = new Date(year, month, day, 12);
+    if (made.getMonth() !== month) return null;          // no 31st of February
+    if (made < new Date(Store.dayKey() + 'T00:00')) made = new Date(year + 1, month, day, 12);
+    return made;
+  }
+
   /* An abbreviation has to be exact -- "man" is one letter from "mon" and is
      usually just a word. A full day name may be misspelt by one. */
   function weekdayFrom(word) {
@@ -282,7 +315,8 @@ window.Plan = (function () {
      left in the title, so plain typing still works exactly as before. */
   function parseAdd(raw) {
     var text = String(raw || '').trim();
-    var out = { title: text, due: null, at: null, mins: null, repeat: 'none', weekday: null, found: [] };
+    var out = { title: text, due: null, at: null, mins: null, effort: null,
+                repeat: 'none', weekday: null, found: [] };
     if (!text) { out.title = ''; return out; }
 
     function take(re, apply) {
@@ -318,6 +352,19 @@ window.Plan = (function () {
       out.mins = mins;
       out.found.push(mins >= 60 ? Math.floor(mins / 60) + 'h' + (mins % 60 ? ' ' + (mins % 60) + 'm' : '') : mins + 'm');
     });
+
+    /* How long, roughly, for the times you would not bother counting minutes.
+       An exact length above always wins; this only fills the gap. */
+    if (out.mins === null) {
+      take(/\b(low|quick|short|med|medium|normal|high|long|big)\b/i, function (hit) {
+        var word = hit[1].toLowerCase();
+        var size = /low|quick|short/.test(word) ? 15
+                 : /high|long|big/.test(word) ? 60 : 30;
+        out.mins = size;
+        out.effort = size === 15 ? 'quick' : size === 60 ? 'long' : 'medium';
+        out.found.push(out.effort + ' \u00b7 ' + spanLabel(size));
+      });
+    }
 
     // a time of day: "4pm", "16:30", "at 9"
     take(/\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b(?:at\s+)?(\d{1,2}):(\d{2})\b/i, function (hit) {
@@ -374,6 +421,45 @@ window.Plan = (function () {
       return false;
     });
 
+    /* "october 12", "12 oct", "october 12th" -- and the same misspelt. Read as
+       words with a number beside them rather than as a pattern, because there
+       is no pattern for "octber". */
+    if (!out.due) {
+      var bits = text.match(/[a-z]{3,10}|\d{1,2}(?:st|nd|rd|th)?/gi) || [];
+      for (var m = 0; m < bits.length && !out.due; m++) {
+        var month = monthFrom(bits[m]);
+        if (month === -1) continue;
+        var before = m > 0 ? bits[m - 1] : '';
+        var after = m + 1 < bits.length ? bits[m + 1] : '';
+        var num = /^\d{1,2}(st|nd|rd|th)?$/i.test(after) ? after
+                : /^\d{1,2}(st|nd|rd|th)?$/i.test(before) ? before : '';
+        if (!num) continue;
+        var day = parseInt(num, 10);
+        if (day < 1 || day > 31) continue;
+        var made = onDay(month, day);
+        if (!made) continue;
+        out.due = dayKeyFrom(made);
+        out.found.push('due ' + dueLabel(out.due));
+        text = text
+          .replace(new RegExp('\\b' + bits[m] + '\\b\\s*', 'i'), ' ')
+          .replace(new RegExp('\\b' + num + '\\b\\s*', 'i'), ' ')
+          .replace(/\s{2,}/g, ' ').trim();
+      }
+    }
+
+    /* A bare ordinal on its own: "the 12th" is the next twelfth. */
+    if (!out.due) {
+      take(/\b(\d{1,2})(st|nd|rd|th)\b/i, function (hit) {
+        var day = +hit[1];
+        if (day < 1 || day > 31) return false;
+        var now = new Date();
+        var made = onDay(now.getDate() <= day ? now.getMonth() : (now.getMonth() + 1) % 12, day);
+        if (!made) return false;
+        out.due = dayKeyFrom(made);
+        out.found.push('due ' + dueLabel(out.due));
+      });
+    }
+
     /* No pattern can enumerate the ways a day gets misspelt, so whatever is
        left is read word by word: "mondya" is a Monday, "monitor" is not. */
     if (!out.due && out.repeat === 'none') {
@@ -402,6 +488,42 @@ window.Plan = (function () {
     if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
     var read = parseAdd('x ' + clean);
     return read.due || null;
+  }
+
+  /* What the box understands, said plainly, with every line tappable so it
+     goes in rather than having to be remembered and retyped. */
+  var SHEET = [
+    ['PHY', 'a capital word becomes a tag'],
+    ['friday', 'any day, short or long, typos forgiven'],
+    ['october 12', 'or oct 12, 12 oct, the 12th, 12/3'],
+    ['tomorrow', 'and today'],
+    ['4pm', 'or 16:30, at 9'],
+    ['45m', 'or 1h, 1h30, 20 min'],
+    ['low', 'roughly how long: low, med, high'],
+    ['every day', 'or weekdays, every tuesday']
+  ];
+
+  function renderSheet() {
+    if (!el.addSheet) return;
+    el.addSheet.hidden = !ui.helping;
+    el.addHelp.setAttribute('aria-pressed', String(!!ui.helping));
+    if (!ui.helping || el.addSheet.childNodes.length) return;
+
+    SHEET.forEach(function (pair) {
+      var line = node('div', 'sheet-line');
+      var bit = node('button', 'sheet-bit', pair[0]);
+      bit.type = 'button';
+      bit.title = 'Put it in the box';
+      bit.addEventListener('click', function () {
+        var now = el.taskInput.value.replace(/\s+$/, '');
+        el.taskInput.value = (now ? now + ' ' : '') + pair[0] + ' ';
+        el.taskInput.focus();
+        renderHint();
+      });
+      line.appendChild(bit);
+      line.appendChild(node('span', 'sheet-says', pair[1]));
+      el.addSheet.appendChild(line);
+    });
   }
 
   /* what it understood, shown under the box before you commit to it */
@@ -1616,6 +1738,12 @@ window.Plan = (function () {
       renderHint();
     });
 
+    el.addHelp.addEventListener('click', function () {
+      ui.helping = !ui.helping;
+      render();
+      if (ui.helping) el.taskInput.focus();
+    });
+
     el.taskInput.addEventListener('input', renderHint);
     el.taskInput.addEventListener('blur', function () { setTimeout(renderHint, 120); });
 
@@ -2287,6 +2415,7 @@ window.Plan = (function () {
       renderViews();
       renderChips();
       renderSort();
+      renderSheet();
       renderAdders();
       renderTasks();
       renderTagGrid();
@@ -2312,6 +2441,7 @@ window.Plan = (function () {
       taskAdd: $('taskAdd'), taskInput: $('taskInput'), bulkBtn: $('bulkBtn'), listBtn: $('listBtn'),
       doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'), addHint: $('addHint'),
       findBtn: $('findBtn'), findRow: $('findRow'), findInput: $('findInput'), findClear: $('findClear'),
+      addHelp: $('addHelp'), addSheet: $('addSheet'),
       sortBtn: $('sortBtn'), sortRow: $('sortRow'), sortPicks: $('sortPicks'), sortDir: $('sortDir'),
       weekBtn: $('weekBtn'), weekWrap: $('weekWrap'), week: $('week'),
       timesBtn: $('timesBtn'), queue: $('queue'),
