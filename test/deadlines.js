@@ -57,13 +57,40 @@ const { chromium } = require('./browser');
   check('and it is really stored', await p.evaluate(() => {
     const t = Store.tasks().find(x => x.title.includes('roughly')); return t.mins; }), 60);
 
+  console.log('\n--- a backslash keeps a word out of it ---');
+  const reads = async (text) => { await p.fill('#taskInput', text); await p.waitForTimeout(170);
+    return p.evaluate(() => {
+      const h = document.getElementById('addHint');
+      return { bits: h.hidden ? [] : [...h.querySelectorAll('.add-bit')].map(x=>x.textContent),
+               rest: h.hidden ? null : (h.querySelector('.add-rest')||{}).textContent }; }); };
+
+  check('without one, long is an hour', (await reads('PHY long division practice')).bits.includes('long \u00b7 1h'), true);
+  check('with one, it stays in the title', await reads('PHY \\long division practice'),
+    { bits: ['PHY'], rest: 'PHY long division practice' });
+  check('a day can be escaped too', (await reads('MSB essay \\friday plans')).rest, 'MSB essay friday plans');
+  check('and a month', (await reads('TAA \\october notes')).rest, 'TAA october notes');
+  check('and a length', (await reads('ART \\45m sprint idea')).rest, 'ART 45m sprint idea');
+  check('two in one line', (await reads('MSB \\long division \\friday notes')).rest,
+    'MSB long division friday notes');
+  check('a doubled backslash is a real one', (await reads('HIST a \\\\ backslash')).rest, 'HIST a \\ backslash');
+
+  await p.fill('#taskInput','\\PHY is a band name'); await p.press('#taskInput','Enter'); await p.waitForTimeout(300);
+  check('an escaped first word is not made into a tag', await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'PHY is a band name');
+    return { found: !!t, tags: t ? Store.tagsOf(t).length : -1 }; }), { found: true, tags: 0 });
+  await p.fill('#taskInput','PHY ordinary task'); await p.press('#taskInput','Enter'); await p.waitForTimeout(300);
+  check('but an ordinary one still is', await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'PHY ordinary task');
+    return t ? Store.tagsOf(t).map(x => x.name) : null; }), ['PHY']);
+  await p.fill('#taskInput',''); await p.waitForTimeout(150);
+
   console.log('\n--- the cheat sheet ---');
   await p.fill('#taskInput',''); await p.waitForTimeout(150);
   await p.click('#addHelp'); await p.waitForTimeout(400);
   check('it opens', await p.evaluate(() => !document.getElementById('addSheet').hidden), true);
   check('and lists what it knows', await p.evaluate(() =>
     [...document.querySelectorAll('.sheet-bit')].map(b => b.textContent)),
-    ['PHY','friday','october 12','tomorrow','4pm','45m','low','every day']);
+    ['PHY','friday','october 12','tomorrow','4pm','45m','low','every day','\\long']);
   await p.locator('.sheet-bit', { hasText: /^october 12$/ }).click(); await p.waitForTimeout(350);
   check('tapping a line puts it in the box', await p.evaluate(() =>
     document.getElementById('taskInput').value), 'october 12 ');

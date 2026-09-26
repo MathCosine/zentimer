@@ -313,10 +313,41 @@ window.Plan = (function () {
   /* "PHY essay tue 4pm 45m every week" -> a tagged task, due Tuesday, usually
      at 16:00, half an hour long, repeating. Anything it does not recognise is
      left in the title, so plain typing still works exactly as before. */
+  /* A backslash means "this word is just a word": \long stays in the title
+     instead of becoming an hour, \friday is not a deadline, \PHY is not a
+     tag. The escaped words are lifted out before any of the reading happens
+     and dropped back into the title afterwards, so nothing can match them --
+     which is simpler, and more reliable, than teaching each pattern to look
+     out for a backslash. A doubled \\ is a real backslash. */
+  var HOLD = '\u0001';        // stands in for a word that must not be read
+  var REAL_SLASH = '\u0002';
+
+  function shield(text) {
+    var kept = [];
+    var out = text.replace(/\\\\/g, REAL_SLASH).replace(/\\([^\s\\]+)/g, function (all, word) {
+      kept.push(word);
+      return HOLD;
+    });
+    return { text: out, kept: kept };
+  }
+
+  function unshield(text, kept) {
+    var i = 0;
+    return text
+      .replace(new RegExp(HOLD, 'g'), function () { return kept[i++] || ''; })
+      .replace(new RegExp(REAL_SLASH, 'g'), '\\')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
   function parseAdd(raw) {
-    var text = String(raw || '').trim();
-    var out = { title: text, due: null, at: null, mins: null, effort: null,
-                repeat: 'none', weekday: null, found: [] };
+    var typed = String(raw || '').trim();
+    var held = shield(typed);
+    var text = held.text;
+    var out = { title: typed, due: null, at: null, mins: null, effort: null,
+                repeat: 'none', weekday: null, found: [],
+                // an escaped first word must not be picked up as a tag either
+                autoTag: !/^\\/.test(typed) };
     if (!text) { out.title = ''; return out; }
 
     function take(re, apply) {
@@ -356,10 +387,12 @@ window.Plan = (function () {
     /* How long, roughly, for the times you would not bother counting minutes.
        An exact length above always wins; this only fills the gap. */
     if (out.mins === null) {
-      take(/\b(low|quick|short|med|medium|normal|high|long|big)\b/i, function (hit) {
+      /* "normal" and "big" were here too and had to go: they turn up in real
+         titles far more often than they mean a length. */
+      take(/\b(low|quick|short|med|medium|high|long)\b/i, function (hit) {
         var word = hit[1].toLowerCase();
         var size = /low|quick|short/.test(word) ? 15
-                 : /high|long|big/.test(word) ? 60 : 30;
+                 : /high|long/.test(word) ? 60 : 30;
         out.mins = size;
         out.effort = size === 15 ? 'quick' : size === 60 ? 'long' : 'medium';
         out.found.push(out.effort + ' \u00b7 ' + spanLabel(size));
@@ -474,8 +507,8 @@ window.Plan = (function () {
       }
     }
 
-    out.title = text.replace(/\s{2,}/g, ' ').trim();
-    var sniffed = Store.sniffTag ? Store.sniffTag(out.title) : null;
+    out.title = unshield(text, held.kept);
+    var sniffed = out.autoTag && Store.sniffTag ? Store.sniffTag(out.title) : null;
     if (sniffed) out.found.unshift(sniffed);
     return out;
   }
@@ -500,7 +533,8 @@ window.Plan = (function () {
     ['4pm', 'or 16:30, at 9'],
     ['45m', 'or 1h, 1h30, 20 min'],
     ['low', 'roughly how long: low, med, high'],
-    ['every day', 'or weekdays, every tuesday']
+    ['every day', 'or weekdays, every tuesday'],
+    ['\\long', 'a backslash keeps a word out of all this']
   ];
 
   function renderSheet() {
@@ -1730,7 +1764,7 @@ window.Plan = (function () {
       if (!read.title) return;
       var listId = ui.view !== 'all' ? ui.view : (Store.lists()[0] || {}).id;
       Store.addTask({
-        title: read.title, listId: listId,
+        title: read.title, listId: listId, autoTag: read.autoTag,
         due: read.due, at: read.at, mins: read.mins,
         repeat: read.repeat, weekday: read.weekday
       });
