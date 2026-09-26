@@ -5,6 +5,14 @@ window.Plan = (function () {
 
   var $ = function (id) { return document.getElementById(id); };
   var el = {};
+
+  /* An hour and a half is where a task stops being one sitting: at or above it
+     the planner spreads a task over the days it has, and below it spreading is
+     silly -- nobody does nine minutes of a forty minute worksheet five days
+     running -- so a small one waits for the day it is needed and is then done
+     whole. It is also what typing "high" means, so the word and the rule are
+     the same number. */
+  var BIG = 90;
   var ui = {
     date: null,              // the day on the timeline; null means follow today
     view: 'all',             // 'all' | listId
@@ -391,10 +399,12 @@ window.Plan = (function () {
          titles far more often than they mean a length. */
       take(/\b(low|quick|short|med|medium|high|long)\b/i, function (hit) {
         var word = hit[1].toLowerCase();
+        /* "high" is the size at which a task stops being one sitting and gets
+           spread across the days it has, so the word and the rule agree. */
         var size = /low|quick|short/.test(word) ? 15
-                 : /high|long/.test(word) ? 60 : 30;
+                 : /high|long/.test(word) ? BIG : 30;
         out.mins = size;
-        out.effort = size === 15 ? 'quick' : size === 60 ? 'long' : 'medium';
+        out.effort = size === 15 ? 'quick' : size === BIG ? 'long' : 'medium';
         out.found.push(out.effort + ' \u00b7 ' + spanLabel(size));
       });
     }
@@ -2374,12 +2384,6 @@ window.Plan = (function () {
      is not a six hour job today: it is an hour and ten minutes, six times. The
      same number decides the size of the block a suggestion makes, so what you
      are told to do and what lands on the day agree. */
-  /* An hour and a half is where a task stops being one sitting. Below it,
-     spreading is silly -- nobody does nine minutes of a forty minute worksheet
-     five days running -- so a small one waits for the day it is actually
-     needed and then is done whole. */
-  var BIG = 90;
-
   function shareOf(task, key) {
     key = key || Store.dayKey();
     var left = leftOf(task);

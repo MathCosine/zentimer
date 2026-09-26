@@ -43,7 +43,7 @@ const { chromium } = require('./browser');
   })(), true);
 
   console.log('\n--- roughly how long ---');
-  for (const [text, want] of [['PHY essay high','long · 1h'],['MSB reading low','quick · 15m'],
+  for (const [text, want] of [['PHY essay high','long · 1h 30m'],['MSB reading low','quick · 15m'],
                               ['TAA notes med','medium · 30m'],['HIST essay medium','medium · 30m']]) {
     await p.fill('#taskInput', text); await p.waitForTimeout(170);
     const hint = await p.evaluate(() => [...document.querySelectorAll('#addHint .add-bit')].map(x=>x.textContent));
@@ -54,8 +54,10 @@ const { chromium } = require('./browser');
     return p.evaluate(() => [...document.querySelectorAll('#addHint .add-bit')].map(x=>x.textContent)); })(),
     ['ART','45m']);
   await p.fill('#taskInput','PHY roughly long essay'); await p.press('#taskInput','Enter'); await p.waitForTimeout(250);
+  /* "high" is 1h 30m on purpose: it is the size at which the planner starts
+     spreading a task over the days it has rather than asking for all of it. */
   check('and it is really stored', await p.evaluate(() => {
-    const t = Store.tasks().find(x => x.title.includes('roughly')); return t.mins; }), 60);
+    const t = Store.tasks().find(x => x.title.includes('roughly')); return t.mins; }), 90);
 
   console.log('\n--- a backslash keeps a word out of it ---');
   const reads = async (text) => { await p.fill('#taskInput', text); await p.waitForTimeout(170);
@@ -64,7 +66,7 @@ const { chromium } = require('./browser');
       return { bits: h.hidden ? [] : [...h.querySelectorAll('.add-bit')].map(x=>x.textContent),
                rest: h.hidden ? null : (h.querySelector('.add-rest')||{}).textContent }; }); };
 
-  check('without one, long is an hour', (await reads('PHY long division practice')).bits.includes('long \u00b7 1h'), true);
+  check('without one, long is a stretch', (await reads('PHY long division practice')).bits.includes('long \u00b7 1h 30m'), true);
   check('with one, it stays in the title', await reads('PHY \\long division practice'),
     { bits: ['PHY'], rest: 'PHY long division practice' });
   check('a day can be escaped too', (await reads('MSB essay \\friday plans')).rest, 'MSB essay friday plans');
