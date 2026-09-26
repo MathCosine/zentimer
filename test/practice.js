@@ -75,6 +75,74 @@ const { chromium } = require('./browser');
   check('an overdue one comes back to the top', (await queue(p))[0].title, 'EXTRA Competition entry');
   check('and says so', (await queue(p))[0].why, 'overdue');
 
+  console.log('\n--- when there is not time for all of it, a place decides ---');
+  await p.evaluate(() => {
+    // only drills in the running, so the order is about them and nothing else
+    Store.tasks().filter(t => !(/^EXTRA /.test(t.title) && t.repeat === 'daily'))
+      .forEach(t => Store.removeTask(t.id));
+    ['Reading','Listening'].forEach(n => Store.addTask({ title: 'DRILLS ' + n, repeat: 'daily', mins: 20 }));
+    Store.addTask({ title: 'PRACTICE Piano', repeat: 'daily', mins: 25 });
+    Store.tasks().forEach(t => { if (Store.isDone(t, Store.dayKey())) Store.toggleDone(t.id, Store.dayKey()); });
+  });
+  await p.waitForTimeout(800);
+  check('the new names are practice too', await p.evaluate(() =>
+    Store.tags().filter(t => ['DRILLS','PRACTICE'].indexOf(t.name) !== -1).map(t => t.kind)),
+    ['practice','practice']);
+  const titles = async () => (await queue(p)).map(r => r.title);
+  const first = await titles();
+
+  await p.click('#settingsBtn'); await p.waitForTimeout(600);
+  const rankOf = name => p.evaluate(n => {
+    const row = [...document.querySelectorAll('.tag-row')]
+      .find(r => r.querySelector('.tag-name') && r.querySelector('.tag-name').value === n);
+    const sub = row.nextElementSibling;
+    return sub && sub.querySelector('.tag-rank') ? sub.querySelector('.tag-rank').textContent : null; }, name);
+  const tapRank = name => p.evaluate(n => {
+    const row = [...document.querySelectorAll('.tag-row')]
+      .find(r => r.querySelector('.tag-name') && r.querySelector('.tag-name').value === n);
+    row.nextElementSibling.querySelector('.tag-rank').click(); }, name);
+
+  check('every practice tag starts in no fixed place', await rankOf('DRILLS'), 'any order');
+  await tapRank('DRILLS'); await p.waitForTimeout(400);
+  check('one tap makes it first', await rankOf('DRILLS'), '1st');
+  /* Two taps walk PRACTICE past first place into second -- and DRILLS is
+     moved along rather than turfed out, so it is first again. */
+  await tapRank('PRACTICE'); await p.waitForTimeout(400);
+  await tapRank('PRACTICE'); await p.waitForTimeout(400);
+  check('another can be second', await rankOf('PRACTICE'), '2nd');
+  check('and the first one kept its place', await rankOf('DRILLS'), '1st');
+  await p.click('#settingsClose'); await p.waitForTimeout(700);
+
+  const ranked = await titles();
+  check('first place is asked for first', ranked[0], 'DRILLS Reading');
+  check('then second place', ranked[1], 'PRACTICE Piano');
+  check('and the unplaced one takes what is left', ranked[2].indexOf('EXTRA'), 0);
+  check('which is not the order it had before', JSON.stringify(ranked) !== JSON.stringify(first), true);
+
+  await p.evaluate(() => {
+    const t = Store.tags().find(x => x.name === 'EXTRA'); Store.setTagRank(t.id, 1); });
+  await p.waitForTimeout(700);
+  check('a second tag cannot also be first', await p.evaluate(() =>
+    Store.tags().filter(t => t.rank === 1).map(t => t.name)), ['EXTRA']);
+  check('and the queue follows it', (await titles())[0].indexOf('EXTRA'), 0);
+
+  /* Once first place has had its day's worth, it stops asking and second place
+     takes over -- which is the whole point of putting them in an order. */
+  await p.evaluate(() => {
+    const t = Store.tags().find(x => x.name === 'EXTRA');
+    Store.tasks().filter(x => (x.tags || []).indexOf(t.id) !== -1)
+      .forEach(x => { if (!Store.isDone(x, Store.dayKey())) Store.toggleDone(x.id, Store.dayKey()); }); });
+  await p.waitForTimeout(800);
+  check('with first place done, second leads', (await titles())[0], 'DRILLS Reading');
+
+  await p.evaluate(() => {
+    ['DRILLS','PRACTICE','EXTRA'].forEach(n => {
+      const t = Store.tags().find(x => x.name === n); Store.setTagRank(t.id, null); });
+    Store.tasks().filter(t => /^(DRILLS|PRACTICE) /.test(t.title)).forEach(t => Store.removeTask(t.id));
+    Store.tasks().forEach(t => { if (Store.isDone(t, Store.dayKey())) Store.toggleDone(t.id, Store.dayKey()); });
+  });
+  await p.waitForTimeout(800);
+
   console.log('\n--- and the guess is only a guess ---');
   await p.click('#settingsBtn'); await p.waitForTimeout(600);
   await flipExtra(); await p.waitForTimeout(500);
@@ -87,14 +155,11 @@ const { chromium } = require('./browser');
   /* As a subject its daily repeat is an ordinary thing due by the end of today,
      which is the wording a repeat had before any of this existed. */
   await p.evaluate(() => {
-    Store.removeTask(Store.tasks().find(x => x.title === 'EXTRA Competition entry').id);
-    ['EXTRA SAT','EXTRA HMMT'].forEach(title => {
-      const t = Store.tasks().find(x => x.title === title);
-      if (Store.isDone(t, Store.dayKey())) Store.toggleDone(t.id, Store.dayKey()); }); });
+    Store.tasks().forEach(t => { if (Store.isDone(t, Store.dayKey())) Store.toggleDone(t.id, Store.dayKey()); }); });
   await p.waitForTimeout(800);
   const back = await queue(p);
   check('the repeat says "today", not "due today"',
-    (back.find(r => /^EXTRA (SAT|HMMT)$/.test(r.title)) || {}).why, 'today');
+    (back.find(r => r.tag === 'EXTRA') || {}).why, 'today');
 
   console.log(`\n${pass} passed, ${fail} failed, ${errs.length} console errors`);
   errs.slice(0,5).forEach(e => console.log('  !', e));

@@ -265,6 +265,27 @@ window.Panel = (function () {
       if (isPractice) {
         var how = Store.practiceToday(tag.id);
         var note = node('div', 'tag-sub');
+
+        /* Which practice comes first on a day with no room for all of it. The
+           button walks the places and then back to no place at all, because
+           saying "any order" has to be as easy as saying "first". */
+        var practice = Store.tags().filter(function (t) { return t.kind === 'practice'; });
+        var placed = practice.filter(function (t) { return typeof t.rank === 'number'; }).length;
+        // you can take a place that exists, or join the end of the order
+        var places = Math.min(practice.length, placed + (tag.rank ? 0 : 1));
+        var place = node('button', 'tag-act tag-rank' + (tag.rank ? ' is-ranked' : ''),
+          tag.rank ? ordinal(tag.rank) : 'any order');
+        place.type = 'button';
+        place.title = tag.rank
+          ? 'Comes ' + ordinal(tag.rank) + ' when there is not time for everything'
+          : 'No fixed place \u2014 mixed in with the rest';
+        place.addEventListener('click', function () {
+          var next = (tag.rank || 0) + 1;
+          Store.setTagRank(tag.id, next > places ? null : next);
+          draw();
+        });
+        note.appendChild(place);
+
         note.appendChild(node('span', null, 'a day\u2019s worth is'));
         var many = number(how.want, 1, 20, 1, function (n) {
           Store.setTagKind(tag.id, 'practice', n);
@@ -280,6 +301,12 @@ window.Panel = (function () {
 
     box.appendChild(list);
     if (merging) box.appendChild(node('p', 'set-note', 'pick the tag to merge into, or cancel'));
+  }
+
+  function ordinal(n) {
+    var tail = n % 100 > 10 && n % 100 < 14 ? 'th'
+      : ['th', 'st', 'nd', 'rd'][n % 10] || 'th';
+    return n + tail;
   }
 
   function drawLists() {

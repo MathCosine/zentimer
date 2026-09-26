@@ -262,7 +262,7 @@ window.Store = (function () {
     var tag = {
       id: id('g_'), name: clean,
       color: TAG_COLORS[alive(state.tags).length % TAG_COLORS.length],
-      kind: PRACTICE_NAMES.test(clean) ? 'practice' : 'work', daily: null
+      kind: PRACTICE_NAMES.test(clean) ? 'practice' : 'work', daily: null, rank: null
     };
     state.tags.push(tag);
     return tag;
@@ -676,6 +676,7 @@ window.Store = (function () {
       // a tag from before there were kinds gets the same guess a new one would
       if (!t.kind) t.kind = PRACTICE_NAMES.test(t.name || '') ? 'practice' : 'work';
       if (typeof t.daily === 'undefined') t.daily = null;
+      if (typeof t.rank !== 'number') t.rank = null;
     });
     ROW_TABLES.forEach(function (table) {
       state[table].forEach(function (row) {
@@ -735,13 +736,34 @@ window.Store = (function () {
       var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
       if (!tag) return;
       tag.kind = kind === 'practice' ? 'practice' : 'work';
-      if (tag.kind !== 'practice') tag.daily = null;
+      if (tag.kind !== 'practice') { tag.daily = null; tag.rank = null; }
       else if (typeof daily === 'number') tag.daily = Math.max(1, Math.min(20, Math.round(daily)));
       else if (typeof tag.daily !== 'number') {
         // most of them, by default, since that is what "most days" means
         var mine = alive(state.tasks).filter(function (t) { return (t.tags || []).indexOf(tagId) !== -1; });
         tag.daily = Math.max(1, Math.ceil(mine.length / 2));
       }
+      changed();
+    },
+
+    /* Which practice comes first when there is not time for all of it. 1 is
+       first, 2 next, null is "mix it in with the others".
+
+       Giving a tag a place moves it into the order rather than taking that
+       place off whoever held it: ask for second and whoever was second becomes
+       third. Otherwise walking a tag down to second would quietly unplace the
+       tag it passed on the way. */
+    setTagRank: function (tagId, rank) {
+      var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
+      if (!tag) return;
+      var place = typeof rank === 'number' && rank > 0 ? Math.round(rank) : null;
+      var order = alive(state.tags).filter(function (t) {
+        return t.id !== tagId && t.kind === 'practice' && typeof t.rank === 'number';
+      }).sort(function (a, b) { return a.rank - b.rank; });
+
+      tag.rank = null;
+      if (place) order.splice(Math.min(place - 1, order.length), 0, tag);
+      order.forEach(function (t, i) { t.rank = i + 1; });
       changed();
     },
 

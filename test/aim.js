@@ -12,6 +12,8 @@ const { chromium } = require('./browser');
         name: l.querySelector('.aim-name').textContent,
         num: l.querySelector('.aim-num').textContent,
         met: l.classList.contains('is-met'),
+        fill: l.querySelector('.aim-fill').style.width,
+        count: l.querySelector('.aim-count').textContent,
         over: l.classList.contains('is-over') })),
       warn: a.querySelector('.aim-warn') ? a.querySelector('.aim-warn').textContent : null,
       clear: a.querySelector('.aim-clear') ? a.querySelector('.aim-clear').textContent : null }; });
@@ -101,6 +103,45 @@ const { chromium } = require('./browser');
     Store.logTime(t.id, null, 60 * 60000); });
   await p.waitForTimeout(800);
   check('with both met it says so', (await aim(p)).clear, 'deadlines are covered — the rest is yours');
+
+  console.log('--- ticking it off counts, with no timer at all ---');
+  await p.evaluate(() => {
+    Store.tasks().forEach(t => Store.removeTask(t.id));
+    Store.state().logs.length = 0;
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    Store.addTask({ title: 'MSB WA1', due: Store.dayKey(d), mins: 45 });
+    Store.addTask({ title: 'PHY Mastering', due: Store.dayKey(d), mins: 60 });
+  });
+  await p.waitForTimeout(800);
+  const fresh = await aim(p);
+  check('an hour and three quarters to do', fresh.lines[0].num, '1h 45m');
+  check('nothing done yet', fresh.lines[0].fill, '0%');
+
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'MSB WA1');
+    Store.toggleDone(t.id, Store.dayKey()); });
+  await p.waitForTimeout(800);
+  const ticked = await aim(p);
+  check('the bar moves by what it was going to take', ticked.lines[0].fill, '43%');
+  check('and an hour is left', ticked.lines[0].num, '1h');
+  check('one thing, not two', ticked.lines[0].count, '1 thing');
+
+  // a timer on a different task adds to the same bar
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'PHY Mastering');
+    Store.logTime(t.id, null, 20 * 60000); });
+  await p.waitForTimeout(800);
+  check('a timer adds to it too', (await aim(p)).lines[0].num, '40m');
+
+  /* The task the timer ran against is then ticked off: its credit replaces
+     those twenty minutes rather than stacking on top of them. */
+  await p.evaluate(() => {
+    const t = Store.tasks().find(x => x.title === 'PHY Mastering');
+    Store.toggleDone(t.id, Store.dayKey()); });
+  await p.waitForTimeout(800);
+  const finished = await aim(p);
+  check('finishing it does not count the timer twice', finished.lines[0].fill, '100%');
+  check('and the day is done', finished.lines[0].num, 'done \u2713');
 
   console.log('--- and when the day is asking too much ---');
   await p.evaluate(() => {

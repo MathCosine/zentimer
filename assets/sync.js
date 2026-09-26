@@ -37,13 +37,15 @@ window.Sync = (function () {
       to: function (r) {
         return plain(r, {
           name: r.name || '', colour: r.color || 'blue',
-          kind: r.kind || 'work', daily: typeof r.daily === 'number' ? r.daily : null
+          kind: r.kind || 'work', daily: typeof r.daily === 'number' ? r.daily : null,
+          rank: typeof r.rank === 'number' ? r.rank : null
         });
       },
       from: function (r) {
         return {
           id: r.id, name: r.name || '', color: r.colour || 'blue',
-          kind: r.kind || 'work', daily: typeof r.daily === 'number' ? r.daily : null
+          kind: r.kind || 'work', daily: typeof r.daily === 'number' ? r.daily : null,
+          rank: typeof r.rank === 'number' ? r.rank : null
         };
       }
     },

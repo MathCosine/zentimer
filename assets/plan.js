@@ -2193,6 +2193,12 @@ window.Plan = (function () {
         why = task.progress + '% done';
       }
 
+      /* Not all practice is equally important, and on a day with no time for
+         all of it the one you said comes first should come first. A place is
+         worth less than any real deadline -- it decides between drills, not
+         between a drill and an essay. */
+      if (practice && practice.rank) score += Math.max(2, 12 - 2 * practice.rank);
+
       /* How the practice is going is worth saying -- but not over the top of
          "overdue", which is the more useful thing to know. */
       if (practice && (why === 'practice' || why === 'today' || why === 'nothing else pressing' || !why)) {
@@ -2365,19 +2371,29 @@ window.Plan = (function () {
     return Math.round((new Date(toKey + 'T12:00') - new Date(fromKey + 'T12:00')) / 86400000);
   }
 
-  /* Minutes logged today, split by what the tag is for. */
+  /* Minutes logged today, split by what the tag is for, and kept per task as
+     well so a task you then tick off is not counted twice. */
   function doneToday(key) {
-    var out = { work: 0, practice: 0 };
+    var out = { work: 0, practice: 0, byTask: {} };
     Store.state().logs.forEach(function (log) {
       if (log.deletedAt || log.date !== key) return;
       var task = log.taskId ? Store.taskById(log.taskId) : null;
       var mins = (log.ms || 0) / 60000;
       var practice = task && Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
       out[practice ? 'practice' : 'work'] += mins;
+      if (task) out.byTask[task.id] = (out.byTask[task.id] || 0) + mins;
     });
-    out.work = Math.round(out.work);
-    out.practice = Math.round(out.practice);
     return out;
+  }
+
+  /* What finishing a task today was worth. Ticking it off is the claim that
+     the work is done, so the time it was going to take counts -- you do not
+     have to run a timer for it to be real. Ticking also sets the task to 100%,
+     which is why this asks the estimate rather than what is left: a moment
+     after the tick, nothing is. A timer that measured more than the estimate
+     wins, because that part was actually counted. */
+  function creditFor(task, did) {
+    return Math.max(task.mins || 30, did.byTask[task.id] || 0);
   }
 
   /* How much of one task belongs to today. A six hour project due in six days
@@ -2397,52 +2413,79 @@ window.Plan = (function () {
     return Math.max(5, Math.round(left / (slack + 1) / 5) * 5);
   }
 
+  /* Both bars mean the same thing: how much of today's work today is asking
+     for, and how much of it you have done. Work you finished is on both sides
+     of that -- it was asked for, and you did it -- so the bar fills as you
+     tick things off, whether or not a timer was running. */
   function todaysAim() {
     var key = Store.dayKey();
+    var did = doneToday(key);
     var work = 0, practice = 0, tightest = null;
     var workLeft = 0, practiceDone = 0, practiceWant = 0;
+    var gotWork = did.work, gotPractice = did.practice;
+    var still = 0;                              // what is left to do, for the ceiling
 
     Store.tasks().forEach(function (task) {
-      if (Store.isDone(task, key)) return;
       var practising = Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
-
       if (practising && !task.due) return;      // counted below, by the day's worth
 
       var deadline = Store.dueFor(task, key);
       if (!deadline) return;                    // no deadline, no share of today
 
+      if (Store.isDone(task, key)) {
+        var credit = creditFor(task, did);
+        work += credit;
+        gotWork += credit - (did.byTask[task.id] || 0);   // the timer already had its share
+        return;
+      }
+
       var share = shareOf(task, key);
       if (!share) return;                       // not today's problem yet
       work += share;
+      still += share;
       workLeft++;
       if (tightest === null || daysBetween(key, deadline) < tightest) tightest = daysBetween(key, deadline);
     });
 
     /* Practice is not a deadline, so its share is simply a day's worth of it:
-       the tasks you have said make a day, as long as they take. */
+       the tasks you have said make a day, as long as they take -- the ones you
+       have already done today among them. */
+    var stillPractice = 0;
     Store.tags().forEach(function (tag) {
       if (tag.kind !== 'practice') return;
       var how = Store.practiceToday(tag.id, key);
-      if (!how || how.enough) return;
-      var left = Store.tasks().filter(function (t) {
-        return !Store.isDone(t, key) && (t.tags || []).indexOf(tag.id) !== -1;
-      }).sort(function (a, b) { return leftOf(a) - leftOf(b); });
-      left.slice(0, Math.max(0, how.want - how.done)).forEach(function (t) { practice += leftOf(t); });
+      if (!how) return;
+      var mine = Store.tasks().filter(function (t) { return (t.tags || []).indexOf(tag.id) !== -1; });
+
+      mine.filter(function (t) { return Store.isDone(t, key); })
+        .slice(0, how.want)
+        .forEach(function (t) {
+          var credit = creditFor(t, did);
+          practice += credit;
+          gotPractice += credit - (did.byTask[t.id] || 0);
+        });
+
+      if (!how.enough) {
+        mine.filter(function (t) { return !Store.isDone(t, key); })
+          .sort(function (a, b) { return leftOf(a) - leftOf(b); })
+          .slice(0, Math.max(0, how.want - how.done))
+          .forEach(function (t) { practice += leftOf(t); stillPractice += leftOf(t); });
+      }
       practiceDone += how.done;
       practiceWant += how.want;
     });
 
-    var did = doneToday(key);
     return {
       work: Math.round(work / 5) * 5,
       practice: Math.round(practice / 5) * 5,
-      did: did,
+      did: { work: Math.round(gotWork), practice: Math.round(gotPractice) },
       workLeft: workLeft,
       practiceDone: practiceDone,
       practiceWant: practiceWant,
       tightest: tightest,
-      overWork: work > caps.work,
-      overPractice: practice > caps.practice
+      // the warning is about what is still ahead of you, not what you have done
+      overWork: still > caps.work,
+      overPractice: stillPractice > caps.practice
     };
   }
 

@@ -2509,6 +2509,15 @@ body.dragging-task .task-list { pointer-events: none; }
 .tag-sub .tag-daily { width: 50px; font-size: 0.7rem; padding: 2px 6px; margin: 0; }
 .tag-of { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* which practice comes first */
+.tag-sub .tag-rank { flex: 0 0 auto; font-size: 0.62rem; padding: 2px 7px; }
+.tag-rank.is-ranked {
+  border-style: solid;
+  border-color: var(--violet);
+  color: var(--violet);
+  font-weight: 600;
+}
+
 /* ---------- how much today needs to hold ---------- */
 
 /* It sits with what to do next, because "how much" and "which" are the same
