@@ -112,6 +112,12 @@ create table if not exists public.prefs (
 -- over an existing project adds them without touching anything else.
 alter table public.tasks add column if not exists progress int not null default 0;
 
+-- What a tag is for. 'work' is a subject with real deadlines; 'practice' is
+-- something you do most days, where doing most of it is the point and no one
+-- day is a deadline. `daily` is how many of its tasks count as a day's worth.
+alter table public.tags add column if not exists kind text not null default 'work';
+alter table public.tags add column if not exists daily int;
+
 -- ---------------------------------------------------------------------------
 -- stamps, indexes and row security, applied to every table the same way
 -- ---------------------------------------------------------------------------

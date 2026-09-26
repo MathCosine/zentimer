@@ -22,6 +22,7 @@ without a Supabase project.
     node test/queue.js        what to do now, and the hours being optional
     node test/tagsview.js     every tag on screen at once, at five sizes
     node test/progress.js     how far in a task is, and what that changes
+    node test/practice.js     practice tags, and the queue not repeating itself
     node test/sweep.js        every control, once, looking for console errors
 
 Each exits non-zero on a failed check or any console error.

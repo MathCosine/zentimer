@@ -197,6 +197,21 @@ window.Panel = (function () {
 
       line.appendChild(node('span', 'tag-use', Store.tagUse(tag.id)));
 
+      /* What a tag is for. A subject has real deadlines; practice is something
+         you do most days, where doing most of it is the point. */
+      var isPractice = tag.kind === 'practice';
+      var kind = node('button', 'tag-act tag-kind' + (isPractice ? ' is-practice' : ''),
+        isPractice ? 'practice' : 'subject');
+      kind.type = 'button';
+      kind.title = isPractice
+        ? 'Doing most of it is enough; it never crowds out real deadlines'
+        : 'Deadlines on this tag are real';
+      kind.addEventListener('click', function () {
+        Store.setTagKind(tag.id, isPractice ? 'work' : 'practice');
+        draw();
+      });
+      line.appendChild(kind);
+
       var merge = node('button', 'tag-act', merging === tag.id ? 'cancel' : 'merge');
       merge.type = 'button';
       merge.title = merging === tag.id ? 'Stop merging' : 'Merge this into another tag';
@@ -229,6 +244,21 @@ window.Panel = (function () {
       }
 
       list.appendChild(line);
+
+      if (isPractice) {
+        var how = Store.practiceToday(tag.id);
+        var note = node('div', 'tag-sub');
+        note.appendChild(node('span', null, 'a day\u2019s worth is'));
+        var many = number(how.want, 1, 20, 1, function (n) {
+          Store.setTagKind(tag.id, 'practice', n);
+          draw();
+        });
+        many.className = 'set-number tag-daily';
+        note.appendChild(many);
+        note.appendChild(node('span', 'tag-of', 'of ' + how.of +
+          ' \u00b7 ' + how.done + ' done today' + (how.enough ? ' \u2713' : '')));
+        list.appendChild(note);
+      }
     });
 
     box.appendChild(list);

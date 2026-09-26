@@ -2489,3 +2489,22 @@ body.dragging-task .task-list { pointer-events: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* what a tag is for */
+.tag-kind { border-style: dashed; }
+.tag-kind.is-practice {
+  border-style: solid;
+  border-color: var(--violet);
+  color: var(--violet);
+  font-weight: 600;
+}
+.tag-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -1px 0 4px 26px;
+  font-size: 0.64rem;
+  color: var(--soft);
+}
+.tag-sub .tag-daily { width: 50px; font-size: 0.7rem; padding: 2px 6px; margin: 0; }
+.tag-of { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -2125,41 +2125,76 @@ window.Plan = (function () {
     var planned = {};
     Store.blocks(viewDate()).forEach(function (b) { if (b.taskId) planned[b.taskId] = true; });
 
+    // how much of each practice tag is already behind you today
+    var practiceState = {};
+    Store.tags().forEach(function (tag) {
+      if (tag.kind === 'practice') practiceState[tag.id] = Store.practiceToday(tag.id, key);
+    });
+
     var ranked = Store.tasks().filter(function (task) {
       if (Store.isDone(task, key)) return false;
       if (planned[task.id]) return false;                 // already on the day
       if (Store.repeats(task) && !Store.dueOn(task, new Date())) return false;
-      return true;
+      /* A day's worth of practice done is a day's worth done: the rest of the
+         routine is not work you are behind on, so it stops asking. A date you
+         actually wrote on one of them is not routine, though, and still
+         counts however much practice you have done. */
+      if (task.due) return true;
+      var settled = Store.tagsOf(task).some(function (tag) {
+        var how = practiceState[tag.id];
+        return how && how.enough;
+      });
+      return !settled;
     }).map(function (task) {
       var score = 0, why = '';
       var length = leftOf(task);
+      var tags = Store.tagsOf(task);
+      var practice = tags.filter(function (t) { return t.kind === 'practice'; })[0] || null;
 
+      /* A date you wrote down is a promise; a daily repeat is a routine. They
+         were scored the same, which is why five days of practice drowned out
+         an essay actually due today. */
       var deadline = Store.dueFor(task, key);
+      var promised = !!task.due;
       if (deadline) {
         var days = Math.round((new Date(deadline + 'T12:00') - new Date(key + 'T12:00')) / 86400000);
-        var repeating = Store.repeats(task);
         if (days < 0) { score += 100; why = 'overdue'; }
-        else if (days === 0) { score += 70; why = repeating ? 'today' : 'due today'; }
-        else if (days === 1) { score += 45; why = 'due tomorrow'; }
+        else if (days === 0) {
+          if (promised) { score += 70; why = 'due today'; }
+          else if (practice) { score += 20; why = 'practice'; }
+          else { score += 40; why = 'today'; }
+        } else if (days === 1) { score += 45; why = 'due tomorrow'; }
         else if (days <= 7) { score += 30 - days; why = 'due ' + dueLabel(deadline); }
         else { score += 4; why = 'due ' + dueLabel(deadline); }
       }
 
       var fits = gap === 0 || length <= gap + 5;
 
-      var quiet = Store.tagsOf(task).some(function (tag) { return (seen[tag.id] || 0) < 30; });
+      var quiet = tags.some(function (tag) { return (seen[tag.id] || 0) < 30; });
       if (quiet) {
         score += 12;
         if (!why) why = 'not touched this week';
       }
 
-      // something already begun is worth finishing before something begun
       if (task.progress > 0 && task.progress < 100) {
         score += 10 + task.progress / 10;
         why = task.progress + '% done';
       }
 
-      return { task: task, score: score, why: why || 'nothing else pressing', fits: fits, mins: length };
+      /* How the practice is going is worth saying -- but not over the top of
+         "overdue", which is the more useful thing to know. */
+      if (practice && (why === 'practice' || why === 'today' || why === 'nothing else pressing' || !why)) {
+        var how = practiceState[practice.id];
+        if (how && how.want > 1) why = 'practice \u00b7 ' + how.done + ' of ' + how.want + ' today';
+        else why = 'practice';
+      }
+
+      return {
+        task: task, score: score, fits: fits, mins: length,
+        why: why || 'nothing else pressing',
+        tagId: tags[0] ? tags[0].id : null,
+        practice: !!practice
+      };
     }).sort(function (a, b) {
       /* Fitting the gap is not one consideration among several -- a four hour
          essay is not the answer to twenty minutes, however overdue it is. So
@@ -2170,7 +2205,39 @@ window.Plan = (function () {
       return (a.task.order || 0) - (b.task.order || 0);
     });
 
-    return { gap: gap, list: ranked };
+    return { gap: gap, list: ranked, pick: spread(ranked, 3) };
+  }
+
+  /* Three of the same class is not a list of what to do next, it is one thing
+     said three times. So the best of each comes first, and a tag only gets a
+     second turn once every other has had a first -- practice tags not at all,
+     because the whole point of them is that one is enough for now. */
+  function spread(ranked, want) {
+    var out = [], taken = {};
+    ranked.forEach(function (pick) {
+      if (out.length >= want) return;
+      var tag = pick.tagId || '\u0000none';
+      var had = taken[tag] || 0;
+      if (had === 0) { out.push(pick); taken[tag] = 1; }
+    });
+    if (out.length < want) {
+      ranked.forEach(function (pick) {
+        if (out.length >= want || out.indexOf(pick) !== -1) return;
+        if (pick.practice) return;                        // one turn each, and no more
+        var tag = pick.tagId || '\u0000none';
+        if ((taken[tag] || 0) >= 2) return;
+        out.push(pick);
+        taken[tag] = (taken[tag] || 0) + 1;
+      });
+    }
+    // still short: anything left rather than an empty row
+    if (out.length < want) {
+      ranked.forEach(function (pick) {
+        if (out.length >= want || out.indexOf(pick) !== -1) return;
+        out.push(pick);
+      });
+    }
+    return out;
   }
 
   function renderQueue() {
@@ -2179,7 +2246,7 @@ window.Plan = (function () {
     var made = suggestions();
 
     // the plan already answered the question
-    if (now || !made.list.length || ui.week) {
+    if (now || !made.pick.length || ui.week) {
       el.queue.hidden = true;
       el.queue.textContent = '';
       return;
@@ -2195,7 +2262,7 @@ window.Plan = (function () {
     el.queue.appendChild(head);
     el.queue.hidden = false;
 
-    made.list.slice(0, 3).forEach(function (pick) {
+    made.pick.forEach(function (pick) {
       var row = node('button', 'queue-row' + (pick.fits ? '' : ' is-long'));
       row.type = 'button';
       row.title = 'Put it on the day now';

@@ -34,8 +34,18 @@ window.Sync = (function () {
     },
     {
       name: 'tags', key: 'tags',
-      to: function (r) { return plain(r, { name: r.name || '', colour: r.color || 'blue' }); },
-      from: function (r) { return { id: r.id, name: r.name || '', color: r.colour || 'blue' }; }
+      to: function (r) {
+        return plain(r, {
+          name: r.name || '', colour: r.color || 'blue',
+          kind: r.kind || 'work', daily: typeof r.daily === 'number' ? r.daily : null
+        });
+      },
+      from: function (r) {
+        return {
+          id: r.id, name: r.name || '', color: r.colour || 'blue',
+          kind: r.kind || 'work', daily: typeof r.daily === 'number' ? r.daily : null
+        };
+      }
     },
     {
       name: 'tasks', key: 'tasks',

@@ -253,7 +253,11 @@ window.Store = (function () {
     if (!clean) return null;
     var found = alive(state.tags).filter(function (t) { return t.name.toLowerCase() === clean.toLowerCase(); })[0];
     if (found) return found;
-    var tag = { id: id('g_'), name: clean, color: TAG_COLORS[alive(state.tags).length % TAG_COLORS.length] };
+    var tag = {
+      id: id('g_'), name: clean,
+      color: TAG_COLORS[alive(state.tags).length % TAG_COLORS.length],
+      kind: 'work', daily: null
+    };
     state.tags.push(tag);
     return tag;
   }
@@ -662,6 +666,10 @@ window.Store = (function () {
       if (typeof t.at === 'undefined') t.at = null;
       if (!t.mins) t.mins = 30;
     });
+    state.tags.forEach(function (t) {
+      if (!t.kind) t.kind = 'work';
+      if (typeof t.daily === 'undefined') t.daily = null;
+    });
     ROW_TABLES.forEach(function (table) {
       state[table].forEach(function (row) {
         if (typeof row.updated !== 'number') row.updated = 0;
@@ -714,6 +722,33 @@ window.Store = (function () {
       changed();
       return tag;
     },
+    /* A practice tag is something you do most days: no one day of it is a
+       deadline, and once you have done a day's worth the rest can wait. */
+    setTagKind: function (tagId, kind, daily) {
+      var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
+      if (!tag) return;
+      tag.kind = kind === 'practice' ? 'practice' : 'work';
+      if (tag.kind !== 'practice') tag.daily = null;
+      else if (typeof daily === 'number') tag.daily = Math.max(1, Math.min(20, Math.round(daily)));
+      else if (typeof tag.daily !== 'number') {
+        // most of them, by default, since that is what "most days" means
+        var mine = alive(state.tasks).filter(function (t) { return (t.tags || []).indexOf(tagId) !== -1; });
+        tag.daily = Math.max(1, Math.ceil(mine.length / 2));
+      }
+      changed();
+    },
+
+    /* How much of a practice tag is behind you today, and how much is enough. */
+    practiceToday: function (tagId, key) {
+      var when = key || dayKey();
+      var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
+      if (!tag || tag.kind !== 'practice') return null;
+      var mine = alive(state.tasks).filter(function (t) { return (t.tags || []).indexOf(tagId) !== -1; });
+      var done = mine.filter(function (t) { return isDone(t, when); }).length;
+      var want = typeof tag.daily === 'number' ? tag.daily : Math.max(1, Math.ceil(mine.length / 2));
+      return { done: done, want: want, enough: done >= want, of: mine.length };
+    },
+
     recolourTag: function (tagId, colour) {
       var tag = alive(state.tags).filter(function (t) { return t.id === tagId; })[0];
       if (!tag || TAG_COLORS.indexOf(colour) === -1) return;
