@@ -2597,6 +2597,17 @@ body.dragging-task .task-list { pointer-events: none; }
   line-height: 1.35;
 }
 .aim-warn { color: var(--coral); }
+
+/* how tonight is going */
+.aim-tonight {
+  margin: 2px 0 0;
+  font-size: 0.6rem;
+  line-height: 1.35;
+  color: var(--soft);
+}
+.aim-tonight.is-tight { color: var(--ink); }
+.aim-tonight.is-crunch,
+.aim-tonight.is-late { color: var(--coral); font-weight: 600; }
 .aim-clear { color: var(--green); }
 
 .aim-count {

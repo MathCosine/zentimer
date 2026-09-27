@@ -26,6 +26,7 @@ without a Supabase project.
     node test/practice.js     practice tags, and the queue not repeating itself
     node test/aim.js          how much today needs to hold, and when it is too much
     node test/pacing.js       the three rows as roles: now, a change of gear, a quick one
+    node test/tonight.js      time till bed, and an evening planned to it
     node test/basics.js       the writing is readable, and clicking away is not a new block
     node test/sweep.js        every control, once, looking for console errors
 

@@ -154,7 +154,7 @@ window.Panel = (function () {
   }
 
   function drawDay() {
-    var box = section('your day', 'the hours the timeline covers');
+    var box = section('your day', 'when it starts, and when you mean to be asleep');
     var starts = node('input', 'set-time');
     starts.type = 'time';
     starts.value = hhmm(api.dayStart());
@@ -163,7 +163,7 @@ window.Panel = (function () {
       if (starts.value) api.setDay((+parts[0]) * 60 + (+parts[1]), api.dayEnd());
       draw();
     });
-    row(box, 'day starts', starts);
+    row(box, 'day starts', starts, 'anything before this counts to the night before');
 
     var ends = node('input', 'set-time');
     ends.type = 'time';
@@ -173,7 +173,7 @@ window.Panel = (function () {
       if (ends.value) api.setDay(api.dayStart(), (+parts[0]) * 60 + (+parts[1]));
       draw();
     });
-    row(box, 'day ends', ends);
+    row(box, 'bedtime', ends, 'the evening is planned to finish by then');
 
     row(box, 'clock', choice(
       [{ label: '24 hour', value: false }, { label: '12 hour', value: true }],

@@ -220,9 +220,15 @@ window.Store = (function () {
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
 
+  /* Minutes into the day. A clock handed in is read as it stands; "now" is
+     read against the day the app is on, so half past twelve at night -- still
+     yesterday, as far as your day goes -- is 24:30 and not 00:30. Past the end
+     of the day, in other words, rather than before the start of it. */
   function minutesNow(d) {
-    d = d || new Date();
-    return d.getHours() * 60 + d.getMinutes();
+    if (d) return d.getHours() * 60 + d.getMinutes();
+    var now = new Date();
+    var mins = now.getHours() * 60 + now.getMinutes();
+    return dayOf(+now) === calendarKey(now) ? mins : mins + 24 * 60;
   }
 
   function clockLabel(minutes, hour12) {

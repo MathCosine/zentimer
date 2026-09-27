@@ -16,6 +16,8 @@ const { chromium } = require('./browser');
   });
 
   const p = await (await b.newContext({viewport:{width:430,height:900}})).newPage();
+  // two in the afternoon, so what fits before bed does not depend on when this runs
+  await p.clock.install({ time: new Date(2026, 8, 27, 14, 0) });
   p.on('pageerror', e => errs.push('PAGE: '+e.message));
   p.on('console', m => { const t=m.text(); if(m.type()==='error' && !/ERR_TUNNEL|ERR_CONN|Failed to load|jsdelivr/.test(t)) errs.push('CON: '+t); });
   await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(1100);
@@ -50,11 +52,14 @@ const { chromium } = require('./browser');
   check('and says why', q[0].why, 'overdue');
   check('due today is next', q[1].title, 'PHY Due today');
   check('three at a time', q.length, 3);
-  check('the four-hour one is not among them', q.some(r => r.title.includes('Enormous')), false);
+  /* Ten hours till bed: a four-hour thing due today is exactly what the
+     afternoon is for. It is a gap of twenty minutes it is no answer to --
+     which is the next section. */
+  check('with the afternoon free, four hours due today is offered', q.some(r => r.title.includes('Enormous')), true);
 
   console.log('\n--- it knows how long you have ---');
-  check('the head says the gap', await p.evaluate(() =>
-    /free|rest of the day/.test(document.querySelector('.queue-head span').textContent)), true);
+  check('the head says how long till bed', await p.evaluate(() =>
+    document.querySelector('.queue-head span').textContent), '10h till bed');
   await p.evaluate(() => {
     const at = Store.minutesNow();
     Store.addBlock({ date: Store.dayKey(), start: at + 25, end: at + 55, title: 'something later' });
@@ -64,6 +69,8 @@ const { chromium } = require('./browser');
     document.querySelector('.queue-head span').textContent), '25m free');
   const short = await queue(p);
   check('and a task that will not fit is marked', short.filter(r => !r.fits).length > 0 || short.every(r => r.fits), true);
+  // four hours is no answer to twenty-five minutes, however due it is
+  check('the four-hour one is not first in line for it', short[0].title.includes('Enormous'), false);
 
   console.log('\n--- a daily repeat is due by the end of today ---');
   await p.evaluate(() => {

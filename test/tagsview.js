@@ -13,6 +13,7 @@ const { chromium } = require('./browser');
   for (const [n, width] of [[4,430],[8,430],[12,430],[12,380],[8,300]]) {
     const p = await (await b.newContext({viewport:{width,height:900}})).newPage();
     p.on('pageerror', e => errs.push(`${n}@${width}: ` + e.message));
+    await p.clock.install({ time: new Date(2026, 8, 27, 14, 0) });   // an afternoon: the queue must not depend on the hour this runs at
     await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(900);
     const names = ['PHY','MSB','TAA','LATIN','ANALYSIS','WELL','EXTRA','CHEM','BIO','HIST','GEO','ART'];
     await seed(p, names.slice(0, n).map((t,i) => t + ' task ' + i));
@@ -36,6 +37,7 @@ const { chromium } = require('./browser');
   const p = await (await b.newContext({viewport:{width:430,height:900}})).newPage();
   p.on('pageerror', e => errs.push('PAGE: ' + e.message));
   p.on('console', m => { const t=m.text(); if(m.type()==='error' && !/ERR_TUNNEL|ERR_CONN|Failed to load|jsdelivr/.test(t)) errs.push('CON: '+t); });
+  await p.clock.install({ time: new Date(2026, 8, 27, 14, 0) });   // an afternoon: the queue must not depend on the hour this runs at
   await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(900);
   await seed(p, ['PHY one','PHY two','PHY three','MSB only one','a task with no tag at all']);
   await p.evaluate(() => {

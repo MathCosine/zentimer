@@ -11,6 +11,7 @@ const WIDTHS = [260, 280, 300, 320, 360, 380, 412, 430];
   for (const w of WIDTHS) {
     const p = await (await b.newContext({viewport:{width:w,height:880}})).newPage();
     p.on('pageerror', e => errs.push(w+': '+e.message));
+    await p.clock.install({ time: new Date(2026, 8, 27, 14, 0) });   // an afternoon: the queue must not depend on the hour this runs at
     await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(700);
     await p.fill('#taskInput','PHY Mastering Week 5'); await p.press('#taskInput','Enter'); await p.waitForTimeout(250);
     /* Deadlines, a practice tag and some long titles, so the day's aim, the

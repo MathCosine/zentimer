@@ -16,6 +16,7 @@ const { chromium } = require('./browser');
   const p = await (await b.newContext({viewport:{width:430,height:950}})).newPage();
   p.on('pageerror', e => errs.push('PAGE: '+e.message));
   p.on('console', m => { const t=m.text(); if(m.type()==='error' && !/ERR_TUNNEL|ERR_CONN|Failed to load|jsdelivr/.test(t)) errs.push('CON: '+t); });
+  await p.clock.install({ time: new Date(2026, 8, 27, 14, 0) });   // an afternoon: the queue must not depend on the hour this runs at
   await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(1100);
 
   // five daily EXTRA drills, and some real homework
