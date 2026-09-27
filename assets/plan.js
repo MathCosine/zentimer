@@ -2168,6 +2168,7 @@ window.Plan = (function () {
     var plan = isToday() ? tonight() : null;
     var short = plan && plan.mode !== 'easy';   // not everything fits before bed
     var crunch = plan && (plan.mode === 'crunch' || plan.mode === 'late');
+    var grind = plan && plan.mode === 'easy' && plan.workNeed === 0 && plan.free >= PRACTICE_FLOOR;
     var planned = {};
     Store.blocks(viewDate()).forEach(function (b) { if (b.taskId) planned[b.taskId] = true; });
 
@@ -2190,7 +2191,10 @@ window.Plan = (function () {
         var how = practiceState[tag.id];
         return how && how.enough;
       });
-      if (settled) return false;
+      /* A day's worth done stops practice asking -- unless the homework is
+         covered too and there is evening left, which is exactly when you
+         would rather grind more of it than stop. */
+      if (settled && !grind) return false;
       /* If you have put a tag's tasks in an order, that order is the answer:
          only the next one still to do is offered, and the unplaced rest of
          the tag waits its turn behind them. */
@@ -2201,6 +2205,17 @@ window.Plan = (function () {
       var length = shareOf(task, key) || whole;   // a slice of a big one, or all of a small one
       var tags = Store.tagsOf(task);
       var practice = tags.filter(function (t) { return t.kind === 'practice'; })[0] || null;
+
+      // practice past the day's worth, on offer because the homework is done
+      var beyond = !!practice && !task.due && !!(practiceState[practice.id] || {}).enough;
+
+      /* When the evening cannot hold the whole drill, offer the part of it
+         that it can: thirty minutes of an hour's maths is still maths. */
+      var cut = false;
+      if (practice && !task.due && short && plan.practiceRoom < length) {
+        var fitted = Math.floor(plan.practiceRoom / 5) * 5;
+        if (fitted >= Math.min(length, PRACTICE_FLOOR)) { length = fitted; cut = true; }
+      }
 
       /* A date you wrote down is a promise; a daily repeat is a routine. They
          were scored the same, which is why five days of practice drowned out
@@ -2262,7 +2277,8 @@ window.Plan = (function () {
           score -= 40;
           why = 'can wait till tomorrow';
         } else if (practice && !promised) {
-          score -= late ? 60 : 15;
+          // tonight has time set aside for practice; it only steps back if it does not
+          score -= late ? 60 : plan.practiceRoom >= QUICK ? 0 : 15;
         } else if (!deadline) {
           score -= late ? 50 : 25;
         }
@@ -2272,7 +2288,9 @@ window.Plan = (function () {
          "overdue", which is the more useful thing to know. */
       if (practice && (why === 'practice' || why === 'today' || why === 'nothing else pressing' || !why)) {
         var how = practiceState[practice.id];
-        if (how && how.want > 1) why = 'practice \u00b7 ' + how.done + ' of ' + how.want + ' today';
+        if (beyond) { why = 'extra practice'; score -= 5; }
+        else if (cut) why = 'practice';           // "35m of 1h" beside it says the rest, and needs the room
+        else if (how && how.want > 1) why = 'practice \u00b7 ' + how.done + ' of ' + how.want + ' today';
         else why = 'practice';
       }
 
@@ -2281,6 +2299,7 @@ window.Plan = (function () {
         part: length < whole ? Math.round(length / whole * 100) : 0,
         why: why || 'nothing else pressing', urgent: urgent,
         tonight: !!tonightsJob, hard: !!deadline && days <= 1 && !routine, pressing: pressing,
+        cut: cut, extra: beyond,
         tagId: tags[0] ? tags[0].id : null,
         practice: !!practice
       };
@@ -2318,6 +2337,7 @@ window.Plan = (function () {
      Each role falls back to "best of what is left" when nothing suits, so the
      list is never short on account of being fussy. */
   var QUICK = 20;                // a tickable-in-one-go sort of task
+  var PRACTICE_FLOOR = 30;       // a short session of practice beats none at all
 
   /* Was the last thing finished today itself a quick one? */
   function justHadAQuickWin(key) {
@@ -2374,8 +2394,11 @@ window.Plan = (function () {
        quick one only if tonight has room for it anyway. Nothing tonight has
        no room for gets a row while something it does have room for is left. */
     if (mode === 'tight') {
-      while (out.length < want && grab(mustDo, 3)) { /* the deadlines lead */ }
+      var drill = function (pick) { return pick.practice && !pick.task.due; };
       var tonightsOwn = function (pick) { return pick.tonight || pick.pressing; };
+      while (out.length < want && grab(mustDo, 3)) { /* the deadlines lead */ }
+      // then practice -- tonight set time aside for it, so it gets a row
+      if (roomLeft >= QUICK && out.length < want) take(drill);
       if (out.length < want) {
         var fair = !justHadAQuickWin(Store.dayKey());
         var tick = fair && take(function (pick) {
@@ -2384,10 +2407,7 @@ window.Plan = (function () {
         if (tick) tick.quick = true;
       }
       while (out.length < want && take(tonightsOwn)) { /* what tonight can hold */ }
-      // practice, if the homework leaves the evening room for any
-      if (roomLeft >= QUICK) {
-        while (out.length < want && take(function (pick) { return pick.practice; })) { /* practice fills */ }
-      }
+      if (roomLeft >= QUICK) while (out.length < want && take(drill)) { /* more practice */ }
       if (!out.length) take(null);
       return out;
     }
@@ -2436,6 +2456,12 @@ window.Plan = (function () {
     if (plan && plan.mode === 'late') says = 'past bedtime';
     else if (!made.gap) says = 'no gap right now';
     else if (plan && Store.nextBlock(Store.minutesNow()) && made.gap < plan.free) says = spanLabel(made.gap) + ' free';
+    /* Homework covered and evening left: the moment to say it is all
+       practice from here -- in the line that is already there, since a phone
+       with eight tags on it has no room for another. */
+    else if (plan && plan.mode === 'easy' && plan.workNeed === 0 && plan.practice > 0) {
+      says = 'homework done \u00b7 ' + spanLabel(plan.free) + ' till bed';
+    }
     else if (plan) says = spanLabel(plan.free) + ' till bed';
     else says = made.gap >= 180 ? 'the rest of the day' : spanLabel(made.gap) + ' free';
     head.appendChild(node('span', null, says));
@@ -2466,7 +2492,9 @@ window.Plan = (function () {
         (pick.quick ? ' is-quick' : ''), says));
       /* A slice says so, because "1h 10m" on a six hour project reads like a
          lie until you know it is today's portion of it. */
-      row.appendChild(node('span', 'queue-mins', pick.part
+      row.appendChild(node('span', 'queue-mins', pick.cut
+        ? spanLabel(pick.mins) + ' of ' + spanLabel(pick.whole)
+        : pick.part
         ? spanLabel(pick.mins) + ' \u00b7 ' + pick.part + '%'
         : spanLabel(pick.mins) + (pick.task.progress > 0 && pick.task.progress < 100 ? ' left' : '')));
 
@@ -2605,22 +2633,48 @@ window.Plan = (function () {
       return a.mins - b.mins;
     });
 
-    var room = free, need = 0, hardNeed = 0, fits = {}, waits = [];
+    var room = free, need = 0, hardNeed = 0, workNeed = 0, fits = {}, waits = [];
+    var practice = todaysAim().stillPractice;
+
+    // what cannot wait
     jobs.forEach(function (job) {
       need += job.mins;
-      if (job.hard) {
-        hardNeed += job.mins;
-        fits[job.task.id] = true;          // it cannot wait, whether or not it all fits
-        room = Math.max(0, room - job.mins);
-      } else if (job.mins <= room) {
-        fits[job.task.id] = true;
-        room -= job.mins;
-      } else {
-        waits.push(job);                   // and a smaller one further down may still fit
-      }
+      workNeed += job.mins;
+      if (!job.hard) return;
+      hardNeed += job.mins;
+      fits[job.task.id] = true;            // it cannot wait, whether or not it all fits
+      room = Math.max(0, room - job.mins);
     });
 
-    var practice = todaysAim().stillPractice;
+    /* Is the evening pressed? That is: will the things due in the next couple
+       of days not fit before bed, even with nothing else in it? Then it is
+       late and a lot is due, and practice waits -- the deadlines get the
+       evening, and anything near that will not all fit is at least started. */
+    var nearNeed = 0;
+    jobs.forEach(function (job) { if (job.days <= EARLY_DAYS) nearNeed += job.mins; });
+    var pressed = nearNeed + (practice > 0 ? PRACTICE_FLOOR : 0) > free;
+
+    /* Otherwise, a session of practice before anything that could be done
+       tomorrow. Practice is not leftovers: it is the thing a short evening
+       should cut down, not cut out -- half an hour of a one-hour drill is
+       half an hour more than none. */
+    var booked = !pressed && practice > 0 && room >= QUICK ? Math.min(PRACTICE_FLOOR, practice, room) : 0;
+    room -= booked;
+
+    // then the rest of today's share, least time to spare first
+    jobs.forEach(function (job) {
+      if (job.hard) return;
+      if (job.mins <= room) { fits[job.task.id] = true; room -= job.mins; }
+      else if (pressed && job.days <= EARLY_DAYS && room >= QUICK) {
+        fits[job.task.id] = true;          // near and pressed: start it rather than drill
+        room = 0;
+      }
+      else waits.push(job);                // and a smaller one further down may still fit
+    });
+
+    // and practice has whatever the evening has left
+    var more = Math.max(0, Math.min(practice - booked, room));
+    room -= more;
     need += practice;
 
     var mode = free <= 0 ? 'late'
@@ -2629,8 +2683,10 @@ window.Plan = (function () {
       : 'easy';
 
     return {
-      free: free, need: need, hardNeed: hardNeed, spare: Math.max(0, free - need),
-      fits: fits, waits: waits, practiceRoom: room, mode: mode
+      free: free, need: need, hardNeed: hardNeed, workNeed: workNeed,
+      spare: Math.max(0, free - need), fits: fits, waits: waits, pressed: pressed,
+      practice: practice, practiceRoom: mode === 'crunch' || mode === 'late' ? 0 : booked + more,
+      mode: mode
     };
   }
 
@@ -2806,8 +2862,11 @@ window.Plan = (function () {
         var more = plan.waits.length - names.length;
         var list = more > 0 ? names.join(', ') + ' and ' + more + ' more'
           : names.length === 2 ? names.join(' and ') : names[0];
-        line.textContent = spanLabel(plan.free) + ' till bed \u2014 deadlines first' +
-          (names.length ? '; ' + list + ' can wait till tomorrow' : ', practice gets what is left');
+        var drills = plan.practiceRoom >= QUICK
+          ? ', then ' + spanLabel(plan.practiceRoom) + ' of practice'
+          : plan.pressed && plan.practice > 0 ? ', practice waits' : '';
+        line.textContent = spanLabel(plan.free) + ' till bed \u2014 deadlines first' + drills +
+          (names.length ? '; ' + list + ' can wait till tomorrow' : '');
       } else {
         line.textContent = spanLabel(plan.free) + ' till bed \u2014 it all fits' +
           (plan.spare >= 15 ? ', with ' + spanLabel(plan.spare) + ' to spare' : '');
@@ -2819,7 +2878,9 @@ window.Plan = (function () {
       el.aim.appendChild(node('p', 'aim-warn',
         'more than a day holds \u2014 push something back or accept a late one'));
     } else if (aim.did.work >= aim.work && aim.did.practice >= aim.practice) {
-      el.aim.appendChild(node('p', 'aim-clear', 'deadlines are covered \u2014 the rest is yours'));
+      el.aim.appendChild(node('p', 'aim-clear', plan && plan.free >= PRACTICE_FLOOR
+        ? 'everything today asked for is done \u2014 ' + spanLabel(plan.free) + ' till bed for extra practice'
+        : 'deadlines are covered \u2014 the rest is yours'));
     }
 
     /* And what exactly is on the bar. A filled bar you cannot account for is

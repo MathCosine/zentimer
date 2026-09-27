@@ -24,7 +24,7 @@ const seed = () => {
     console.log(`  ${ok?'ok  ':'FAIL'}  ${n}`); if (!ok) console.log(`        got  ${JSON.stringify(got)}\n        want ${JSON.stringify(want)}`);
     ok ? pass++ : fail++; };
 
-  async function at(hh, mm, before) {
+  async function at(hh, mm, before, after) {
     const ctx = await b.newContext({ viewport: { width: 430, height: 950 } });
     const p = await ctx.newPage();
     p.on('pageerror', e => errs.push(hh + ':' + mm + ' ' + e.message));
@@ -33,13 +33,17 @@ const seed = () => {
     await p.clock.install({ time: new Date(2026, 8, 27, hh, mm) });
     await p.goto('http://127.0.0.1:8899/app/'); await p.clock.runFor(1500);
     if (before) await p.evaluate(before);
-    await p.evaluate(seed); await p.clock.runFor(1200);
+    await p.evaluate(seed);
+    if (after) await p.evaluate(after);
+    await p.clock.runFor(1200);
     const r = await p.evaluate(() => ({
       head: (document.querySelector('.queue-head span') || {}).textContent || null,
       tonight: (document.querySelector('.aim-tonight') || {}).textContent || null,
       mode: ((document.querySelector('.aim-tonight') || {}).className || '').replace('aim-tonight is-', ''),
       rows: [...document.querySelectorAll('.queue-row')].map(n => n.querySelector('.queue-title').textContent),
-      whys: [...document.querySelectorAll('.queue-row')].map(n => n.querySelector('.queue-why').textContent)
+      whys: [...document.querySelectorAll('.queue-row')].map(n => n.querySelector('.queue-why').textContent),
+      mins: [...document.querySelectorAll('.queue-row')].map(n => n.querySelector('.queue-mins').textContent),
+      clear: (document.querySelector('.aim-clear') || {}).textContent || null
     }));
     await ctx.close();
     return r;
@@ -58,8 +62,27 @@ const seed = () => {
   check('it says so', eight.mode, 'tight');
   check('both things due tomorrow lead, same class or not', eight.rows.slice(0, 2),
     ['PHY Workbook Week 5', 'PHY Mastering Week 5']);
-  check('then whatever has least time to spare', eight.rows[2], 'LATIN Unit Test 1');
+  check('then practice gets its row, ahead of homework that can wait', eight.rows[2].indexOf('EXTRA'), 0);
+  check('and the line says how much of it', /then 1h 5m of practice/.test(eight.tonight), true);
   check('and the far-off essay is named as waiting', /TAA Research essay can wait till tomorrow/.test(eight.tonight), true);
+
+  console.log('\n--- ten o\u2019clock with a lot due: forget practice, hit the deadlines ---');
+  const tenish = await at(22, 0);
+  check('two hours', tenish.head, '2h till bed');
+  check('the deadlines lead', tenish.rows.slice(0, 2), ['PHY Workbook Week 5', 'PHY Mastering Week 5']);
+  check('and the next nearest is started, not a drill', tenish.rows[2], 'LATIN Unit Test 1');
+  check('no practice offered at all', tenish.rows.some(t => /^EXTRA/.test(t)), false);
+  check('and the line says practice waits', /deadlines first, practice waits/.test(tenish.tonight), true);
+
+  console.log('\n--- half past ten with little due: practice cut down, not cut out ---');
+  const light = await at(22, 30, () => {}, () => {
+    // only one sheet due tomorrow; the rest is far off, and the drills are an hour each
+    Store.tasks().filter(t => /Mastering|LATIN|ANALYSIS/.test(t.title)).forEach(t => Store.removeTask(t.id));
+    Store.tasks().filter(t => /^EXTRA/.test(t.title)).forEach(t => Store.updateTask(t.id, { mins: 60 }));
+  });
+  check('the sheet due tomorrow first', light.rows[0], 'PHY Workbook Week 5');
+  check('then an hour\u2019s drill, cut to what is left', light.rows[1].indexOf('EXTRA'), 0);
+  check('and it says so', light.mins[1], '45m of 1h');
 
   console.log('\n--- half past ten: only the deadlines ---');
   const ten = await at(22, 30);
@@ -95,6 +118,20 @@ const seed = () => {
   check('as a slice of it, not all ten hours', / \u00b7 \d+%$/.test(effort[0]), true);
   check('and the near one is still there', effort.some(r => r.indexOf('MSB Worksheet') === 0), true);
   await ctx.close();
+
+  console.log('\n--- homework done: the evening is practice ---');
+  const done = await at(20, 0, null, () => {
+    Store.tasks().filter(t => !/^EXTRA/.test(t.title)).forEach(t => Store.toggleDone(t.id, Store.dayKey()));
+  });
+  check('the head says the rest of the evening can be practice', done.head, 'homework done \u00b7 4h till bed');
+  check('and offers it', done.rows.every(t => /^EXTRA/.test(t)), true);
+
+  const more = await at(20, 0, null, () => {
+    Store.tasks().filter(t => !/^EXTRA/.test(t.title)).forEach(t => Store.toggleDone(t.id, Store.dayKey()));
+    Store.tasks().filter(t => /USACO|OTIS/.test(t.title)).forEach(t => Store.toggleDone(t.id, Store.dayKey()));
+  });
+  check('with the day\u2019s worth done too, more is still on offer', more.whys.every(w => w === 'extra practice'), true);
+  check('and the bars say how long there is for it', /4h till bed for extra practice/.test(more.clear || ''), true);
 
   console.log('\n--- bedtime is yours to set ---');
   const early = await at(22, 30, () => Plan.setDay(Plan.dayStart(), 23 * 60));

@@ -103,7 +103,9 @@ const { chromium } = require('./browser');
     const t = Store.tasks().find(x => x.title === 'EXTRA USACO');
     Store.logTime(t.id, null, 60 * 60000); });
   await p.waitForTimeout(800);
-  check('with both met it says so', (await aim(p)).clear, 'deadlines are covered — the rest is yours');
+  // two in the afternoon, so ten hours of evening for as much more as you like
+  check('with both met it says so, and how long is left for more', (await aim(p)).clear,
+    'everything today asked for is done — 10h till bed for extra practice');
 
   console.log('--- ticking it off counts, with no timer at all ---');
   await p.evaluate(() => {
