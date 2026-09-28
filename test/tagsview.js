@@ -26,13 +26,14 @@ const { chromium } = require('./browser');
                scrolls: g.scrollHeight > g.clientHeight + 1,
                lastInside: last.bottom <= box.bottom + 1 && last.right <= box.right + 1,
                listHidden: document.getElementById('taskList').hidden,
-               // on a phone the tiles get a screen of their own, a scroll down;
-               // what matters is that it is a real screen and not a sliver
-               roomy: box.height >= innerHeight * 0.45,
-               sideways: document.documentElement.scrollWidth > innerWidth };
+               // all of it at once was the point: not the grid, not the page
+               pageFits: document.documentElement.scrollHeight <= innerHeight + 1,
+               // and the rows the tiles make redundant are folded away for them
+               folded: getComputedStyle(document.getElementById('tagChips')).display === 'none' &&
+                       getComputedStyle(document.querySelector('.extras')).display === 'none' };
     });
     check(`${n} tags at ${width}px: all on screen, nothing scrolls`, r,
-      { tiles: n, scrolls: false, lastInside: true, listHidden: true, roomy: true, sideways: false });
+      { tiles: n, scrolls: false, lastInside: true, listHidden: true, pageFits: true, folded: true });
     await p.close();
   }
 

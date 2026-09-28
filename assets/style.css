@@ -1473,13 +1473,19 @@ body.is-ringing .pet-hit { pointer-events: none; }
      like, which for a real list is far more than a screen -- and the list
      scrolls inside it. Only when what is left is less than the floor does the
      page grow, and then by exactly the difference. */
-  .tasks-card { flex: 1 1 0; min-height: 21rem; }
+  .tasks-card { flex: 1 1 0; min-height: 18rem; }
 
-  /* The tiles are there to show what is in each tag, and a sliver of screen
-     shows "+3 more" instead. So on a phone they get a screen of their own,
-     one scroll down from the timer; the list goes back to sharing when the
-     tiles are put away. */
-  body.tiles-on .tasks-card { min-height: calc(100dvh - 24px); }
+  /* The tiles share the screen with everything else, like the list does:
+     all of the tags at once, with no scrolling, was the point of them. A
+     screen of their own spread them into one long column you had to scroll
+     through. They only push the page when what is left of it is less than
+     the floor above -- a phone genuinely too short for them.
+
+     What they can have instead is the room of the things they make
+     redundant: the row of tag chips (the tiles are the tags) and the
+     today/alarms strip, both one tap away when the tiles are put away. */
+  body.tiles-on #tagChips,
+  body.tiles-on .extras { display: none; }
 }
 
 /* ---------- split by tag: two groups in one list ---------- */

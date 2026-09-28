@@ -1897,7 +1897,7 @@ window.Plan = (function () {
     el.tagGrid.hidden = !ui.tagsView;
     el.taskList.hidden = ui.tagsView;
     el.tagsBtn.setAttribute('aria-pressed', String(!!ui.tagsView));
-    // a phone gives the tiles a screen of their own; the stylesheet says how
+    // the stylesheet folds away what the tiles make redundant on a phone
     document.body.classList.toggle('tiles-on', !!ui.tagsView);
     if (!ui.tagsView) return;
 
