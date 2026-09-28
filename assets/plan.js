@@ -1841,6 +1841,13 @@ window.Plan = (function () {
     el.tagsBtn.addEventListener('click', function () {
       ui.tagsView = !ui.tagsView;
       render();
+      // on a phone the tiles are a scroll down: go there, rather than leave
+      // them just out of sight below the button that asked for them
+      var card = el.tagGrid.closest('.tasks-card');
+      if (ui.tagsView && card && window.innerWidth < 900 &&
+          document.documentElement.scrollHeight > window.innerHeight + 1) {
+        card.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
     });
 
     el.sortBtn.addEventListener('click', function () {
@@ -1890,6 +1897,8 @@ window.Plan = (function () {
     el.tagGrid.hidden = !ui.tagsView;
     el.taskList.hidden = ui.tagsView;
     el.tagsBtn.setAttribute('aria-pressed', String(!!ui.tagsView));
+    // a phone gives the tiles a screen of their own; the stylesheet says how
+    document.body.classList.toggle('tiles-on', !!ui.tagsView);
     if (!ui.tagsView) return;
 
     var key = Store.dayKey();

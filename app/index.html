@@ -13,6 +13,19 @@
 <link rel="manifest" href="../manifest.webmanifest">
 <link rel="preload" href="../assets/fonts/fredoka-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../assets/style.css">
+<script>
+  /* the text size you chose, before anything is drawn in the wrong one */
+  (function () {
+    var size = 'large';
+    try { size = (JSON.parse(localStorage.getItem('pip.state.v1') || '{}').settings || {}).textSize || size; } catch (e) {}
+    var sizes = {
+      normal: '100%',
+      large: 'clamp(100%, calc(100% + (100vw - 320px) * 0.036), 112.5%)',
+      larger: 'clamp(100%, calc(100% + (100vw - 320px) * 0.073), 125%)'
+    };
+    document.documentElement.style.fontSize = sizes[size] || sizes.large;
+  })();
+</script>
 </head>
 <body data-status="idle" data-mode="focus">
 

@@ -484,7 +484,7 @@ body[data-mode="break"] .phase { color: var(--green); }
   position: absolute;
   left: 0;
   top: -6px;
-  font-size: 0.58rem;
+  font-size: 0.64rem;
   color: var(--muted);
   background: var(--well);
   padding: 0 3px;
@@ -545,7 +545,7 @@ body[data-mode="break"] .phase { color: var(--green); }
 .block.is-tight .block-when { display: none; }
 .block.is-tight .block-title { font-size: 0.66rem; }
 .block-title { font-size: 0.72rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.block-when { font-size: 0.58rem; color: var(--muted); }
+.block-when { font-size: 0.64rem; color: var(--muted); }
 .block-grip { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; }
 
 .block.is-now { border-color: var(--yellow); box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--yellow) 55%, transparent); }
@@ -649,7 +649,7 @@ body[data-mode="break"] .phase { color: var(--green); }
 .views button { white-space: nowrap; display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
 
 .view-count {
-  font-size: 0.58rem;
+  font-size: 0.64rem;
   font-weight: 600;
   color: var(--muted);
   background: var(--well);
@@ -878,7 +878,7 @@ body[data-mode="break"] .phase { color: var(--green); }
   gap: 6px;
 }
 
-.field { display: grid; gap: 2px; font-size: 0.58rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.field { display: grid; gap: 2px; font-size: 0.64rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
 .field.is-wide { grid-column: 1 / -1; }
 
 .field input, .field select {
@@ -1460,6 +1460,28 @@ body.is-ringing .pet-hit { pointer-events: none; }
   body.planning .app { padding-top: 34px; }
 }
 
+/* A phone holds the timer, the day and the list in one screen when it can --
+   and when it cannot, the list keeps a size you can use and the page scrolls,
+   rather than everything above squeezing it down to nothing. A real week's
+   worth of tasks, or a bigger text size, used to leave the tag tiles with no
+   height at all. The floor is in rem so it grows with the text. */
+@media (max-width: 899px) {
+  html, body { height: auto; min-height: 100%; }
+  body { overflow-x: hidden; overflow-y: auto; }
+  .app { height: auto; min-height: 100dvh; }
+  /* It takes what is left of the screen -- not what its own contents would
+     like, which for a real list is far more than a screen -- and the list
+     scrolls inside it. Only when what is left is less than the floor does the
+     page grow, and then by exactly the difference. */
+  .tasks-card { flex: 1 1 0; min-height: 21rem; }
+
+  /* The tiles are there to show what is in each tag, and a sliver of screen
+     shows "+3 more" instead. So on a phone they get a screen of their own,
+     one scroll down from the timer; the list goes back to sharing when the
+     tiles are put away. */
+  body.tiles-on .tasks-card { min-height: calc(100dvh - 24px); }
+}
+
 /* ---------- split by tag: two groups in one list ---------- */
 
 /* The heading stays put at the top of the list while its group scrolls past,
@@ -1500,7 +1522,7 @@ body.is-ringing .pet-hit { pointer-events: none; }
 
 .chip-label {
   align-self: center;
-  font-size: 0.58rem;
+  font-size: 0.64rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--soft);
@@ -2057,7 +2079,7 @@ body.dragging-task .task-list { pointer-events: none; }
   cursor: pointer;
   border-bottom: 1.5px solid var(--hair);
 }
-.week-head b { font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); font-weight: 700; }
+.week-head b { font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); font-weight: 700; }
 .week-head span { font-size: 0.86rem; line-height: 1.1; }
 .week-day.is-today .week-head span { color: var(--accent); font-weight: 700; }
 .week-head:hover b, .week-head:hover span { color: var(--accent); }
@@ -2089,7 +2111,7 @@ body.dragging-task .task-list { pointer-events: none; }
   cursor: grab;
 }
 .week-block.is-done { background: color-mix(in srgb, var(--green) 26%, var(--card)); opacity: 0.75; }
-.week-when { font-size: 0.54rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.week-when { font-size: 0.6rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .week-title {
   font-size: 0.62rem;
   line-height: 1.2;
@@ -2100,7 +2122,7 @@ body.dragging-task .task-list { pointer-events: none; }
   -webkit-box-orient: vertical;
 }
 .week-empty { flex: 1 1 auto; margin: 0; }
-.week-sum { font-size: 0.56rem; color: var(--soft); text-align: center; min-height: 0.8em; }
+.week-sum { font-size: 0.62rem; color: var(--soft); text-align: center; min-height: 0.8em; }
 
 /* ---------- what order the list comes in ---------- */
 
@@ -2241,7 +2263,7 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 .queue-tag {
   flex: 0 0 auto;
-  font-size: 0.55rem;
+  font-size: 0.62rem;
   padding: 1px 5px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--tone, var(--blue)) 30%, var(--card));
@@ -2388,14 +2410,14 @@ body.dragging-task .task-list { pointer-events: none; }
 .tile-task-due {
   margin-left: auto;
   flex: 0 0 auto;
-  font-size: 0.52rem;
+  font-size: 0.6rem;
   color: var(--soft);
   white-space: nowrap;
 }
 .tile-task-due.is-late { color: var(--coral); font-weight: 700; }
 
-.tile-clear { margin: 2px 4px; font-size: 0.58rem; color: var(--soft); }
-.tile-more { flex: 0 0 auto; margin: 0 4px; font-size: 0.54rem; color: var(--soft); }
+.tile-clear { margin: 2px 4px; font-size: 0.64rem; color: var(--soft); }
+.tile-more { flex: 0 0 auto; margin: 0 4px; font-size: 0.6rem; color: var(--soft); }
 
 .tile-bar {
   flex: 0 0 auto;
@@ -2409,10 +2431,10 @@ body.dragging-task .task-list { pointer-events: none; }
 
 /* packed tighter once there are a lot of them */
 .tag-grid.is-tight .tag-tile { padding: 5px 6px 6px; }
-.tag-grid.is-tight .tile-name { font-size: 0.58rem; }
+.tag-grid.is-tight .tile-name { font-size: 0.64rem; }
 .tag-grid.is-tight .tile-count { font-size: 0.72rem; }
-.tag-grid.is-tight .tile-task-name { font-size: 0.56rem; }
-.tag-grid.is-tight .tile-task-due { font-size: 0.48rem; }
+.tag-grid.is-tight .tile-task-name { font-size: 0.62rem; }
+.tag-grid.is-tight .tile-task-due { font-size: 0.58rem; }
 .tag-grid.is-tight .tile-open { padding: 1px 3px 1px 0; }
 .tag-grid.is-tight .tile-tick { width: 11px; height: 11px; }
 
@@ -2612,7 +2634,7 @@ body.dragging-task .task-list { pointer-events: none; }
 
 .aim-count {
   flex: 0 0 auto;
-  font-size: 0.56rem;
+  font-size: 0.62rem;
   color: var(--soft);
   white-space: nowrap;
   min-width: 0;
@@ -2631,7 +2653,7 @@ body.dragging-task .task-list { pointer-events: none; }
   border: 0;
   background: none;
   font: inherit;
-  font-size: 0.56rem;
+  font-size: 0.62rem;
   color: var(--soft);
   cursor: pointer;
 }
@@ -2652,7 +2674,7 @@ body.dragging-task .task-list { pointer-events: none; }
   border: 0;
   background: none;
   font: inherit;
-  font-size: 0.58rem;
+  font-size: 0.64rem;
   text-align: left;
   cursor: pointer;
 }
@@ -2667,4 +2689,4 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 .aim-bit-how { flex: 0 0 auto; color: var(--soft); }
 .aim-bit-mins { flex: 0 0 auto; color: var(--soft); font-variant-numeric: tabular-nums; }
-.aim-none { margin: 0; font-size: 0.58rem; color: var(--soft); }
+.aim-none { margin: 0; font-size: 0.64rem; color: var(--soft); }

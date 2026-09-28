@@ -123,6 +123,48 @@ const CONTRAST = `(() => {
   check('with the name on it', await p.evaluate(() =>
     Store.blocks(Store.dayKey()).some(x => x.title === 'Deep work')), true);
 
+  console.log('\n--- the words can be bigger ---');
+  {
+    const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+    const q = await ctx.newPage();
+    q.on('pageerror', e => errs.push('size ' + e.message));
+    await q.goto('http://127.0.0.1:8899/app/'); await q.waitForTimeout(900);
+    const root = () => q.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
+    check('a step up from the browser\u2019s size to begin with', await root(), 18);
+    await q.click('#settingsBtn'); await q.waitForTimeout(500);
+    await q.locator('.set-row', { hasText: 'text size' }).locator('.pick', { hasText: /^larger$/ }).click();
+    await q.waitForTimeout(400);
+    check('larger is larger', await root(), 20);
+    await q.reload(); await q.waitForTimeout(900);
+    check('and it is remembered', await root(), 20);
+    check('from the very first paint', await q.evaluate(() => document.documentElement.style.fontSize.indexOf('125%') > -1), true);
+    await q.setViewportSize({ width: 320, height: 640 }); await q.waitForTimeout(300);
+    check('but a very narrow phone keeps the size it has room for', await root(), 16);
+    // nothing tiny left: no text smaller than 10px anywhere on the desk
+    await q.setViewportSize({ width: 390, height: 844 }); await q.waitForTimeout(300);
+    await q.click('#settingsBtn'); await q.waitForTimeout(400);
+    await q.locator('.set-row', { hasText: 'text size' }).locator('.pick', { hasText: /^normal$/ }).click();
+    await q.click('#settingsClose'); await q.waitForTimeout(400);
+    await q.evaluate(() => {
+      Store.addTask({ title: 'PHY Workbook', due: Store.dayKey(), mins: 45 });
+      Store.addTask({ title: 'EXTRA OTIS', repeat: 'daily', mins: 60 });
+    });
+    await q.click('#tagsBtn'); await q.waitForTimeout(600);
+    const smallest = await q.evaluate(() => {
+      let min = 99, what = '';
+      document.querySelectorAll('.app *').forEach(n => {
+        if (!n.offsetParent || !n.childNodes.length) return;
+        const own = [...n.childNodes].some(c => c.nodeType === 3 && c.textContent.trim());
+        if (!own) return;
+        const px = parseFloat(getComputedStyle(n).fontSize);
+        if (px < min) { min = px; what = n.className; }
+      });
+      return { min: Math.round(min * 10) / 10, what };
+    });
+    check('even at normal, nothing on the desk is under 9.5px', smallest.min >= 9.5, true);
+    await ctx.close();
+  }
+
   console.log(`\n${pass} passed, ${fail} failed, ${errs.length} console errors`);
   errs.slice(0, 5).forEach(e => console.log('  !', e));
   await b.close();

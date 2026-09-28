@@ -26,10 +26,13 @@ const { chromium } = require('./browser');
                scrolls: g.scrollHeight > g.clientHeight + 1,
                lastInside: last.bottom <= box.bottom + 1 && last.right <= box.right + 1,
                listHidden: document.getElementById('taskList').hidden,
-               pageFits: document.body.scrollHeight <= innerHeight + 1 };
+               // on a phone the tiles get a screen of their own, a scroll down;
+               // what matters is that it is a real screen and not a sliver
+               roomy: box.height >= innerHeight * 0.45,
+               sideways: document.documentElement.scrollWidth > innerWidth };
     });
     check(`${n} tags at ${width}px: all on screen, nothing scrolls`, r,
-      { tiles: n, scrolls: false, lastInside: true, listHidden: true, pageFits: true });
+      { tiles: n, scrolls: false, lastInside: true, listHidden: true, roomy: true, sideways: false });
     await p.close();
   }
 

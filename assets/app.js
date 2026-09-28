@@ -36,6 +36,7 @@
 
   var settings = {
     hour12: false, sound: true, notify: false, theme: 'auto', pet: true,
+    textSize: 'large',                  // a step up from the browser's own size: small labels were too small
     focusMs: 30 * MIN, breakMs: 10 * MIN,
     presets: [15, 30, 45, 60, 90, 120],
     dayStart: 5 * 60, dayEnd: 24 * 60,
@@ -834,6 +835,13 @@
 
       theme: function () { return settings.theme; },
       setTheme: function (value) { settings.theme = value; applyTheme(); save(); },
+      textSize: function () { return settings.textSize; },
+      setTextSize: function (value) {
+        settings.textSize = TEXT_SIZES[value] ? value : 'large';
+        applyTextSize();
+        save();
+        if (window.Plan) Plan.render();       // the timeline measures itself in the new size
+      },
 
       hour12: function () { return settings.hour12; },
       setHour12: function (on) {
@@ -1126,6 +1134,25 @@
     else document.documentElement.setAttribute('data-theme', settings.theme);
   }
 
+  /* Everything in the app is sized from the root, so one number makes all of
+     it bigger together -- the words and the room around them -- rather than
+     cramming larger text into the same boxes. A percentage, so whatever size
+     the browser itself is set to is the starting point. */
+  /* ...but only as far as the screen has room for. A 300-pixel phone cannot
+     hold the timer, the day and the tag tiles at a bigger size -- the tiles
+     end up with no height at all -- so the size grows with the width: as it
+     always was at 320px, the full step up from about 375px, which is most
+     phones. */
+  var TEXT_SIZES = {
+    normal: '100%',
+    large: 'clamp(100%, calc(100% + (100vw - 320px) * 0.036), 112.5%)',
+    larger: 'clamp(100%, calc(100% + (100vw - 320px) * 0.073), 125%)'
+  };
+
+  function applyTextSize() {
+    document.documentElement.style.fontSize = TEXT_SIZES[settings.textSize] || TEXT_SIZES.large;
+  }
+
   el.themeBtn.addEventListener('click', function () {
     settings.theme = effectiveTheme() === 'dark' ? 'light' : 'dark';
     applyTheme();
@@ -1202,6 +1229,7 @@
         settings.notify = !!stored.settings.notify;
         settings.pet = stored.settings.pet !== false;
         settings.theme = stored.settings.theme || 'auto';
+        if (TEXT_SIZES[stored.settings.textSize]) settings.textSize = stored.settings.textSize;
         if (Array.isArray(stored.settings.presets) && stored.settings.presets.length) {
           settings.presets = stored.settings.presets
             .map(function (n) { return Math.max(1, Math.min(600, Math.round(+n) || 30)); })
@@ -1247,6 +1275,7 @@
     }
 
     applyTheme();
+    applyTextSize();
     // before anything asks what day it is
     if (window.Store) Store.setDayStart(settings.dayStart);
     if (window.Plan) {
