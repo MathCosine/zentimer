@@ -3162,12 +3162,26 @@ window.Plan = (function () {
     });
   }
 
+  /* Once a minute. The clock moving changes more than the timeline: it is
+     a minute less till bed, which can tip the evening from "it all fits" to
+     "deadlines first" -- so the queue and the bars are redrawn with it,
+     not left saying what was true when you last ticked something off. And
+     when the day itself turns over, everything is. */
+  var tickedDay = null;
+
   function tick() {
     if (!el.timeline || dragging) return;
-    Store.ensureRoutine(Store.dayKey());
-    renderTimeline();
-    renderNow();
-    renderDayHead();
+    var today = Store.dayKey();
+    if (tickedDay && tickedDay !== today) { tickedDay = today; render(); return; }
+    tickedDay = today;
+    Store.ensureRoutine(today);
+    keepingFocus(function () {
+      renderTimeline();
+      renderNow();
+      renderDayHead();
+      renderQueue();
+      renderAim();
+    });
   }
 
   function init(prefs) {

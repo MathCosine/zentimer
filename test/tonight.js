@@ -133,6 +133,30 @@ const seed = () => {
   check('with the day\u2019s worth done too, more is still on offer', more.whys.every(w => w === 'extra practice'), true);
   check('and the bars say how long there is for it', /4h till bed for extra practice/.test(more.clear || ''), true);
 
+  console.log('\n--- it keeps time on its own ---');
+  {
+    const ctx = await b.newContext({ viewport: { width: 430, height: 950 } });
+    const p = await ctx.newPage();
+    p.on('pageerror', e => errs.push('live ' + e.message));
+    await p.clock.install({ time: new Date(2026, 8, 27, 22, 20) });
+    await p.goto('http://127.0.0.1:8899/app/'); await p.clock.runFor(1500);
+    await p.evaluate(seed); await p.clock.runFor(1200);
+    const read = () => p.evaluate(() => ({
+      head: document.querySelector('.queue-head span').textContent,
+      mode: ((document.querySelector('.aim-tonight') || {}).className || '').replace('aim-tonight is-', '') }));
+    const first = await read();
+    check('twenty past ten: an hour forty', first.head, '1h 40m till bed');
+    check('and tight', first.mode, 'tight');
+    // nothing is touched: only the clock moves
+    await p.clock.fastForward('10:00'); await p.clock.runFor(1000);
+    check('ten minutes later it says so by itself', (await read()).head, '1h 30m till bed');
+    await p.clock.fastForward('50:00'); await p.clock.runFor(1000);
+    const later = await read();
+    check('and at twenty past eleven', later.head, '40m till bed');
+    check('the evening has tipped into a crunch without a click', later.mode, 'crunch');
+    await ctx.close();
+  }
+
   console.log('\n--- bedtime is yours to set ---');
   const early = await at(22, 30, () => Plan.setDay(Plan.dayStart(), 23 * 60));
   check('with bed at eleven, half past ten is half an hour', early.head, '30m till bed');
