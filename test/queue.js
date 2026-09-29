@@ -50,7 +50,10 @@ const { chromium } = require('./browser');
   check('the queue is showing', !!q, true);
   check('overdue comes first', q[0].title, 'TAA Overdue essay');
   check('and says why', q[0].why, 'overdue');
-  check('due today is next', q[1].title, 'PHY Due today');
+  /* Two things due today tie on urgency; the tie goes the way tonight's plan
+     goes -- least time to spare first, which is the four-hour one. */
+  check('then what is due today, in the plan\u2019s order', q.slice(1).map(r => r.title),
+    ['LATIN Enormous thing', 'PHY Due today']);
   check('three at a time', q.length, 3);
   /* Ten hours till bed: a four-hour thing due today is exactly what the
      afternoon is for. It is a gap of twenty minutes it is no answer to --
@@ -75,6 +78,8 @@ const { chromium } = require('./browser');
   console.log('\n--- a daily repeat is due by the end of today ---');
   await p.evaluate(() => {
     Store.blocks(Store.dayKey()).forEach(b => Store.removeBlock(b.id));
+    // the four-hour one has made its point; it would only crowd this one out
+    Store.removeTask(Store.tasks().find(t => t.title === 'LATIN Enormous thing').id);
     Store.addTask({ title: 'WELL Stretch', repeat: 'daily', mins: 15 });
     Store.addTask({ title: 'ART Someday thing', mins: 15 });
   });

@@ -2651,6 +2651,46 @@ body.dragging-task .task-list { pointer-events: none; }
 
 .queue-why.is-quick { color: var(--green); font-weight: 600; }
 
+/* tonight's plan, all the way down */
+.aim-asks { display: flex; justify-content: center; gap: 14px; }
+.aim-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+  max-height: 45vh;                 /* a long evening scrolls here, not the page */
+  overflow-y: auto;
+}
+.plan-line {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.66rem;
+  text-align: left;
+  cursor: pointer;
+}
+.plan-line:hover .plan-name { text-decoration: underline; }
+.plan-at { flex: 0 0 3.2em; color: var(--soft); font-variant-numeric: tabular-nums; }
+.plan-name { flex: 1 1 auto; min-width: 0; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-why { flex: 0 0 auto; color: var(--soft); }
+.plan-mins { flex: 0 0 auto; color: var(--soft); font-variant-numeric: tabular-nums; }
+.plan-line.is-late .plan-at { color: var(--coral); }
+.plan-note { margin: 3px 0 0; font-size: 0.64rem; color: var(--green); }
+.plan-sub {
+  margin: 8px 0 1px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+
 /* what is on the bar, and how it got there */
 .aim-why {
   align-self: flex-start;

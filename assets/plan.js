@@ -2177,6 +2177,8 @@ window.Plan = (function () {
     var plan = isToday() ? tonight() : null;
     var short = plan && plan.mode !== 'easy';   // not everything fits before bed
     var crunch = plan && (plan.mode === 'crunch' || plan.mode === 'late');
+    var planAt = {};
+    if (plan) plan.order.forEach(function (step, i) { if (!(step.task.id in planAt)) planAt[step.task.id] = i; });
     var grind = plan && plan.mode === 'easy' && plan.workNeed === 0 && plan.free >= PRACTICE_FLOOR;
     var planned = {};
     Store.blocks(viewDate()).forEach(function (b) { if (b.taskId) planned[b.taskId] = true; });
@@ -2308,6 +2310,7 @@ window.Plan = (function () {
         part: length < whole ? Math.round(length / whole * 100) : 0,
         why: why || 'nothing else pressing', urgent: urgent,
         tonight: !!tonightsJob, hard: !!deadline && days <= 1 && !routine, pressing: pressing,
+        planAt: task.id in planAt ? planAt[task.id] : 999,
         cut: cut, extra: beyond,
         tagId: tags[0] ? tags[0].id : null,
         practice: !!practice
@@ -2324,6 +2327,7 @@ window.Plan = (function () {
          then does urgency decide. */
       if (a.fits !== b.fits) return a.fits ? -1 : 1;
       if (b.score !== a.score) return b.score - a.score;
+      if (a.planAt !== b.planAt) return a.planAt - b.planAt;     // a tie goes the plan's way
       return (a.task.order || 0) - (b.task.order || 0);
     });
 
@@ -2347,6 +2351,7 @@ window.Plan = (function () {
      list is never short on account of being fussy. */
   var QUICK = 20;                // a tickable-in-one-go sort of task
   var PRACTICE_FLOOR = 30;       // a short session of practice beats none at all
+  var LATE_WINDOW = 3 * 60;      // how close to bed counts as late
 
   /* Was the last thing finished today itself a quick one? */
   function justHadAQuickWin(key) {
@@ -2365,9 +2370,10 @@ window.Plan = (function () {
        roles below all look for an untouched tag first and only then allow a
        class its second turn, so "three suggestions" stays three subjects for
        as long as you have three. */
-    function grab(suits, cap) {
-      for (var i = 0; i < ranked.length; i++) {
-        var pick = ranked[i];
+    function grab(suits, cap, list) {
+      list = list || ranked;
+      for (var i = 0; i < list.length; i++) {
+        var pick = list[i];
         if (used[pick.task.id]) continue;
         var tag = pick.tagId || '\u0000none';
         var room = pick.practice ? 1 : cap;    // practice asks once; a class twice at the very most
@@ -2388,11 +2394,14 @@ window.Plan = (function () {
        deadlines will not all fit, that is simply the ranking -- three things
        due tomorrow in the same class are three things due tomorrow. */
     function mustDo(pick) { return pick.hard; }
+    /* Short of time, "up next" is simply the top of tonight's plan: the same
+       things in the same order, so the two never disagree about what is first. */
+    var byPlan = ranked.slice().sort(function (a, b) { return a.planAt - b.planAt; });
 
     /* With no time even for what is due tomorrow, those are the whole list:
        a third row offering something that can wait is only a distraction. */
     if (mode === 'crunch' || mode === 'late') {
-      while (out.length < want && grab(mustDo, 3)) { /* due by tomorrow, nearest first */ }
+      while (out.length < want && grab(mustDo, 3, byPlan)) { /* due by tomorrow, nearest first */ }
       if (!out.length) while (out.length < want && grab(null, 3)) { /* nothing is due: the ranking */ }
       return out;
     }
@@ -2405,7 +2414,7 @@ window.Plan = (function () {
     if (mode === 'tight') {
       var drill = function (pick) { return pick.practice && !pick.task.due; };
       var tonightsOwn = function (pick) { return pick.tonight || pick.pressing; };
-      while (out.length < want && grab(mustDo, 3)) { /* the deadlines lead */ }
+      while (out.length < want && grab(mustDo, 3, byPlan)) { /* the deadlines lead */ }
       // then practice -- tonight set time aside for it, so it gets a row
       if (roomLeft >= QUICK && out.length < want) take(drill);
       if (out.length < want) {
@@ -2605,6 +2614,34 @@ window.Plan = (function () {
     return daysBetween(key, deadline) - leftOf(task) / Math.max(60, caps.work);
   }
 
+  /* Today's practice, one drill after another in the order it would be done:
+     tags you gave a place first, in that order; inside a tag, the drills you
+     gave a place, then the shortest. Only a day's worth -- more than that is
+     not the plan, it is extra. */
+  function practiceDrills(key) {
+    var byTag = Store.tags().filter(function (tag) { return tag.kind === 'practice'; })
+      .sort(function (a, b) {
+        var ra = typeof a.rank === 'number' ? a.rank : 99, rb = typeof b.rank === 'number' ? b.rank : 99;
+        return ra - rb;
+      });
+    var drills = [];
+    byTag.forEach(function (tag) {
+      var how = Store.practiceToday(tag.id, key);
+      if (!how || how.enough) return;
+      Store.tasks().filter(function (t) {
+        return (t.tags || [])[0] === tag.id && !t.due && !Store.isDone(t, key) &&
+          (!Store.repeats(t) || Store.dueOn(t, new Date()));
+      }).sort(function (a, b) {
+        var ra = typeof a.rank === 'number' ? a.rank : 99, rb = typeof b.rank === 'number' ? b.rank : 99;
+        if (ra !== rb) return ra - rb;
+        return leftOf(a) - leftOf(b);
+      }).slice(0, Math.max(0, how.want - how.done)).forEach(function (t) {
+        drills.push({ task: t, whole: leftOf(t), left: leftOf(t) });
+      });
+    });
+    return drills;
+  }
+
   /* What fits before bed, in the order it should be done.
 
        first    anything overdue, due today or due tomorrow -- tonight is the
@@ -2645,6 +2682,27 @@ window.Plan = (function () {
     var room = free, need = 0, hardNeed = 0, workNeed = 0, fits = {}, waits = [];
     var practice = todaysAim().stillPractice;
 
+    /* The evening in order, written down as it is filled, so it can be shown
+       all the way down and not just its first three lines. */
+    var order = [];
+    function homework(job, mins) {
+      var whole = leftOf(job.task);
+      order.push({ task: job.task, mins: mins, whole: whole, kind: 'work', days: job.days,
+        deadline: Store.dueFor(job.task, key), part: mins < whole ? Math.round(mins / whole * 100) : 0 });
+    }
+    var drills = practiceDrills(key), nextDrill = 0;
+    function drill(budget) {
+      while (budget >= QUICK && nextDrill < drills.length) {
+        var d = drills[nextDrill];
+        var take = Math.min(budget, d.left);
+        order.push({ task: d.task, mins: take, whole: d.whole, kind: 'practice',
+          rest: d.left < d.whole, cut: take < d.left });
+        d.left -= take;
+        budget -= take;
+        if (d.left <= 0) nextDrill++;
+      }
+    }
+
     // what cannot wait
     jobs.forEach(function (job) {
       need += job.mins;
@@ -2653,15 +2711,19 @@ window.Plan = (function () {
       hardNeed += job.mins;
       fits[job.task.id] = true;            // it cannot wait, whether or not it all fits
       room = Math.max(0, room - job.mins);
+      homework(job, job.mins);
     });
 
     /* Is the evening pressed? That is: will the things due in the next couple
        of days not fit before bed, even with nothing else in it? Then it is
        late and a lot is due, and practice waits -- the deadlines get the
        evening, and anything near that will not all fit is at least started. */
+    /* "Late" is the last few hours before bed. Earlier than that, a lot due in
+       two days is not a reason to drop practice: what does not fit tonight
+       still has tomorrow. */
     var nearNeed = 0;
     jobs.forEach(function (job) { if (job.days <= EARLY_DAYS) nearNeed += job.mins; });
-    var pressed = nearNeed + (practice > 0 ? PRACTICE_FLOOR : 0) > free;
+    var pressed = free <= LATE_WINDOW && nearNeed + (practice > 0 ? PRACTICE_FLOOR : 0) > free;
 
     /* Otherwise, a session of practice before anything that could be done
        tomorrow. Practice is not leftovers: it is the thing a short evening
@@ -2669,13 +2731,15 @@ window.Plan = (function () {
        half an hour more than none. */
     var booked = !pressed && practice > 0 && room >= QUICK ? Math.min(PRACTICE_FLOOR, practice, room) : 0;
     room -= booked;
+    drill(booked);
 
     // then the rest of today's share, least time to spare first
     jobs.forEach(function (job) {
       if (job.hard) return;
-      if (job.mins <= room) { fits[job.task.id] = true; room -= job.mins; }
+      if (job.mins <= room) { fits[job.task.id] = true; room -= job.mins; homework(job, job.mins); }
       else if (pressed && job.days <= EARLY_DAYS && room >= QUICK) {
         fits[job.task.id] = true;          // near and pressed: start it rather than drill
+        homework(job, room);
         room = 0;
       }
       else waits.push(job);                // and a smaller one further down may still fit
@@ -2685,6 +2749,7 @@ window.Plan = (function () {
     var more = Math.max(0, Math.min(practice - booked, room));
     room -= more;
     need += practice;
+    if (!pressed || more) drill(more);
 
     var mode = free <= 0 ? 'late'
       : free < hardNeed ? 'crunch'
@@ -2695,8 +2760,78 @@ window.Plan = (function () {
       free: free, need: need, hardNeed: hardNeed, workNeed: workNeed,
       spare: Math.max(0, free - need), fits: fits, waits: waits, pressed: pressed,
       practice: practice, practiceRoom: mode === 'crunch' || mode === 'late' ? 0 : booked + more,
-      mode: mode
+      mode: mode, order: order, room: room
     };
+  }
+
+  /* Tonight's plan, all the way down: each step with the time it would start
+     if you began now and went straight through, skipping anything already on
+     the day that is not work. What does not fit is listed after it, so the
+     plan says what it has left out as well as what it has put in. */
+  function planList(plan) {
+    var box = node('div', 'aim-plan');
+    var key = Store.dayKey();
+    var at = Math.max(Store.minutesNow(), DAY_START);
+    var busy = Store.blocks(key).filter(function (b) { return !b.done && !b.taskId && b.end > at; })
+      .sort(function (a, b) { return a.start - b.start; });
+
+    function open(task) {
+      return function () {
+        if (!Store.taskById(task.id)) return;
+        ui.tagsView = false;
+        ui.editing = task.id;
+        ui.focusTask = task.id;
+        reveal = task.id;
+        render();
+      };
+    }
+
+    function line(step, when) {
+      var row = node('button', 'plan-line' + (when !== null && when + step.mins > DAY_END ? ' is-late' : ''));
+      row.type = 'button';
+      row.title = 'Open it';
+      row.appendChild(node('span', 'plan-at', when === null ? '' : label(when % (24 * 60))));
+      row.appendChild(node('span', 'plan-name', step.task.title));
+      var why;
+      if (step.kind === 'practice') why = step.rest ? 'practice, the rest' : 'practice';
+      else if (step.days < 0) why = 'overdue';
+      else if (step.days === 0) why = 'due today';
+      else if (step.days === 1) why = 'due tomorrow';
+      else why = 'due ' + dueLabel(step.deadline);
+      row.appendChild(node('span', 'plan-why', why));
+      row.appendChild(node('span', 'plan-mins',
+        step.kind === 'practice' && step.cut ? spanLabel(step.mins) + ' of ' + spanLabel(step.whole)
+        : step.part ? spanLabel(step.mins) + ' \u00b7 ' + step.part + '%'
+        : spanLabel(step.mins)));
+      row.addEventListener('click', open(step.task));
+      return row;
+    }
+
+    if (!plan.order.length) {
+      box.appendChild(node('p', 'aim-none', 'nothing fits before bed tonight'));
+    }
+    plan.order.forEach(function (step) {
+      // step round anything already on the day that is not this work
+      busy.forEach(function (b) { if (at >= b.start && at < b.end) at = b.end; });
+      box.appendChild(line(step, at));
+      at += step.mins;
+    });
+    if (plan.order.length) {
+      box.appendChild(node('p', 'plan-note', at > DAY_END
+        ? 'that runs past bedtime'
+        : plan.room >= 15 ? 'done by ' + label(at % (24 * 60)) + ', ' + spanLabel(plan.room) + ' to spare before bed'
+        : 'done by ' + label(at % (24 * 60))));
+    }
+
+    if (plan.waits.length) {
+      box.appendChild(node('p', 'plan-sub', 'can wait till tomorrow'));
+      plan.waits.forEach(function (job) {
+        box.appendChild(line({ task: job.task, mins: job.mins, kind: 'work', days: job.days,
+          deadline: Store.dueFor(job.task, key), whole: leftOf(job.task),
+          part: job.mins < leftOf(job.task) ? Math.round(job.mins / leftOf(job.task) * 100) : 0 }, null));
+      });
+    }
+    return box;
   }
 
   /* Minutes past midnight for a moment in time, so the clock can name it. */
@@ -2894,10 +3029,22 @@ window.Plan = (function () {
 
     /* And what exactly is on the bar. A filled bar you cannot account for is
        worse than no bar: it says the thing is wrong without saying how. */
+    /* Two things the bars can be asked: what the rest of the evening holds,
+       all the way down, and what is already behind you. */
+    var asks = node('div', 'aim-asks');
+    if (plan && (plan.order.length || plan.waits.length)) {
+      var planBtn = node('button', 'aim-why', ui.aimPlan ? 'tonight\u2019s plan \u25b4' : 'tonight\u2019s plan \u25be');
+      planBtn.type = 'button';
+      planBtn.addEventListener('click', function () { ui.aimPlan = !ui.aimPlan; if (ui.aimPlan) ui.aimWhy = false; render(); });
+      asks.appendChild(planBtn);
+    }
     var show = node('button', 'aim-why', ui.aimWhy ? 'what counted \u25b4' : 'what counted \u25be');
     show.type = 'button';
-    show.addEventListener('click', function () { ui.aimWhy = !ui.aimWhy; render(); });
-    el.aim.appendChild(show);
+    show.addEventListener('click', function () { ui.aimWhy = !ui.aimWhy; if (ui.aimWhy) ui.aimPlan = false; render(); });
+    asks.appendChild(show);
+    el.aim.appendChild(asks);
+
+    if (ui.aimPlan && plan) el.aim.appendChild(planList(plan));
 
     if (ui.aimWhy) {
       var what = node('div', 'aim-what');

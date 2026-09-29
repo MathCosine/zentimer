@@ -157,6 +157,53 @@ const seed = () => {
     await ctx.close();
   }
 
+  console.log('\n--- the whole plan, all the way down ---');
+  {
+    const ctx = await b.newContext({ viewport: { width: 646, height: 1000 } });
+    const p = await ctx.newPage();
+    p.on('pageerror', e => errs.push('plan ' + e.message));
+    await p.clock.install({ time: new Date(2026, 8, 27, 20, 30) });
+    await p.goto('http://127.0.0.1:8899/app/'); await p.clock.runFor(1500);
+    await p.evaluate(seed); await p.clock.runFor(1200);
+    await p.locator('.aim-why', { hasText: 'plan' }).click(); await p.clock.runFor(500);
+    const plan = await p.evaluate(() => ({
+      lines: [...document.querySelectorAll('.aim-plan .plan-line')].map(n => ({
+        at: n.querySelector('.plan-at').textContent, name: n.querySelector('.plan-name').textContent,
+        why: n.querySelector('.plan-why').textContent, mins: n.querySelector('.plan-mins').textContent })),
+      note: (document.querySelector('.plan-note') || {}).textContent || null,
+      waits: [...document.querySelectorAll('.aim-plan .plan-sub ~ .plan-line .plan-name')].map(n => n.textContent),
+      next: [...document.querySelectorAll('.queue-row .queue-title')].map(n => n.textContent) }));
+    check('it starts now', plan.lines[0].at, '20:30');
+    check('with what is due tomorrow first', plan.lines.slice(0, 2).map(l => l.name), ['PHY Workbook Week 5', 'PHY Mastering Week 5']);
+    check('and each step starts when the one before ends', plan.lines[1].at, '21:15');
+    check('then a practice session, cut to what the evening has', /^EXTRA/.test(plan.lines[2].name) && plan.lines[2].why === 'practice', true);
+    check('then the homework that fits', plan.lines.some(l => l.name === 'LATIN Unit Test 1'), true);
+    check('it says when it would all be done', /^done by /.test(plan.note || ''), true);
+    check('and what it has left out', plan.waits.indexOf('TAA Research essay') > -1 && plan.waits.indexOf('ANALYSIS Problem Set 2') > -1, true);
+    check('up next is the top of the plan', plan.next.slice(0, 2), plan.lines.slice(0, 2).map(l => l.name));
+    await p.locator('.aim-plan .plan-line').nth(3).click(); await p.clock.runFor(500);
+    check('a step opens the task it names', await p.evaluate(() => !!document.querySelector('.task-edit')), true);
+    await ctx.close();
+  }
+  {
+    // four in the afternoon is not late: a lot due in two days does not cost practice
+    const ctx = await b.newContext({ viewport: { width: 646, height: 1000 } });
+    const p = await ctx.newPage();
+    p.on('pageerror', e => errs.push('afternoon ' + e.message));
+    await p.clock.install({ time: new Date(2026, 8, 27, 16, 0) });
+    await p.goto('http://127.0.0.1:8899/app/'); await p.clock.runFor(1500);
+    await p.evaluate(() => {
+      const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+      for (let i = 0; i < 8; i++) Store.addTask({ title: 'LATIN Load ' + i, due: on(i < 3 ? 1 : 2), mins: 60 });
+      Store.addTask({ title: 'EXTRA OTIS', repeat: 'daily', mins: 60 });
+    });
+    await p.clock.runFor(1200);
+    await p.locator('.aim-why', { hasText: 'plan' }).click(); await p.clock.runFor(500);
+    check('at four with a heavy two days, practice is still in the plan', await p.evaluate(() =>
+      [...document.querySelectorAll('.aim-plan .plan-why')].some(n => n.textContent === 'practice')), true);
+    await ctx.close();
+  }
+
   console.log('\n--- bedtime is yours to set ---');
   const early = await at(22, 30, () => Plan.setDay(Plan.dayStart(), 23 * 60));
   check('with bed at eleven, half past ten is half an hour', early.head, '30m till bed');

@@ -248,7 +248,7 @@ const { chromium } = require('./browser');
     Store.quiet();
   });
   await p.reload(); await p.waitForTimeout(1300);
-  await p.locator('.aim-why').click(); await p.waitForTimeout(500);
+  await p.locator('.aim-why', { hasText: 'what counted' }).click(); await p.waitForTimeout(500);
   check('with nothing done it says so', await p.evaluate(() =>
     document.querySelector('.aim-what').textContent), 'nothing yet today \u2014 the bar is empty');
 
@@ -269,7 +269,7 @@ const { chromium } = require('./browser');
   check('a session on nothing in particular is named too', await p.evaluate(() =>
     [...document.querySelectorAll('.aim-bit-name')].map(n => n.textContent)
       .indexOf('a session on nothing in particular') > -1), true);
-  await p.locator('.aim-why').click(); await p.waitForTimeout(400);
+  await p.locator('.aim-why', { hasText: 'what counted' }).click(); await p.waitForTimeout(400);
   check('and it folds away again', await p.evaluate(() => !document.querySelector('.aim-what')), true);
 
   console.log('--- and when the day is asking too much ---');
