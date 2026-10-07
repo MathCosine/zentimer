@@ -409,6 +409,30 @@ window.Sync = (function () {
     client: function () { return client; },
     userId: function () { return userId; },
 
+    /* Small things that belong to the account rather than to a device -- a
+       calendar link, so both browsers show the same calendar -- kept in the
+       account's prefs row, which only that account can read. */
+    getPref: function (name) {
+      if (!client || !userId) return Promise.resolve(undefined);
+      return client.from('prefs').select('data').maybeSingle().then(function (res) {
+        if (res.error) throw res.error;
+        return ((res.data && res.data.data) || {})[name];
+      });
+    },
+    setPref: function (name, value) {
+      if (!client || !userId) return Promise.resolve(false);
+      return client.from('prefs').select('data').maybeSingle().then(function (res) {
+        if (res.error) throw res.error;
+        var data = Object.assign({}, (res.data && res.data.data) || {});
+        if (value === undefined || value === null) delete data[name];
+        else data[name] = value;
+        return client.from('prefs').upsert({ user_id: userId, migrated: true, data: data }, { onConflict: 'user_id' });
+      }).then(function (res) {
+        if (res && res.error) throw res.error;
+        return true;
+      });
+    },
+
     save: function (url, key) {
       config = { url: url, key: key };
       keep('pip.supabase', config);

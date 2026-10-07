@@ -39,6 +39,16 @@ function start(port) {
           out = { data: written, error: null };
         } else if (req.url === '/__reset') { db.reset(); out = { ok: true }; }
         else if (req.url === '/__dump') { out = db.tables; }
+        else if (req.url === '/__calendar') { db.calendar = q.ics || null; db.calendarAsked = []; out = { ok: true }; }
+        else if (req.url === '/__calendarAsked') { out = { asked: db.calendarAsked || [] }; }
+        else if (req.url === '/function/calendar') {
+          // as the real relay: a calendar link in, the calendar out
+          (db.calendarAsked = db.calendarAsked || []).push(q.body && q.body.url);
+          if (!db.calendar) { res.writeHead(404, { 'access-control-allow-origin': '*' }); res.end('{}'); return; }
+          res.writeHead(200, { 'content-type': 'text/calendar', 'access-control-allow-origin': '*' });
+          res.end(db.calendar);
+          return;
+        }
         else if (req.url === '/__seedLegacy') {
           db.tables.pip_state.push({ id: 'plan', user_id: q.user, data: q.doc, updated: db.stamp() });
           out = { ok: true };

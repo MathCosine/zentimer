@@ -8,7 +8,7 @@
 
 /* Bump this whenever anything in SHELL changes: it is what makes the new
    version install, sweep the old cache and offer itself to the open page. */
-var VERSION = 'pip-v3';
+var VERSION = 'pip-v4';
 
 /* The app's own code is asked for over the network first, with the cache as
    the answer when there is no network. Cache-first was wrong for it: a fix
@@ -52,6 +52,8 @@ var SHELL = [
   './assets/music.js',
   './assets/sync.js',
   './assets/store.js',
+  './assets/calendar.js',
+  './assets/vendor/ical.min.js',
   './assets/plan.js',
   './assets/settings.js',
   './assets/pet.js',

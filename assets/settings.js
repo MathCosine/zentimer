@@ -136,6 +136,89 @@ window.Panel = (function () {
       'a system notification too');
   }
 
+  /* Your calendar: paste its private iCal link and its events show on the
+     day, and the evening's plan goes round them. Fixed things -- tutoring,
+     a club -- live in the calendar, where repeating them is easy. */
+  function drawCalendar() {
+    if (!window.Calendar) return;
+    var box = section('calendar', 'show your Google, Apple or Outlook calendar here, and plan around it');
+    var signedIn = window.Sync && Sync.signedIn && Sync.signedIn();
+
+    Calendar.links().forEach(function (link, i) {
+      var line = node('div', 'set-row');
+      var name = node('div', 'set-label');
+      var host = '';
+      try { host = new URL(link.replace(/^webcal:/i, 'https:')).hostname; } catch (e) { host = 'calendar'; }
+      var which = /google/.test(host) ? 'Google calendar' : /icloud/.test(host) ? 'Apple calendar'
+        : /outlook|office365/.test(host) ? 'Outlook calendar' : 'calendar';
+      name.appendChild(node('span', null, which));
+      name.appendChild(node('small', null, '\u2026' + link.replace(/\/basic\.ics.*$|\.ics.*$/, '').slice(-10)));
+      line.appendChild(name);
+      var drop = node('button', 'ghost', 'remove');
+      drop.type = 'button';
+      drop.addEventListener('click', function () { Calendar.remove(i).then(draw); draw(); });
+      line.appendChild(drop);
+      box.appendChild(line);
+    });
+
+    if (Calendar.connected()) {
+      var state = node('div', 'set-row');
+      var says = node('div', 'set-label');
+      says.appendChild(node('small', 'cal-status', Calendar.status()));
+      state.appendChild(says);
+      var again = node('button', 'ghost', 'read it again');
+      again.type = 'button';
+      again.addEventListener('click', function () {
+        again.textContent = 'reading\u2026';
+        Calendar.refresh().then(draw);
+      });
+      state.appendChild(again);
+      box.appendChild(state);
+    }
+
+    if (!signedIn) {
+      box.appendChild(node('p', 'set-note',
+        'sign in first (the cloud button, top right) \u2014 your calendar is read through your own account'));
+      return;
+    }
+
+    var add = node('div', 'cal-add');
+    var input = node('input', 'set-text cal-link');
+    input.type = 'url';
+    input.placeholder = Calendar.connected() ? 'add another calendar\u2019s iCal link' : 'paste your calendar\u2019s secret iCal link';
+    input.dataset.focusKey = 'cal-link';
+    input.setAttribute('aria-label', 'Calendar iCal link');
+    var go = node('button', 'set-add wide', 'connect');
+    go.type = 'button';
+    var said = node('p', 'set-note cal-said', '');
+    function connect() {
+      if (!input.value.trim()) return;
+      go.textContent = 'reading\u2026';
+      Calendar.add(input.value).then(function (res) {
+        go.textContent = 'connect';
+        if (res && res.error) { said.textContent = res.error; return; }
+        input.value = '';
+        draw();
+      });
+    }
+    go.addEventListener('click', connect);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
+    add.appendChild(input);
+    add.appendChild(go);
+    box.appendChild(add);
+    box.appendChild(said);
+
+    var how = node('details', 'cal-how');
+    how.appendChild(node('summary', null, 'where is that link?'));
+    [
+      'Google: open Google Calendar on a computer \u2192 \u2699 Settings \u2192 click your calendar on the left \u2192 Integrate calendar \u2192 copy \u201cSecret address in iCal format\u201d.',
+      'Apple: Calendar on a Mac \u2192 right-click the calendar \u2192 Share Calendar \u2192 Public Calendar \u2192 copy the link.',
+      'Outlook: Settings \u2192 Calendar \u2192 Shared calendars \u2192 Publish a calendar \u2192 copy the ICS link.',
+      'It is private: anyone with it can read that calendar, so it is kept in your account and nowhere else. pip only ever reads it.'
+    ].forEach(function (text) { how.appendChild(node('p', 'set-note', text)); });
+    box.appendChild(how);
+  }
+
   function drawLoad() {
     var box = section('a full day', 'the point at which today is asking too much');
     var caps = window.Plan ? Plan.caps() : { work: 330, practice: 240 };
@@ -589,6 +672,7 @@ window.Panel = (function () {
     drawStats();
     drawTimer();
     drawDay();
+    drawCalendar();
     drawLoad();
     drawTags();
     drawLists();

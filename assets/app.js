@@ -243,7 +243,7 @@
   function assignment() {
     if (!window.Store) return null;
     var block = Store.currentBlock();
-    if (!block) return null;
+    if (!block || block.calendar) return null;     // a calendar event is not a study session
     var task = block.taskId ? Store.taskById(block.taskId) : null;
     return { blockId: block.id, taskId: task ? task.id : null, title: block.title || (task ? task.title : 'block') };
   }
@@ -1282,6 +1282,11 @@
       Plan.init({ hour12: settings.hour12 });   // before the first render reaches into it
       Plan.setDay(settings.dayStart, settings.dayEnd);
       Plan.setCaps(settings.capWork, settings.capPractice);
+    }
+    // your calendar's events join the day; when they change, so does the plan
+    if (window.Calendar) {
+      Calendar.init();
+      Calendar.onChange(function () { if (window.Plan) Plan.render(); });
     }
     wirePanel();
     el.soundBtn.setAttribute('aria-pressed', String(settings.sound));

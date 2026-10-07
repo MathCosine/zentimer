@@ -492,9 +492,21 @@ window.Store = (function () {
     return alive(state.blocks).filter(function (b) { return b.id === blockId; })[0] || null;
   }
 
+  /* Things on the day that are not pip's to keep: events from a connected
+     calendar. They are shown, planned around and counted as time spoken for,
+     but they are never stored, synced, moved or deleted here -- they are
+     asked for fresh each time, and blockById does not know them, so nothing
+     that edits a block can touch one. */
+  var outside = null;
+  function setOutside(fn) { outside = typeof fn === 'function' ? fn : null; }
+
   function blocksOn(key) {
-    return alive(state.blocks).filter(function (b) { return b.date === (key || dayKey()); })
-      .sort(function (a, b) { return a.start - b.start; });
+    var when = key || dayKey();
+    var mine = alive(state.blocks).filter(function (b) { return b.date === when; });
+    if (outside) {
+      try { mine = mine.concat(outside(when) || []); } catch (e) { /* a calendar never breaks the day */ }
+    }
+    return mine.sort(function (a, b) { return a.start - b.start; });
   }
 
   /* the block happening right now, if any */
@@ -520,7 +532,8 @@ window.Store = (function () {
   function overrunBlock(atMinutes) {
     var at = typeof atMinutes === 'number' ? atMinutes : minutesNow();
     var recent = blocksOn(dayKey()).filter(function (b) {
-      return !b.done && b.end <= at && (at - b.end) <= OVERRUN_GRACE;
+      // a calendar event that has ended has ended; it is not work running over
+      return !b.done && !b.calendar && b.end <= at && (at - b.end) <= OVERRUN_GRACE;
     });
     return recent.length ? recent[recent.length - 1] : null;
   }
@@ -528,7 +541,7 @@ window.Store = (function () {
   /* push everything after this block later by n minutes */
   /* how much of a day is spoken for */
   function daySummary(key) {
-    var day = blocksOn(key);
+    var day = blocksOn(key).filter(function (b) { return !b.calendar; });   // what you planned
     var planned = day.reduce(function (sum, b) { return sum + (b.end - b.start); }, 0);
     return { count: day.length, minutes: planned, done: day.filter(function (b) { return b.done; }).length };
   }
@@ -889,6 +902,7 @@ window.Store = (function () {
     blocks: blocksOn, addBlock: addBlock, updateBlock: updateBlock, removeBlock: removeBlock,
     blockById: blockById, currentBlock: currentBlock, nextBlock: nextBlock, daySummary: daySummary,
     ensureRoutine: ensureRoutine,
+    setOutside: setOutside,
     overrunBlock: overrunBlock, shiftAfter: shiftAfter, findSlot: findSlot,
 
     logTime: logTime, loggedOn: loggedOn,

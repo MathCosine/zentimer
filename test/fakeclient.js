@@ -56,7 +56,15 @@ export function createClient() {
       return { on() { return this; }, subscribe(cb) { cb && cb('SUBSCRIBED'); return this; } };
     },
     removeChannel() {},
-    rpc: async () => ({ data: null, error: null })
+    rpc: async () => ({ data: null, error: null }),
+    // as supabase-js: a text body comes back as text, a failure as an error with its status
+    functions: {
+      async invoke(name, opts) {
+        const res = await fetch(DB + '/function/' + name, { method: 'POST', body: JSON.stringify({ body: opts && opts.body }) });
+        if (!res.ok) return { data: null, error: { message: 'Edge Function returned a non-2xx status code', context: { status: res.status } } };
+        return { data: await res.text(), error: null };
+      }
+    }
   };
 }
 `;

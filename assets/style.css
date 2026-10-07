@@ -559,6 +559,20 @@ body[data-mode="break"] .phase { color: var(--green); }
 
 .block.is-flash { animation: flash 900ms var(--ease); }
 
+/* From your calendar: a different kind of thing from a block you planned --
+   hatched, outlined dashed, and not something you can pick up. */
+.block.is-calendar {
+  cursor: default;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--violet) 70%, var(--outline));
+  background:
+    repeating-linear-gradient(135deg,
+      color-mix(in srgb, var(--violet) 16%, var(--card)) 0 7px,
+      color-mix(in srgb, var(--violet) 26%, var(--card)) 7px 14px);
+}
+.block.is-calendar .block-title::before { content: "\1F4C5\FE0E  "; font-size: 0.85em; opacity: 0.7; }
+.plan-card.is-open .timeline .block.is-calendar { cursor: default; }
+
 /* the shape you drag out before letting go */
 .block.is-ghost {
   border-style: dashed;
@@ -1636,6 +1650,27 @@ body.settings-open .extras { display: none; }
 .set-number { width: 68px; }
 .set-number:focus, .set-time:focus { outline: none; border-color: var(--accent); }
 
+/* connecting a calendar */
+.cal-add { display: flex; gap: 6px; align-items: center; min-width: 0; margin-top: 4px; }
+.cal-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1.5px solid var(--outline);
+  background: var(--well);
+  color: var(--ink);
+}
+.cal-link:focus { outline: none; border-color: var(--accent); }
+.cal-add .set-add.wide { flex: 0 0 auto; width: auto; margin: 0; padding: 6px 12px; }
+.cal-said:empty { display: none; }
+.cal-said { color: var(--coral); }
+.cal-status { white-space: normal; }
+.cal-how summary { cursor: pointer; font-size: 0.68rem; color: var(--soft); margin-top: 6px; }
+.cal-how .set-note { margin: 4px 0 0; }
+
 /* a switch that reads as on or off at a glance */
 .set-toggle {
   width: 42px;
@@ -2117,6 +2152,11 @@ body.dragging-task .task-list { pointer-events: none; }
   cursor: grab;
 }
 .week-block.is-done { background: color-mix(in srgb, var(--green) 26%, var(--card)); opacity: 0.75; }
+.week-block.is-calendar {
+  cursor: pointer;
+  border-style: dashed;
+  background: color-mix(in srgb, var(--violet) 20%, var(--card));
+}
 .week-when { font-size: 0.6rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .week-title {
   font-size: 0.62rem;
@@ -2681,6 +2721,11 @@ body.dragging-task .task-list { pointer-events: none; }
 .plan-why { flex: 0 0 auto; color: var(--soft); }
 .plan-mins { flex: 0 0 auto; color: var(--soft); font-variant-numeric: tabular-nums; }
 .plan-line.is-late .plan-at { color: var(--coral); }
+.plan-line.is-fixed { cursor: default; }
+.allday-line { margin: 2px 0 4px 18px; font-size: 0.68rem; color: var(--violet); font-weight: 600; }
+.allday-line[hidden] { display: none; }
+.plan-line.is-fixed .plan-name { color: var(--violet); font-weight: 600; }
+.plan-line.is-fixed:hover .plan-name { text-decoration: none; }
 .plan-note { margin: 3px 0 0; font-size: 0.64rem; color: var(--green); }
 .plan-sub {
   margin: 8px 0 1px;

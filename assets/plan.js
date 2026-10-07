@@ -1214,7 +1214,8 @@ window.Plan = (function () {
     var height = Math.max(18, (block.end - block.start) * scale - 2);
 
     var node = document.createElement('div');
-    node.className = 'block' + (tag ? ' tone-' + tag.color : '') +
+    if (block.calendar) over = false;          // an event that has ended is just over
+    node.className = 'block' + (tag ? ' tone-' + tag.color : '') + (block.calendar ? ' is-calendar' : '') +
       (block.done ? ' is-done' : '') + (running ? ' is-now' : '') + (over ? ' is-over' : '') +
       (height < 34 ? ' is-tight' : '') + (ui.selected === block.id ? ' is-picked' : '');
     node.dataset.id = block.id;
@@ -1231,6 +1232,13 @@ window.Plan = (function () {
     when.className = 'block-when';
     when.textContent = label(block.start) + '–' + label(block.end) + (block.ranOver ? ' +' + block.ranOver + 'm' : '');
     node.appendChild(when);
+
+    /* From your calendar: shown, and planned around, but it lives there --
+       to move it or change it, change it in the calendar. */
+    if (block.calendar) {
+      node.title = name + ' \u00b7 from your calendar';
+      return node;
+    }
 
     var grip = document.createElement('span');
     grip.className = 'block-grip';
@@ -1532,8 +1540,24 @@ window.Plan = (function () {
 
   /* ---------- now ---------- */
 
+  /* All-day things from your calendar -- an exam, a trip -- are not time
+     spoken for, so they are not blocks; they are a line under the now strip. */
+  function allDayLine() {
+    if (!el.nowStrip) return;
+    var line = el.allDay;
+    if (!line) {
+      line = el.allDay = document.createElement('p');
+      line.className = 'allday-line';
+      el.nowStrip.parentNode.insertBefore(line, el.nowStrip.nextSibling);
+    }
+    var names = window.Calendar ? Calendar.allDayOn(viewDate()) : [];
+    line.hidden = !names.length;
+    paint(line, names.length ? 'all day: ' + names.join(', ') : '');
+  }
+
   function renderNow() {
     if (!isToday()) {
+      allDayLine();
       var sum = Store.daySummary(viewDate());
       el.nowStrip.classList.remove('is-over');
       el.nowShift.hidden = false;
@@ -1550,6 +1574,7 @@ window.Plan = (function () {
     var block = Store.currentBlock(now);
     var over = block ? null : Store.overrunBlock(now);
     var next = Store.nextBlock(now);
+    allDayLine();
 
     el.nowStrip.classList.toggle('is-over', !!over);
     el.nowShift.hidden = true;
@@ -2642,6 +2667,36 @@ window.Plan = (function () {
     return drills;
   }
 
+  /* A gap before something fixed is better filled by a step that fits it
+     whole than by half of one that does not: an hour before tutoring is the
+     hour-long problem set, and the ninety-minute lab goes after. Only when
+     nothing fits does a step get split around the event. */
+  function fitAround(order, at, busy) {
+    var steps = order.slice(), out = [], cursor = at;
+    while (steps.length) {
+      var inside = busy.filter(function (b) { return cursor >= b.start && cursor < b.end; })[0];
+      if (inside) { cursor = inside.end; continue; }
+      var next = busy.filter(function (b) { return b.start > cursor; })[0];
+      var gap = next ? next.start - cursor : Infinity;
+      var pick = 0;
+      if (steps[0].mins > gap && gap >= 10) {
+        for (var i = 1; i < steps.length; i++) { if (steps[i].mins <= gap) { pick = i; break; } }
+      }
+      var chosen = steps.splice(pick, 1)[0];
+      out.push(chosen);
+      cursor += chosen.mins;
+      if (next && cursor > next.start) cursor += next.end - next.start;   // split round it
+    }
+    return out;
+  }
+
+  /* Anything already on the day that is not one of your tasks: a calendar
+     event, a block for something else. */
+  function fixedFrom(key, at) {
+    return Store.blocks(key).filter(function (b) { return !b.done && !b.taskId && b.end > at; })
+      .sort(function (a, b) { return a.start - b.start; });
+  }
+
   /* What fits before bed, in the order it should be done.
 
        first    anything overdue, due today or due tomorrow -- tonight is the
@@ -2760,7 +2815,8 @@ window.Plan = (function () {
       free: free, need: need, hardNeed: hardNeed, workNeed: workNeed,
       spare: Math.max(0, free - need), fits: fits, waits: waits, pressed: pressed,
       practice: practice, practiceRoom: mode === 'crunch' || mode === 'late' ? 0 : booked + more,
-      mode: mode, order: order, room: room
+      mode: mode, room: room,
+      order: fitAround(order, Math.max(Store.minutesNow(), DAY_START), fixedFrom(key, Math.max(Store.minutesNow(), DAY_START)))
     };
   }
 
@@ -2772,8 +2828,7 @@ window.Plan = (function () {
     var box = node('div', 'aim-plan');
     var key = Store.dayKey();
     var at = Math.max(Store.minutesNow(), DAY_START);
-    var busy = Store.blocks(key).filter(function (b) { return !b.done && !b.taskId && b.end > at; })
-      .sort(function (a, b) { return a.start - b.start; });
+    var busy = fixedFrom(key, at);
 
     function open(task) {
       return function () {
@@ -2807,15 +2862,46 @@ window.Plan = (function () {
       return row;
     }
 
+    /* Something fixed -- from your calendar, or a block that is not one of
+       your tasks -- in its place in the evening, so the plan reads as the
+       evening will actually go. */
+    var shown = {};
+    function fixed(b) {
+      if (shown[b.id]) return;
+      shown[b.id] = true;
+      var row = node('div', 'plan-line is-fixed');
+      row.appendChild(node('span', 'plan-at', label(b.start % (24 * 60))));
+      row.appendChild(node('span', 'plan-name', b.title || 'busy'));
+      row.appendChild(node('span', 'plan-why', b.calendar ? 'calendar' : 'planned'));
+      row.appendChild(node('span', 'plan-mins', spanLabel(b.end - b.start)));
+      box.appendChild(row);
+    }
+
     if (!plan.order.length) {
       box.appendChild(node('p', 'aim-none', 'nothing fits before bed tonight'));
     }
     plan.order.forEach(function (step) {
-      // step round anything already on the day that is not this work
-      busy.forEach(function (b) { if (at >= b.start && at < b.end) at = b.end; });
-      box.appendChild(line(step, at));
-      at += step.mins;
+      var left = step.mins, first = true;
+      while (left > 0) {
+        // inside something fixed: it happens first
+        var inside = busy.filter(function (b) { return at >= b.start && at < b.end; })[0];
+        if (inside) { fixed(inside); at = inside.end; continue; }
+        // something fixed starts before this would finish: do what fits, then it, then the rest
+        var cut = busy.filter(function (b) { return b.start > at && b.start < at + left; })[0];
+        var run = cut ? cut.start - at : left;
+        if (cut && run < 10) { fixed(cut); at = cut.end; continue; }   // too short a gap to start in
+        var part = Object.assign({}, step, { mins: run });
+        var row = line(part, at);
+        if (!first) row.querySelector('.plan-name').textContent = '\u21b3 ' + step.task.title;
+        box.appendChild(row);
+        at += run;
+        left -= run;
+        first = false;
+        if (cut) { fixed(cut); at = cut.end; }
+      }
     });
+    // and whatever else is fixed before bed, after the plan runs out
+    busy.forEach(function (b) { if (b.start >= at && b.start < DAY_END) fixed(b); });
     if (plan.order.length) {
       box.appendChild(node('p', 'plan-note', at > DAY_END
         ? 'that runs past bedtime'
@@ -3145,12 +3231,19 @@ window.Plan = (function () {
       day.forEach(function (block) {
         var chip = document.createElement('button');
         chip.type = 'button';
-        chip.className = 'week-block' + (block.done ? ' is-done' : '');
+        chip.className = 'week-block' + (block.done ? ' is-done' : '') + (block.calendar ? ' is-calendar' : '');
         chip.dataset.id = block.id;
         chip.style.height = Math.max(14, Math.round((block.end - block.start) / busiest * 120)) + 'px';
         chip.appendChild(node('span', 'week-when', label(block.start)));
         chip.appendChild(node('span', 'week-title', block.title || 'untitled'));
-        chip.title = block.title + ' · ' + label(block.start) + '–' + label(block.end);
+        chip.title = block.title + ' · ' + label(block.start) + '–' + label(block.end) +
+          (block.calendar ? ' · from your calendar' : '');
+        if (block.calendar) {
+          // it lives in the calendar: tapping shows its day, nothing moves it
+          chip.addEventListener('click', function () { ui.date = key === today ? null : key; ui.week = false; render(); });
+          stack.appendChild(chip);
+          return;
+        }
         chip.addEventListener('pointerdown', function (event) { startWeekDrag(event, block); });
         chip.addEventListener('click', function () {
           if (movedBlockAt && Date.now() - movedBlockAt < 400) { movedBlockAt = 0; return; }
