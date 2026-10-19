@@ -42,7 +42,7 @@ const { chromium } = require('./browser');
 
   console.log('\n--- the front page offline too ---');
   await p.goto('http://127.0.0.1:8899/'); await p.waitForTimeout(1200);
-  check('front page opens', await p.evaluate(() => /keeps your day honest/i.test(document.body.innerText)), true);
+  check('front page opens', await p.evaluate(() => /planned before bedtime/i.test(document.body.innerText)), true);
 
   await ctx.setOffline(false);
   console.log(`\n${pass} passed, ${fail} failed, ${errs.length} console errors`);

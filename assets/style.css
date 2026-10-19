@@ -3375,3 +3375,11 @@ button:not(:disabled) { -webkit-tap-highlight-color: transparent; }
 }
 .ai-about:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 .ai-said { display: block; }
+
+/* the account panel on the desk: where you are, and the way to your account */
+.sync-lede { margin: 0 0 2px; font-size: 0.78rem; line-height: 1.45; color: var(--muted); }
+.sync-pop a.go, .sync-pop a.ghost { display: inline-block; text-decoration: none; }
+.sync-who { margin: 0; font-size: 0.86rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* a brand new desk says where the welcome is */
+.task-empty a { color: var(--accent); font-weight: 600; }

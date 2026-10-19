@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>pip — your account</title>
+<meta name="description" content="Sign in to pip, or make an account, so your desk follows you to every device.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7f4fc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15132a" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon.svg">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="preload" href="../assets/fonts/fredoka-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/pages.css">
+</head>
+<body class="page">
+
+<div class="sky" aria-hidden="true"></div>
+
+<header class="page-bar">
+  <a class="page-mark" href="../"><img src="../assets/icon.svg" alt="" width="28" height="28"> pip</a>
+  <a class="page-skip" href="../app/" id="skipLink">open your desk →</a>
+</header>
+
+<main class="page-main">
+  <section class="auth-card" id="authCard" aria-live="polite">
+
+    <!-- signing in, and making an account: one form, two ways -->
+    <div class="auth-view" id="viewForm">
+      <div class="auth-switch" role="tablist" aria-label="Sign in or make an account">
+        <button type="button" role="tab" id="tabIn" aria-selected="true">sign in</button>
+        <button type="button" role="tab" id="tabUp" aria-selected="false">make an account</button>
+        <span class="auth-switch-blob" aria-hidden="true"></span>
+      </div>
+
+      <h1 class="auth-title" id="formTitle">welcome back</h1>
+      <p class="auth-lede" id="formLede">your desk, on every device you use</p>
+
+      <button type="button" class="auth-google" id="googleBtn" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h6c-.3 1.4-1 2.6-2.2 3.4v2.8h3.6c2.1-1.9 3.2-4.8 3.2-8.2z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.4-2.7l-3.6-2.8c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2v2.9C3.8 20.5 7.6 23 12 23z"/><path fill="#FBBC05" d="M5.7 14c-.2-.7-.4-1.4-.4-2s.1-1.4.4-2V7.1H2C1.4 8.6 1 10.2 1 12s.4 3.4 1 4.9L5.7 14z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2C17.5 2.1 15 1 12 1 7.6 1 3.8 3.5 2 7.1L5.7 10c.9-2.7 3.4-4.6 6.3-4.6z"/></svg>
+        continue with Google
+      </button>
+      <p class="auth-or" id="googleOr" hidden><span>or with your email</span></p>
+
+      <form class="auth-form" id="authForm" novalidate>
+        <label class="auth-field">
+          <span>email</span>
+          <input id="email" type="email" autocomplete="username" inputmode="email" spellcheck="false" required>
+        </label>
+        <label class="auth-field">
+          <span>password</span>
+          <span class="auth-pass">
+            <input id="password" type="password" autocomplete="current-password" required minlength="6">
+            <button type="button" class="auth-eye" id="eye" aria-label="Show the password" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="3"></circle><path class="eye-shut" d="M4 20L20 4"></path></svg>
+            </button>
+          </span>
+          <small class="auth-hint" id="passHint">at least six characters</small>
+        </label>
+        <p class="auth-said" id="formSaid" role="alert"></p>
+        <button type="submit" class="go auth-go" id="formGo"><span>sign in</span></button>
+        <button type="button" class="linky" id="forgotLink">forgotten your password?</button>
+      </form>
+
+      <p class="auth-small" id="localNote">
+        No account needed to try it — <a href="../app/">open the desk</a> and it keeps
+        everything in this browser. An account is what makes it follow you, and
+        what lets the AI plan with you.
+      </p>
+    </div>
+
+    <!-- forgotten password -->
+    <div class="auth-view" id="viewForgot" hidden>
+      <h1 class="auth-title">no worries</h1>
+      <p class="auth-lede">tell us your email and we’ll send a link to choose a new password</p>
+      <form class="auth-form" id="forgotForm" novalidate>
+        <label class="auth-field">
+          <span>email</span>
+          <input id="forgotEmail" type="email" autocomplete="username" spellcheck="false" required>
+        </label>
+        <p class="auth-said" id="forgotSaid" role="alert"></p>
+        <button type="submit" class="go auth-go"><span>send the link</span></button>
+        <button type="button" class="linky" data-back>back to signing in</button>
+      </form>
+    </div>
+
+    <!-- arriving from the reset email -->
+    <div class="auth-view" id="viewReset" hidden>
+      <h1 class="auth-title">a new password</h1>
+      <p class="auth-lede">pick something you’ll remember</p>
+      <form class="auth-form" id="resetForm" novalidate>
+        <label class="auth-field">
+          <span>new password</span>
+          <input id="newPassword" type="password" autocomplete="new-password" minlength="6" required>
+          <small class="auth-hint">at least six characters</small>
+        </label>
+        <p class="auth-said" id="resetSaid" role="alert"></p>
+        <button type="submit" class="go auth-go"><span>save it</span></button>
+      </form>
+    </div>
+
+    <!-- an email is on its way -->
+    <div class="auth-view auth-sent" id="viewSent" hidden>
+      <div class="auth-envelope" aria-hidden="true">✉</div>
+      <h1 class="auth-title" id="sentTitle">check your email</h1>
+      <p class="auth-lede" id="sentLede"></p>
+      <button type="button" class="linky" data-back>back to signing in</button>
+    </div>
+
+    <!-- signed in -->
+    <div class="auth-view" id="viewAccount" hidden>
+      <div class="acct-head">
+        <span class="acct-face" id="acctFace" aria-hidden="true">?</span>
+        <div class="acct-who">
+          <h1 class="auth-title" id="acctTitle">your account</h1>
+          <p class="auth-lede" id="acctEmail"></p>
+        </div>
+      </div>
+      <p class="acct-status" id="acctStatus"><span class="tool-dot is-synced" aria-hidden="true"></span><span id="acctStatusText">synced</span></p>
+
+      <a class="go auth-go acct-open" href="../app/">open your desk</a>
+
+      <div class="acct-list">
+        <details class="acct-row" id="pwRow">
+          <summary>change your password</summary>
+          <form class="auth-form" id="pwForm" novalidate>
+            <label class="auth-field">
+              <span>new password</span>
+              <input id="pwNew" type="password" autocomplete="new-password" minlength="6" required>
+            </label>
+            <p class="auth-said" id="pwSaid" role="alert"></p>
+            <button type="submit" class="go small"><span>change it</span></button>
+          </form>
+        </details>
+        <button type="button" class="acct-row" id="exportBtn">download everything <small>a file you keep</small></button>
+        <button type="button" class="acct-row" id="outBtn">sign out <small>this browser keeps its own copy</small></button>
+        <details class="acct-row is-danger" id="deleteRow">
+          <summary>delete your account</summary>
+          <p class="auth-small">This removes your account and everything in it, on every device, and cannot be undone. Download a copy first if you want one.</p>
+          <button type="button" class="go small is-danger" id="deleteBtn"><span>yes, delete it all</span></button>
+          <p class="auth-said" id="deleteSaid" role="alert"></p>
+        </details>
+      </div>
+    </div>
+
+    <details class="auth-advanced" id="advanced">
+      <summary>use a different Supabase project</summary>
+      <label class="auth-field"><span>project url</span>
+        <input id="projUrl" type="url" spellcheck="false" placeholder="https://xxxx.supabase.co"></label>
+      <label class="auth-field"><span>publishable (anon) key</span>
+        <input id="projKey" type="text" spellcheck="false" placeholder="sb_publishable_…"></label>
+      <button type="button" class="ghost" id="projSave">use this project</button>
+    </details>
+  </section>
+</main>
+
+<footer class="page-foot">
+  <a href="../privacy.html">what it stores</a>
+  <span aria-hidden="true">·</span>
+  <a href="https://github.com/MathCosine/zentimer">source</a>
+</footer>
+
+<canvas id="petCanvas" aria-hidden="true"></canvas>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="../assets/config.js"></script>
+<script src="../assets/motion.js"></script>
+<script src="../assets/sync.js"></script>
+<script src="../assets/store.js"></script>
+<script src="../assets/pet.js"></script>
+<script src="../assets/account.js"></script>
+<script src="../assets/offline.js"></script>
+</body>
+</html>

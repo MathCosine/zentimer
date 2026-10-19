@@ -21,12 +21,8 @@
     ringOverlay: $('ringOverlay'), ringTime: $('ringTime'), ringHeading: $('ringHeading'),
     ringDismiss: $('ringDismiss'),
     syncBtn: $('syncBtn'), syncPop: $('syncPop'), syncStatus: $('syncStatus'),
-    syncUrl: $('syncUrl'), syncKey: $('syncKey'), syncEmail: $('syncEmail'), syncPass: $('syncPass'),
-    syncConnect: $('syncConnect'), syncExport: $('syncExport'), syncImport: $('syncImport'),
-    authTitle: $('authTitle'), authForm: $('authForm'), authSwap: $('authSwap'), authForgot: $('authForgot'),
+    authTitle: $('authTitle'), authForm: $('authForm'),
     authAccount: $('authAccount'), authWho: $('authWho'), authOut: $('authOut'),
-    authDelete: $('authDelete'), authWarn: $('authWarn'),
-    authDeleteYes: $('authDeleteYes'), authDeleteNo: $('authDeleteNo'), syncAdvanced: $('syncAdvanced'),
     alarmBtn: $('alarmBtn'), alarmPop: $('alarmPop'), alarmNote: $('alarmNote'),
     menuBtn: $('menuBtn'), menuPop: $('menuPop'), syncDot: $('syncDot'),
     bar: document.querySelector('.bar')
@@ -888,8 +884,8 @@
         save();
       },
 
-      exportData: function () { el.syncExport.click(); },
-      importData: function () { el.syncImport.click(); },
+      exportData: exportData,
+      importData: importData,
       openSync: function () { Panel.show(false); el.syncBtn.click(); },
       syncStatus: function () { return el.syncStatus ? el.syncStatus.textContent : 'local only'; }
     });
@@ -1061,8 +1057,6 @@
     save();
   });
 
-  var making = false;          // the form is in "create an account" mode
-
   function renderSync() {
     var status = Store.remote.status();
     var baked = Store.remote.configured();
@@ -1072,28 +1066,14 @@
 
     el.authForm.hidden = inside;
     el.authAccount.hidden = !inside;
-    el.authTitle.textContent = inside ? 'your account' : making ? 'make an account' : 'your desk, everywhere';
-    // a project of your own is an escape hatch, and only while signed out
-    el.syncAdvanced.hidden = inside;
-    if (inside) {
-      el.authWho.textContent = '';
-      el.authWho.appendChild(document.createTextNode('signed in as '));
-      var who = document.createElement('b');
-      who.textContent = email || 'this account';
-      el.authWho.appendChild(who);
-    } else {
-      el.authWarn.hidden = true;
-      el.syncConnect.textContent = making ? 'make it' : 'sign in';
-      el.authSwap.textContent = making ? 'I already have one' : 'make an account';
-      el.syncPass.autocomplete = making ? 'new-password' : 'current-password';
-      el.authForgot.hidden = making;
-    }
+    el.authTitle.textContent = inside ? 'your account' : 'your desk, everywhere';
+    if (inside) el.authWho.textContent = email || 'this account';
     var text = status === 'synced'
       ? (waiting ? '✓ synced · ' + waiting + ' waiting' : '✓ synced')
       : status === 'syncing' ? 'syncing…'
-      : status === 'signed out' ? 'sign in below to sync'
+      : status === 'signed out' ? 'this browser only'
       : status === 'connecting' ? 'connecting…'
-      : status === 'off' ? (baked ? 'starting…' : 'local only (this browser)')
+      : status === 'off' ? (baked ? 'starting…' : 'this browser only')
       : status;
     paint(el.syncStatus, 'textContent', text);
     var dot = !inside ? '' : status === 'synced' ? (waiting ? 'is-waiting' : 'is-synced')
@@ -1104,75 +1084,28 @@
 
   function toggleSyncPanel(force) { openPop('sync', force); }
 
-  function authTrouble(err) {
-    var why = (err && err.message) || String(err);
-    if (/not confirmed/i.test(why)) return 'check your email to confirm the address';
-    if (/already registered|already exists/i.test(why)) return 'that email already has an account — sign in instead';
-    if (/invalid login|invalid credentials/i.test(why)) return 'that email and password do not match';
-    if (/password/i.test(why) && /short|least|6/i.test(why)) return 'a password needs at least six characters';
-    if (/rate|too many/i.test(why)) return 'too many tries — wait a minute';
-    return why.slice(0, 80);
-  }
-
-  el.authSwap.addEventListener('click', function () { making = !making; renderSync(); });
-
-  el.authForgot.addEventListener('click', function () {
-    var email = el.syncEmail.value.trim();
-    if (!email) { paint(el.syncStatus, 'textContent', 'your email first, then this'); return; }
-    Store.remote.connect()
-      .then(function () { return Store.remote.resetPassword(email); })
-      .then(function () { paint(el.syncStatus, 'textContent', 'check your email for the reset link'); })
-      .catch(function (err) { paint(el.syncStatus, 'textContent', authTrouble(err)); });
-  });
-
   el.authOut.addEventListener('click', function () {
     Store.remote.signOut().then(function () {
-      el.syncPass.value = '';
       paint(el.syncStatus, 'textContent', 'signed out — this browser keeps its own copy');
       renderSync();
     });
   });
 
-  el.authDelete.addEventListener('click', function () { el.authWarn.hidden = false; });
-  el.authDeleteNo.addEventListener('click', function () { el.authWarn.hidden = true; });
-  el.authDeleteYes.addEventListener('click', function () {
-    paint(el.syncStatus, 'textContent', 'deleting…');
-    Store.remote.deleteAccount()
-      .then(function () { paint(el.syncStatus, 'textContent', 'account deleted'); renderSync(); })
-      .catch(function (err) { paint(el.syncStatus, 'textContent', authTrouble(err)); });
-  });
-
-  el.syncConnect.addEventListener('click', function () {
-    var url = el.syncUrl.value.trim(), key = el.syncKey.value.trim();
-    var email = el.syncEmail.value.trim(), password = el.syncPass.value;
-    var baked = Store.remote.configured();
-    if ((!url || !key) && !baked) { paint(el.syncStatus, 'textContent', 'paste the project url and key'); return; }
-    if (!email || !password) { paint(el.syncStatus, 'textContent', 'an email and a password'); return; }
-    if (making && password.length < 6) { paint(el.syncStatus, 'textContent', 'a password needs at least six characters'); return; }
-    paint(el.syncStatus, 'textContent', making ? 'making your account…' : 'signing in…');
-    (url && key ? Store.remote.save(url, key) : Store.remote.connect())
-      .then(function () {
-        return making ? Store.remote.signUp(email, password) : Store.remote.signIn(email, password);
-      })
-      .then(function () { el.syncPass.value = ''; making = false; renderSync(); })
-      .catch(function (err) { paint(el.syncStatus, 'textContent', authTrouble(err)); });
-  });
-
-  el.syncExport.addEventListener('click', function () {
+  function exportData() {
     var blob = new Blob([Store.exportJSON()], { type: 'application/json' });
     var link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = 'pip-' + Store.dayKey() + '.json';
     link.click();
     setTimeout(function () { URL.revokeObjectURL(link.href); }, 2000);
-  });
+  }
 
-  el.syncImport.addEventListener('click', function () {
+  function importData() {
     var text = window.prompt('Paste a pip export');
     if (!text) return;
-    try { Store.importJSON(text); paint(el.syncStatus, 'textContent', 'imported'); }
-    catch (err) { paint(el.syncStatus, 'textContent', 'that did not look like an export'); }
-  });
+    try { Store.importJSON(text); if (window.Motion) Motion.toast('imported'); }
+    catch (err) { if (window.Motion) Motion.toast('that did not look like an export'); }
+  }
 
   function effectiveTheme() {
     if (settings.theme !== 'auto') return settings.theme;
@@ -1202,6 +1135,14 @@
 
   function applyTextSize() {
     document.documentElement.style.fontSize = TEXT_SIZES[settings.textSize] || TEXT_SIZES.large;
+  }
+
+  // following the system: the menu's switch says what is showing now
+  if (window.matchMedia) {
+    var scheme = window.matchMedia('(prefers-color-scheme: dark)');
+    var follow = function () { if (settings.theme === 'auto') applyTheme(); };
+    if (scheme.addEventListener) scheme.addEventListener('change', follow);
+    else if (scheme.addListener) scheme.addListener(follow);
   }
 
   el.themeBtn.addEventListener('click', function () {

@@ -1,26 +1,68 @@
 # pip
 
-A study desk for one long narrow window: the time, a timer, today's plan, and your task
-lists — with two little pixel creatures pottering about on top of it all.
+A study desk that plans your evening: your tasks, a timer, and tonight laid out before
+bedtime. It works around your calendar, notices what has to come first, and still makes
+room for practice. Two small pixel creatures potter about at the bottom.
 
-Static files on GitHub Pages. No build step. Everything lives in the browser, and with the
-project settings in `assets/config.js` it syncs through Supabase as well — sign in once per
-browser with the cloud button and the plan follows you (see `supabase/README.md`).
+Static files on GitHub Pages, no build step. Everything lives in the browser first; with an
+account it syncs through Supabase, one row at a time, and the AI and the calendar work
+through that account.
+
+## Pages
+
+| | |
+|---|---|
+| `/` | the front page, with the real desk running in a frame |
+| `/app/` | the desk |
+| `/account/` | sign in, make an account, forgotten password, your account |
+| `/welcome/` | a minute of setting up: classes, practice, bedtime, calendar, a note for the AI |
+| `/privacy.html` | what it stores, and what the AI is sent |
+
+## Setting it up
+
+| | |
+|---|---|
+| [`supabase/README.md`](supabase/README.md) | the database: run `supabase/schema.sql` (safe to run again after every update) |
+| [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md) | redirect URLs, and the optional "continue with Google" |
+| [`docs/AI.md`](docs/AI.md) | the AI: two free keys (Groq, Gemini) and one Edge Function |
+| [`docs/CALENDAR.md`](docs/CALENDAR.md) | the calendar relay, and where people find their iCal link |
+
+## The AI
+
+Two free models, Groq and Gemini, answer at once through an Edge Function on your own
+Supabase project, so no key is ever in the page. Each answer is checked against what pip
+actually has, and when they disagree a third call judges between them.
+
+- **✦ by the add box** turns a note, or a pasted class page, into task cards: class, due
+  date, minutes and what comes first. You fix them or leave some out, then add them.
+- **Tonight's plan** is written by the AI from your tasks, deadlines, calendar, bedtime and
+  "about you, right now" in settings. Every step is checked: made-up tasks are dropped,
+  nothing comes before what it needs, and anything due tomorrow goes in even if it was left
+  out. It asks only after a change that matters, once things have been quiet for 90
+  seconds, and at most every half hour on its own. Whenever it can't answer, the rule-based
+  planner takes over, as before.
+- **Do this first.** A task can need others finished first. The reading takes on the quiz's
+  deadline, and the quiz waits behind it. The AI suggests links it notices; you accept them.
 
 ## The shape of it
 
 The page fills whatever window you give it, so it works docked as a strip down the side of
 a monitor as well as full width:
 
-- **narrow** — one column: clock and timer, then today's plan, then the task list taking
-  whatever height is left and scrolling on its own.
-- **900px and wider** — two columns: the desk on the left, the task list full height on the
-  right.
+- **narrow** — one column: the time and four buttons (alarms, music, account, menu), the
+  timer, tonight (bars, up next, the day), then the task list taking whatever height is
+  left and scrolling on its own.
+- **900px and wider** — two columns: the timer and tonight on the left, the task list full
+  height on the right.
+
+Buttons squish when pressed, ticks pop, rows slide to their new places, finishing the
+evening's homework gets a little confetti, and all of it stands down under "reduce motion".
 
 ## Tasks
 
-- **Lists** down the top (`everything`, `School`, `Extracurricular`, plus any you add) and
-  **tags** underneath as filter chips. Tap chips to narrow, tap again to widen.
+- **Lists** down the top (`everything`, `School`, `Extracurricular`, plus any you add), a
+  search box that is always there, the tag tiles button, and one more button for sort,
+  split, finished tasks, paste and new list. **Tags** sit underneath as filter chips.
 - **Tags come for free**: type `PHY Workbook Week 5` and it tags itself `PHY`. Anything
   starting with a short capitalised word does. `paste` takes a whole list at once, one per
   line, which is how you move in from Google Tasks.
@@ -77,21 +119,36 @@ stand in front of what you're reading. `p` hides them and gives the strip back.
 
 ## Everything else
 
-Alarms with a full-screen ring, four generated ambient tracks behind the headphone button,
-day/night, notifications, wake lock. `space` start, `r` reset, `a` alarm, `m` music,
-`p` pets, `f` fullscreen, `t` theme.
+Alarms (the clock button, which wears the next one's time) with a full-screen ring, four
+generated ambient tracks behind the headphone button, and in the ⋯ menu: settings, sound,
+notifications, pets, night mode, full screen. `space` start, `r` reset, `a` alarm,
+`m` music, `p` pets, `f` fullscreen, `t` theme, `,` settings.
 
 ## Files
 
 ```
-index.html                    markup
-assets/style.css              palette, layout, components
-assets/config.js              sync settings, blank until you fill them in
-assets/store.js               the data: lists, tags, tasks, blocks, logs, sync
-assets/plan.js                the planner: task list, filters, timeline
-assets/app.js                 clock, timer, breaks, alarms, chimes
+index.html                    the front page
+app/index.html                the desk
+account/index.html            signing in, and your account
+welcome/index.html            the first minute
+assets/style.css              palette, layout, components, the feel of it
+assets/pages.css              the account and welcome pages
+assets/landing.css            the front page
+assets/config.js              sync settings (and google: true for Google sign-in)
+assets/store.js               the data: lists, tags, tasks, links, blocks, logs
+assets/sync.js                rows up and down to Supabase
+assets/plan.js                the planner: list, tonight, up next, timeline, week
+assets/ai.js                  asking the AI, and when
+assets/calendar.js            your calendar, read in
+assets/motion.js              the small movements
+assets/app.js                 clock, timer, breaks, alarms, the top buttons
+assets/settings.js            the settings page
+assets/account.js             the account page
+assets/welcome.js             the welcome
 assets/pet.js                 pip and pop
 assets/music.js               the ambience, generated with Web Audio
-supabase/schema.sql           the table and its row-level security
-supabase/README.md            how to switch sync on
+supabase/schema.sql           the tables, row-level security, the AI allowance
+supabase/functions/ai         the AI relay (Groq + Gemini)
+supabase/functions/calendar   the calendar relay
+test/                         Playwright suites (see test/README.md)
 ```

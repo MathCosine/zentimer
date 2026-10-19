@@ -1163,6 +1163,16 @@ window.Plan = (function () {
       var empty = document.createElement('li');
       empty.className = 'task-empty';
       empty.textContent = emptyText;
+      // a brand new desk: the minute of setting up is one tap away
+      var welcomed = true;
+      try { welcomed = !!localStorage.getItem('pip.welcomed'); } catch (e) {}
+      if (!Store.tasks().length && !Store.tags().length && !welcomed) {
+        empty.textContent = 'nothing here yet \u2014 ';
+        var start = node('a', '', 'set up your desk \u2192');
+        start.href = '../welcome/';
+        start.target = '_top';            // out of the front page's frame, if it is in one
+        empty.appendChild(start);
+      }
       el.taskList.appendChild(empty);
       return;
     }

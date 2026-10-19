@@ -16,6 +16,7 @@ window.Sync = (function () {
   var CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
   var OUTBOX = 'pip.sync.outbox';
   var CURSOR = 'pip.sync.cursor';
+  var WHO = 'pip.sync.who';          // whose rows the cursor counts
 
   /* ---------- what each table looks like on the wire ---------- */
 
@@ -173,12 +174,21 @@ window.Sync = (function () {
         });
         client.auth.onAuthStateChange(function (event) {
           if (event === 'SIGNED_OUT') { ready = false; userId = null; userEmail = null; say('signed out'); }
+          // back from a reset email: whoever is listening should ask for the new password
+          if (event === 'PASSWORD_RECOVERY') {
+            try { sessionStorage.setItem('pip.recovering', '1'); } catch (e) {}
+            note(status);
+          }
         });
         return client.auth.getUser();
       })
       .then(function (res) {
         var user = res && res.data && res.data.user;
         if (!user) { say('signed out'); return false; }
+        /* Signed in some other way than the form here -- with Google, or on
+           the account page as somebody else -- the rows already counted as
+           seen were the last person's, not these. */
+        if (load(WHO, null) && load(WHO, null) !== user.id) forgetCursors();
         userId = user.id;
         userEmail = user.email || null;
         return start();
@@ -195,6 +205,7 @@ window.Sync = (function () {
 
   /* first migrate, then pull everything, then send anything waiting */
   function start() {
+    keep(WHO, userId);
     say('syncing');
     return migrate()
       .then(pullAll)
@@ -491,7 +502,7 @@ window.Sync = (function () {
     resetPassword: function (email) {
       if (!client) return Promise.reject(new Error('not connected'));
       return client.auth.resetPasswordForEmail(email, {
-        redirectTo: location.origin + location.pathname
+        redirectTo: location.origin + location.pathname + '?reset=1'
       }).then(function (res) {
         if (res.error) throw res.error;
         say('check your email for the reset link');

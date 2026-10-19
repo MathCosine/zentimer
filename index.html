@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>pip — a study desk</title>
-<meta name="description" content="A study timer, an hour-by-hour plan and your task list in one narrow window, with two small pixel creatures who work alongside you.">
+<title>pip — a study desk that plans your evening</title>
+<meta name="description" content="Your tasks, a timer, and tonight planned before bedtime — with AI that reads your homework, notices what comes first, and works around your calendar. Two small pixel friends study with you.">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#eaf4fb" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#152530" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f4fc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15132a" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon.svg">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preload" href="assets/fonts/fredoka-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/style.css">
 <link rel="stylesheet" href="assets/landing.css">
@@ -19,8 +20,11 @@
 <div class="sky" aria-hidden="true"></div>
 
 <header class="front-bar">
-  <span class="front-mark">pip</span>
-  <a class="front-in" href="app/">open your desk</a>
+  <a class="front-mark" href="./"><img src="assets/icon.svg" alt="" width="28" height="28"> pip</a>
+  <nav class="front-nav">
+    <a class="front-in" href="account/#signin">sign in</a>
+    <a class="front-cta small" href="account/#signup">make your desk</a>
+  </nav>
 </header>
 
 <main class="front">
@@ -28,59 +32,77 @@
   <div class="front-top">
 
   <section class="front-hero">
-    <h1>A desk that keeps your day honest.</h1>
+    <p class="front-kicker"><span class="ai-spark">✦</span> now with AI that plans with you</p>
+    <h1>Your evening, planned before bedtime.</h1>
     <p class="front-lede">
-      A timer, your day hour by hour, and everything you have to do — in one
-      narrow window you can keep beside your work. Two small creatures study
-      alongside you.
+      Your homework, a timer and a calm plan for tonight, all in one window.
+      pip reads your assignments, notices the reading that has to come before
+      the quiz, works around your tutoring and clubs, and still makes room
+      for practice. Two small pixel friends study with you.
     </p>
     <div class="front-go">
-      <a class="front-cta" href="app/">make a desk</a>
-      <a class="front-alt" href="app/#sign-in">sign in</a>
+      <a class="front-cta" href="account/#signup">make your desk</a>
+      <a class="front-alt" href="app/">try it first →</a>
     </div>
-    <p class="front-small">Works straight away. An account only decides whether it follows you between devices.</p>
+    <p class="front-small">No card, no ads. It works without an account, too; an
+    account is what makes it follow you to every device and lets the AI plan with you.</p>
   </section>
 
   <section class="front-demo" aria-label="The desk">
     <div class="front-frame">
       <iframe src="app/" title="pip, running" loading="lazy"></iframe>
     </div>
-    <p class="front-caption">That is the real thing, not a picture. Type in it.</p>
+    <p class="front-caption">That’s the real thing, not a picture. Type in it.</p>
   </section>
 
   </div>
 
   <section class="front-points">
     <article>
-      <h2>Write a task in one line</h2>
-      <p><code>PHY essay thu 4pm 45m</code> becomes a task tagged PHY, due
-      Thursday, at four, three quarters of an hour long. It shows you what it
-      understood before you commit to it.</p>
+      <span class="front-icon" aria-hidden="true">✦</span>
+      <h2>An evening plan that makes sense</h2>
+      <p>Two AIs plan your evening and their answers are compared. Deadlines
+      tomorrow come first, practice still gets its half hour, and the big essay
+      gets a slice tonight so it isn’t all left to the last night.</p>
     </article>
     <article>
-      <h2>Plan the hours, not just the list</h2>
-      <p>Drag a task onto an hour. The timeline shows the six around now and
-      opens to the whole day when you want it. The timer knows what you are
-      supposed to be doing.</p>
+      <span class="front-icon" aria-hidden="true">📋</span>
+      <h2>Paste the whole assignments page</h2>
+      <p>Copy it from your class site and press ✦. Each task comes out with its
+      class, due date and a rough time. You look them over, fix anything, and
+      add them all at once.</p>
     </article>
     <article>
-      <h2>Your classes, your colours</h2>
-      <p>A capitalised first word becomes a tag. Rename, recolour and merge
-      them; split the list so school sits above everything else; see where the
-      week's hours actually went.</p>
+      <span class="front-icon" aria-hidden="true">↳</span>
+      <h2>Reading before the quiz</h2>
+      <p>Link a task to what has to come first. The reading takes on the quiz’s
+      deadline and comes first in the plan, and the quiz waits its turn.</p>
     </article>
     <article>
+      <span class="front-icon" aria-hidden="true">📅</span>
+      <h2>Your calendar, built in</h2>
+      <p>Connect Google, Apple or Outlook. Tutoring, practice and clubs show on
+      your day, and tonight’s plan fits around them.</p>
+    </article>
+    <article>
+      <span class="front-icon" aria-hidden="true">⏱</span>
+      <h2>A timer that knows what it’s for</h2>
+      <p>Start a session and it counts toward the task you’re on. Your progress
+      bars fill up, and ticking the last thing off gets a little confetti.</p>
+    </article>
+    <article>
+      <span class="front-icon" aria-hidden="true">♡</span>
       <h2>It keeps your work</h2>
-      <p>Everything lives on your machine first and syncs a row at a time, so
-      two devices both win. Deletes are recoverable, there is a daily local
-      snapshot, and you can export the lot as a file whenever you like.</p>
+      <p>Everything is saved on your device first and synced one row at a time.
+      Deleted things can be brought back, and you can download all of it
+      whenever you like.</p>
     </article>
   </section>
 
   <section class="front-close">
     <h2>Free, and staying that way.</h2>
-    <p>No accounts to buy, no limits to hit. Open it and start.</p>
-    <a class="front-cta" href="app/">make a desk</a>
+    <p>No limits to buy your way past. Open it and start.</p>
+    <a class="front-cta" href="account/#signup">make your desk</a>
   </section>
 
 </main>
@@ -89,6 +111,8 @@
   <a href="https://github.com/MathCosine/zentimer">source</a>
   <span aria-hidden="true">·</span>
   <a href="privacy.html">what it stores</a>
+  <span aria-hidden="true">·</span>
+  <a href="account/">your account</a>
 </footer>
 
 <script src="assets/offline.js"></script>

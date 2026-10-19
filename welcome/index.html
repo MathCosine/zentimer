@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>pip — welcome</title>
+<meta name="description" content="Set up your desk: your classes, your practice, your bedtime, your calendar.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7f4fc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15132a" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon.svg">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="preload" href="../assets/fonts/fredoka-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/pages.css">
+</head>
+<body class="page">
+
+<div class="sky" aria-hidden="true"></div>
+
+<header class="page-bar">
+  <a class="page-mark" href="../"><img src="../assets/icon.svg" alt="" width="28" height="28"> pip</a>
+  <a class="page-skip" href="../app/" id="skip">skip to my desk →</a>
+</header>
+
+<main class="page-main">
+  <section class="auth-card welcome-card" aria-live="polite">
+    <ol class="steps" id="steps" aria-label="Setting up"></ol>
+    <div class="welcome-step" id="step"></div>
+    <div class="welcome-nav">
+      <button type="button" class="ghost" id="back">back</button>
+      <button type="button" class="go" id="next">next</button>
+    </div>
+  </section>
+</main>
+
+<canvas id="petCanvas" aria-hidden="true"></canvas>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="../assets/config.js"></script>
+<script src="../assets/motion.js"></script>
+<script src="../assets/sync.js"></script>
+<script src="../assets/store.js"></script>
+<script src="../assets/calendar.js"></script>
+<script src="../assets/ai.js"></script>
+<script src="../assets/pet.js"></script>
+<script src="../assets/welcome.js"></script>
+<script src="../assets/offline.js"></script>
+</body>
+</html>

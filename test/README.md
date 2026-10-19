@@ -11,7 +11,7 @@ without a Supabase project.
 
     node test/twodevice.js    two devices: concurrent edits, deletes, offline queue
     node test/migrate.js      the old single document becoming rows
-    node test/accounts.js     sign in, sign up, sign out, delete account
+    node test/accounts.js     the account pages: making one and the welcome, in and out, a forgotten password, deleting it
     node test/landing.js      the front page, and the app at its new address
     node test/offline.js      the service worker, with the network switched off
     node test/update.js       a pushed fix reaching a browser that already has it

@@ -253,8 +253,11 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return reply(405, { error: 'POST only' });
 
+  // pip never sends more than a few kilobytes; anything bigger is not pip
+  const raw = await req.text();
+  if (raw.length > 60000) return reply(413, { error: 'that is more than pip ever sends' });
   let body: Json;
-  try { body = await req.json(); } catch { return reply(400, { error: 'not JSON' }); }
+  try { body = JSON.parse(raw); } catch { return reply(400, { error: 'not JSON' }); }
   const kind = String(body.kind || '');
   if (kind !== 'parse' && kind !== 'plan') return reply(400, { error: 'kind must be parse or plan' });
   if (!GROQ_KEY && !GEMINI_KEY) return reply(503, { error: 'no AI keys are set on this server' });
