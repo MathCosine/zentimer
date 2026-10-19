@@ -178,7 +178,7 @@ window.Panel = (function () {
 
     if (!signedIn) {
       box.appendChild(node('p', 'set-note',
-        'sign in first (the cloud button, top right) \u2014 your calendar is read through your own account'));
+        'sign in first (the person button, top right) \u2014 your calendar is read through your own account'));
       return;
     }
 
@@ -217,6 +217,50 @@ window.Panel = (function () {
       'It is private: anyone with it can read that calendar, so it is kept in your account and nowhere else. pip only ever reads it.'
     ].forEach(function (text) { how.appendChild(node('p', 'set-note', text)); });
     box.appendChild(how);
+  }
+
+  /* The AI: on or off, and what it should know about you right now --
+     an application deadline, the kids you tutor, how you like to work. It
+     reads this every time it plans. */
+  function drawAi() {
+    if (!window.Ai) return;
+    var box = section('AI', 'plans your evening, and turns messy notes into tasks');
+    row(box, 'use AI', toggle(Ai.on(), function (on) { Ai.setOn(on); draw(); }),
+      Ai.on() ? 'pip\u2019s own rules take over whenever it cannot answer' : 'off: pip plans with its own rules');
+    if (!Ai.on()) return;
+
+    var signedIn = window.Sync && Sync.signedIn && Sync.signedIn();
+    if (!signedIn) {
+      box.appendChild(node('p', 'set-note',
+        'sign in first (the person button, top right) \u2014 the AI runs through your own account'));
+      return;
+    }
+
+    box.appendChild(node('p', 'set-label-text', 'about you, right now'));
+    var area = node('textarea', 'set-text ai-about');
+    area.rows = 4;
+    area.dataset.focusKey = 'ai-about';
+    area.placeholder = 'e.g. applying to a summer research program \u2014 essay due nov 1. ' +
+      'i tutor tue and thu. i want an hour of USACO most days. i focus best before 9.';
+    area.value = Ai.about();
+    var timer = 0;
+    area.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { Ai.setAbout(area.value); }, 1200);
+    });
+    area.addEventListener('change', function () { clearTimeout(timer); Ai.setAbout(area.value); });
+    box.appendChild(area);
+
+    var said = Ai.status();
+    var plan = Ai.planFor(Store.dayKey());
+    box.appendChild(node('small', 'set-note ai-said', said.busy ? 'thinking\u2026'
+      : said.error ? said.error
+      : plan ? 'tonight was planned with AI' + (plan.judged ? ', two answers compared' : '')
+      : 'it plans tonight once things have been quiet for a minute or two'));
+
+    box.appendChild(node('p', 'set-note',
+      'What it is sent: your task names, deadlines and sizes, the evening\u2019s calendar events and the note above \u2014 ' +
+      'to Groq and Google\u2019s Gemini, through your own account, to plan tonight. Not your email, not anything else.'));
   }
 
   function drawLoad() {
@@ -672,6 +716,7 @@ window.Panel = (function () {
     drawStats();
     drawTimer();
     drawDay();
+    drawAi();
     drawCalendar();
     drawLoad();
     drawTags();

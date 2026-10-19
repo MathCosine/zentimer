@@ -16,6 +16,7 @@ without a Supabase project.
     node test/offline.js      the service worker, with the network switched off
     node test/update.js       a pushed fix reaching a browser that already has it
     node test/calendar.js     a Google-format calendar read in: repeats, skips, moves, timezones
+    node test/ai.js           the AI: notes into tasks, links, tonight planned and checked, when it asks
     node test/undo.js         undo, and the bin
     node test/findweek.js     searching, and the week
     node test/sorting.js      the five orders, both directions, inside a split

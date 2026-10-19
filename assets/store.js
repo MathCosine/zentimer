@@ -342,7 +342,8 @@ window.Store = (function () {
       completions: {},
       skips: {},
       created: Date.now(),
-      order: state.tasks.length, rank: null
+      order: state.tasks.length, rank: null,
+      needs: Array.isArray(fields.needs) ? fields.needs.slice(0, 8) : []   // what has to be finished first
     };
     if (!task.title) return null;
     state.tasks.push(task);
@@ -391,13 +392,58 @@ window.Store = (function () {
      there is no date written on it, but it is every bit as pressing as one
      that says so. Anything that ranks or sorts by deadline asks for this
      rather than reading task.due straight off. */
-  function dueFor(task, key) {
+  /* A task that something else needs first is due when that is, if that is
+     sooner: the reading for Friday's quiz is due by Friday, whatever the
+     reading itself says. Followed down a chain (notes, then the reading,
+     then the quiz), and never round a loop. */
+  function dueFor(task, key, seen) {
     if (!task) return null;
     var when = key || dayKey();
+    var own = task.due || null;
     if (task.repeat && task.repeat !== 'none') {
-      if (dueOn(task, new Date(when + 'T12:00'))) return when;
+      if (dueOn(task, new Date(when + 'T12:00'))) own = when;
     }
-    return task.due || null;
+    seen = seen || {};
+    if (seen[task.id]) return own;
+    seen[task.id] = true;
+    alive(state.tasks).forEach(function (other) {
+      if (!other.needs || other.needs.indexOf(task.id) === -1 || isDone(other, when)) return;
+      var theirs = dueFor(other, when, seen);
+      if (theirs && (!own || theirs < own)) own = theirs;
+    });
+    return own;
+  }
+
+  /* What still has to happen before this one can: the open tasks it needs. */
+  function needsOf(task, key) {
+    if (!task || !task.needs || !task.needs.length) return [];
+    return task.needs.map(taskById).filter(function (t) { return t && !isDone(t, key || dayKey()); });
+  }
+
+  /* first before then. A link that would make a loop is refused. */
+  function link(firstId, thenId) {
+    var first = taskById(firstId), then = taskById(thenId);
+    if (!first || !then || firstId === thenId) return false;
+    if (leadsTo(first, thenId, {})) return false;
+    var needs = (then.needs || []).slice();
+    if (needs.indexOf(firstId) !== -1) return true;
+    needs.push(firstId);
+    then.needs = needs.slice(0, 8);
+    changed();
+    return true;
+  }
+
+  function leadsTo(task, targetId, seen) {
+    if (!task || seen[task.id]) return false;
+    seen[task.id] = true;
+    return (task.needs || []).some(function (id) { return id === targetId || leadsTo(taskById(id), targetId, seen); });
+  }
+
+  function unlink(firstId, thenId) {
+    var then = taskById(thenId);
+    if (!then || !then.needs) return;
+    then.needs = then.needs.filter(function (id) { return id !== firstId; });
+    changed();
   }
 
   function isDone(task, key) {
@@ -897,7 +943,7 @@ window.Store = (function () {
     addTask: addTask, updateTask: updateTask, removeTask: removeTask,
     taskById: taskById, toggleDone: toggleDone, isDone: isDone, finishedOn: finishedOn,
     repeats: repeats, dueOn: dueOn,
-    dueFor: dueFor,
+    dueFor: dueFor, needsOf: needsOf, link: link, unlink: unlink,
 
     blocks: blocksOn, addBlock: addBlock, updateBlock: updateBlock, removeBlock: removeBlock,
     blockById: blockById, currentBlock: currentBlock, nextBlock: nextBlock, daySummary: daySummary,

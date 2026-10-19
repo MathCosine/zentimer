@@ -59,6 +59,7 @@ window.Sync = (function () {
           at: typeof r.at === 'number' ? r.at : null,
           mins: r.mins || 30, done: !!r.done, done_at: r.doneAt || null,
           progress: r.progress || 0, rank: typeof r.rank === 'number' ? r.rank : null,
+          needs: Array.isArray(r.needs) ? r.needs : [],
           completions: r.completions || {}, skips: r.skips || {},
           ord: r.order || 0, created: r.created || null
         });
@@ -71,6 +72,7 @@ window.Sync = (function () {
           at: typeof r.at === 'number' ? r.at : null,
           mins: r.mins || 30, done: !!r.done, doneAt: r.done_at || null,
           progress: r.progress || 0, rank: typeof r.rank === 'number' ? r.rank : null,
+          needs: Array.isArray(r.needs) ? r.needs : [],
           completions: r.completions || {}, skips: r.skips || {},
           order: r.ord || 0, created: r.created || null
         };
@@ -325,7 +327,9 @@ window.Sync = (function () {
       .then(function () { if (status !== 'synced') say('synced'); return true; });
   }
 
-  function flushTable(table) {
+  var missing = {};          // columns this database does not have yet, by table
+
+  function flushTable(table, retried) {
     var ids = Object.keys(outbox[table.name] || {});
     if (!ids.length) return Promise.resolve();
 
@@ -339,6 +343,7 @@ window.Sync = (function () {
       var out = table.to(row);
       out.user_id = userId;
       delete out.updated;                 // the server decides the stamp
+      (missing[table.name] || []).forEach(function (col) { delete out[col]; });
       return out;
     }).filter(Boolean);
 
@@ -368,6 +373,16 @@ window.Sync = (function () {
       .catch(function (err) {
         // leave the ids in the outbox: they go up on the next try
         var why = String(err && err.message || err);
+        /* A newer pip than the database: one column it does not have yet
+           should not stop everything else syncing. That column stays on this
+           device until schema.sql is run again, and the rest goes up now. */
+        var col = why.match(/find the '([a-z_]+)' column|column [a-z_."]*?\.?"?([a-z_]+)"? does not exist/i);
+        var name = col && (col[1] || col[2]);
+        if (name && !retried && (missing[table.name] || []).indexOf(name) === -1) {
+          (missing[table.name] = missing[table.name] || []).push(name);
+          say('run supabase/schema.sql again — this version added a column');
+          return flushTable(table, true);
+        }
         if (/column .* does not exist|schema cache/i.test(why)) {
           say('run supabase/schema.sql again — this version added a column');
         } else {

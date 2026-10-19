@@ -576,7 +576,8 @@ window.Plan = (function () {
   function renderHint() {
     if (!el.addHint) return;
     var value = el.taskInput.value;
-    var read = value.trim() ? parseAdd(value) : null;
+    // while the AI's cards are out, they are the preview
+    var read = value.trim() && !ui.aiCards ? parseAdd(value) : null;
     if (!read || !read.found.length) {
       el.addHint.hidden = true;
       el.addHint.textContent = '';
@@ -789,6 +790,13 @@ window.Plan = (function () {
       rep.textContent = (task.repeat === 'weekdays' ? 'weekdays' : task.repeat) +
         (typeof task.at === 'number' ? ' ' + label(task.at) : '');
       meta.appendChild(rep);
+    }
+    var waiting = done ? [] : Store.needsOf(task, key);
+    if (waiting.length) {
+      var after = node('span', 'task-flag is-after', 'after ' + waiting[0].title +
+        (waiting.length > 1 ? ' +' + (waiting.length - 1) : ''));
+      after.title = 'Needs ' + waiting.map(function (t) { return t.title; }).join(', ') + ' first';
+      meta.appendChild(after);
     }
     var slot = scheduled[task.id];
     if (slot) {
@@ -1021,6 +1029,8 @@ window.Plan = (function () {
     });
     grid.appendChild(field('repeat', repeatRow, true));
 
+    if (!Store.repeats(task)) grid.appendChild(field('do first', needsPicker(task), true));
+
     if (Store.repeats(task)) {
       var at = document.createElement('input');
       at.type = 'time';
@@ -1095,6 +1105,50 @@ window.Plan = (function () {
         title.setSelectionRange(title.value.length, title.value.length);
         if (document.activeElement === title) ui.focusTask = null;
       }, 0);
+    }
+    return box;
+  }
+
+  /* The tasks this one waits for, each with a way to let go of it, and a
+     list of the others to pick another from. Only ones that would not make
+     a loop are offered. */
+  function needsPicker(task) {
+    var key = Store.dayKey();
+    var box = node('div', 'needs-pick');
+    (task.needs || []).map(Store.taskById).filter(Boolean).forEach(function (first) {
+      var pill = node('span', 'need-pill' + (Store.isDone(first, key) ? ' is-done' : ''));
+      pill.appendChild(node('span', 'need-name', first.title));
+      var drop = node('button', 'need-drop', '\u00d7');
+      drop.type = 'button';
+      drop.setAttribute('aria-label', 'Does not need ' + first.title + ' first');
+      drop.addEventListener('click', function () { Store.unlink(first.id, task.id); render(); });
+      pill.appendChild(drop);
+      box.appendChild(pill);
+    });
+    var others = Store.tasks().filter(function (t) {
+      return t.id !== task.id && !Store.isDone(t, key) && !Store.repeats(t) &&
+        (task.needs || []).indexOf(t.id) === -1 && (t.needs || []).indexOf(task.id) === -1;
+    });
+    if (others.length) {
+      var pick = document.createElement('select');
+      pick.className = 'need-add';
+      pick.setAttribute('aria-label', 'Something that has to be done first');
+      var blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = task.needs && task.needs.length ? '+ another' : '+ something that comes first';
+      pick.appendChild(blank);
+      others.forEach(function (t) {
+        var option = document.createElement('option');
+        option.value = t.id;
+        option.textContent = t.title + (t.due ? ' \u00b7 ' + dueLabel(t.due) : '');
+        pick.appendChild(option);
+      });
+      pick.addEventListener('change', function () {
+        if (!pick.value) return;
+        if (!Store.link(pick.value, task.id) && window.Motion) Motion.toast('that would go round in a circle');
+        render();
+      });
+      box.appendChild(pick);
     }
     return box;
   }
@@ -1787,6 +1841,13 @@ window.Plan = (function () {
       cancel.textContent = 'cancel';
       cancel.addEventListener('click', function () { ui.adding = null; render(); });
       row.appendChild(add);
+      var smart = document.createElement('button');
+      smart.type = 'button';
+      smart.className = 'ai-go';
+      smart.textContent = '\u2726 sort it out with AI';
+      smart.title = 'Pasted from a class page? The AI picks out the work, the dates, and what comes first';
+      smart.addEventListener('click', function () { askAi(area.value, function () { ui.adding = null; }); });
+      row.appendChild(smart);
       row.appendChild(cancel);
       el.addPanel.appendChild(row);
       setTimeout(function () { area.focus(); }, 0);
@@ -1840,7 +1901,138 @@ window.Plan = (function () {
     }
   }
 
+  /* ---------- the AI writing it down ---------- */
+
+  /* What it read, as cards you can fix before anything is added: the class,
+     the deadline, how long, and what has to come before what. Nothing goes
+     in until you say so. */
+  function askAi(text, then) {
+    text = String(text || '').trim();
+    if (!text) { if (window.Motion) Motion.nudge(el.taskAdd); return; }
+    if (!window.Ai || !Ai.usable()) {
+      if (window.Motion) {
+        Motion.toast(window.Ai && !Ai.on() ? 'the AI is switched off in settings' : 'sign in to use the AI',
+          window.Ai && !Ai.on() ? null : { label: 'sign in', run: function () { var b = document.getElementById('syncBtn'); if (b) b.click(); } });
+      }
+      return;
+    }
+    ui.aiCards = { busy: true, tasks: [], text: text };
+    render();
+    Ai.parse(text).then(function (got) {
+      ui.aiCards = { busy: false, tasks: got.tasks, text: text, meta: got.meta };
+      if (then) then();
+      render();
+    }, function (err) {
+      ui.aiCards = null;
+      render();
+      if (window.Motion) Motion.toast(err.message || 'the AI could not read that');
+    });
+  }
+
+  function renderAiCards() {
+    if (!el.aiCards) return;
+    var deck = ui.aiCards;
+    renderHint();
+    el.aiCards.hidden = !deck;
+    el.aiCards.textContent = '';
+    if (el.aiAdd) el.aiAdd.classList.toggle('is-busy', !!(deck && deck.busy));
+    if (!deck) return;
+
+    if (deck.busy) {
+      var wait = node('div', 'ai-card is-loading');
+      wait.appendChild(node('span', 'ai-spark', '\u2726'));
+      wait.appendChild(node('span', '', 'reading it\u2026'));
+      el.aiCards.appendChild(wait);
+      return;
+    }
+
+    var head = node('div', 'ai-cards-head');
+    head.appendChild(node('span', 'ai-spark', '\u2726'));
+    head.appendChild(node('span', 'ai-cards-title', deck.tasks.length === 1 ? 'one task' : deck.tasks.length + ' tasks'));
+    if (deck.meta && deck.meta.judged) head.appendChild(node('span', 'ai-cards-note', 'two answers compared'));
+    el.aiCards.appendChild(head);
+
+    deck.tasks.forEach(function (card, i) {
+      var row = node('div', 'ai-card');
+      var top = node('div', 'ai-card-top');
+      if (card.tag) {
+        var known = Store.tags().filter(function (t) { return t.name === card.tag; })[0];
+        top.appendChild(node('span', 'tag tone-' + (known ? known.color : 'violet'), card.tag));
+      }
+      var title = document.createElement('input');
+      title.type = 'text';
+      title.className = 'ai-card-title';
+      title.value = card.title;
+      title.dataset.focusKey = 'ai-card:' + i;
+      title.setAttribute('aria-label', 'Task');
+      title.addEventListener('input', function () { card.title = title.value; });
+      top.appendChild(title);
+      var drop = node('button', 'ai-card-drop', '\u00d7');
+      drop.type = 'button';
+      drop.setAttribute('aria-label', 'Leave this one out');
+      drop.addEventListener('click', function () {
+        deck.tasks.splice(i, 1);
+        // "after" pointed at positions; the ones after this moved up one
+        deck.tasks.forEach(function (other) {
+          other.after = other.after.filter(function (ref) { return ref !== String(i); })
+            .map(function (ref) { return /^\d+$/.test(ref) && +ref > i ? String(+ref - 1) : ref; });
+        });
+        if (!deck.tasks.length) ui.aiCards = null;
+        render();
+      });
+      top.appendChild(drop);
+      row.appendChild(top);
+
+      var bits = node('div', 'ai-card-bits');
+      var due = document.createElement('input');
+      due.type = 'text';
+      due.className = 'ai-card-due';
+      due.value = card.due ? dueLabel(card.due) : '';
+      due.placeholder = 'no deadline';
+      due.title = 'A day in words, or a date';
+      due.addEventListener('change', function () { card.due = readDue(due.value); due.value = card.due ? dueLabel(card.due) : ''; });
+      bits.appendChild(due);
+      var mins = document.createElement('input');
+      mins.type = 'number';
+      mins.min = '5';
+      mins.step = '5';
+      mins.className = 'ai-card-mins';
+      mins.value = card.mins || 30;
+      mins.setAttribute('aria-label', 'Minutes');
+      mins.addEventListener('change', function () { card.mins = clamp(+mins.value || 30, 5, 900); });
+      bits.appendChild(mins);
+      bits.appendChild(node('span', 'ai-card-unit', 'min'));
+      if (card.repeat) bits.appendChild(node('span', 'task-flag', card.repeat));
+      card.after.forEach(function (ref) {
+        var first = /^\d+$/.test(ref) ? deck.tasks[+ref] : Store.taskById(ref);
+        if (first) bits.appendChild(node('span', 'task-flag is-after', 'after ' + first.title));
+      });
+      row.appendChild(bits);
+      el.aiCards.appendChild(row);
+    });
+
+    var go = node('div', 'ai-cards-go');
+    var add = node('button', 'go small', deck.tasks.length === 1 ? 'add it' : 'add all ' + deck.tasks.length);
+    add.type = 'button';
+    add.addEventListener('click', function () {
+      var listId = ui.view !== 'all' ? ui.view : (Store.lists()[0] || {}).id;
+      var made = Ai.addAll(deck.tasks, listId);
+      ui.aiCards = null;
+      el.taskInput.value = '';
+      render();
+      if (window.Motion) Motion.toast(made.length === 1 ? 'added' : made.length + ' tasks added');
+    });
+    var cancel = node('button', 'ghost', 'never mind');
+    cancel.type = 'button';
+    cancel.addEventListener('click', function () { ui.aiCards = null; render(); });
+    go.appendChild(add);
+    go.appendChild(cancel);
+    el.aiCards.appendChild(go);
+  }
+
   function wireAdding() {
+    if (el.aiAdd) el.aiAdd.addEventListener('click', function () { askAi(el.taskInput.value); });
+
     el.taskAdd.addEventListener('submit', function (event) {
       event.preventDefault();
       var read = parseAdd(el.taskInput.value);
@@ -2218,6 +2410,7 @@ window.Plan = (function () {
      place waits until the placed ones are out of the way -- "these first, in
      this order, then the rest as they come". */
   function waitingBehind(task, key, gap) {
+    if (Store.needsOf(task, key).length) return true;    // the reading before the quiz
     var mine = (task.tags || [])[0];
     if (!mine) return false;
     var ahead = Store.tasks().filter(function (other) {
@@ -2266,6 +2459,8 @@ window.Plan = (function () {
          routine is not work you are behind on, so it stops asking. A date you
          actually wrote on one of them is not routine, though, and still
          counts however much practice you have done. */
+      // not before what it needs: the reading is offered, its quiz waits
+      if (Store.needsOf(task, key).length) return false;
       if (task.due) return true;
       var settled = Store.tagsOf(task).some(function (tag) {
         var how = practiceState[tag.id];
@@ -2755,7 +2950,7 @@ window.Plan = (function () {
                 deadlines are handled, and what gives way when they are not
 
      Anything that does not fit waits for tomorrow, and the queue says so. */
-  function tonight() {
+  function tonight(rulesOnly) {
     var key = Store.dayKey();
     var free = timeLeft(key);
     var jobs = [];
@@ -2857,12 +3052,130 @@ window.Plan = (function () {
       : free < need ? 'tight'
       : 'easy';
 
-    return {
+    var made = {
       free: free, need: need, hardNeed: hardNeed, workNeed: workNeed,
       spare: Math.max(0, free - need), fits: fits, waits: waits, pressed: pressed,
       practice: practice, practiceRoom: mode === 'crunch' || mode === 'late' ? 0 : booked + more,
-      mode: mode, room: room,
-      order: fitAround(order, Math.max(Store.minutesNow(), DAY_START), fixedFrom(key, Math.max(Store.minutesNow(), DAY_START)))
+      mode: mode, room: room, ai: null
+    };
+
+    /* The AI's plan, when there is one for tonight -- taken step by step and
+       checked as it goes, with the rules' deadlines underneath it. */
+    var ai = !rulesOnly && window.Ai ? Ai.planFor(key) : null;
+    if (ai) {
+      var mine = fromAi(ai, key, jobs);
+      if (mine.order.length || !order.length) {
+        order = mine.order;
+        made.fits = mine.fits;
+        made.waits = mine.waits;
+        made.room = Math.max(0, free - mine.total);
+        made.ai = { note: ai.note, used: ai.used, judged: ai.judged, at: ai.at };
+      }
+    }
+
+    var at = Math.max(Store.minutesNow(), DAY_START);
+    made.order = fitAround(byNeeds(order, key), at, fixedFrom(key, at));
+    return made;
+  }
+
+  /* The AI's steps as the planner's own: only tasks that exist and are still
+     open, each at most once, no more minutes than are left of it. Anything
+     due by tomorrow that it left out goes in first anyway -- a deadline is
+     not the AI's to drop. What it left for later, and why, is what waits. */
+  function fromAi(ai, key, jobs) {
+    var order = [], fits = {}, total = 0;
+    (ai.steps || []).forEach(function (step) {
+      var task = Store.taskById(step && step.id);
+      if (!task || fits[task.id] || Store.isDone(task, key)) return;
+      var whole = leftOf(task);
+      var mins = clamp(Math.round(Number(step.mins) || 0), 5, Math.max(5, whole));
+      var practising = !task.due && Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
+      var deadline = Store.dueFor(task, key);
+      fits[task.id] = true;
+      total += mins;
+      order.push({ task: task, mins: mins, whole: whole, kind: practising ? 'practice' : 'work',
+        days: deadline ? daysBetween(key, deadline) : 99, deadline: deadline,
+        part: !practising && mins < whole ? Math.round(mins / whole * 100) : 0,
+        cut: practising && mins < whole,
+        why: typeof step.why === 'string' ? step.why.slice(0, 40).toLowerCase() : '', ai: true });
+    });
+    var missed = jobs.filter(function (job) { return job.hard && !fits[job.task.id]; });
+    missed.reverse().forEach(function (job) {
+      fits[job.task.id] = true;
+      total += job.mins;
+      order.unshift({ task: job.task, mins: job.mins, whole: leftOf(job.task), kind: 'work',
+        days: job.days, deadline: Store.dueFor(job.task, key),
+        part: job.mins < leftOf(job.task) ? Math.round(job.mins / leftOf(job.task) * 100) : 0 });
+    });
+    var later = {};
+    (ai.later || []).forEach(function (l) { if (l && l.id) later[l.id] = String(l.why || '').slice(0, 40); });
+    var waits = jobs.filter(function (job) { return !fits[job.task.id]; })
+      .map(function (job) { return Object.assign({}, job, { why: later[job.task.id] || '' }); });
+    return { order: order, fits: fits, waits: waits, total: total };
+  }
+
+  /* Nothing before what it needs: the reading goes ahead of the quiz it is
+     for, wherever either of them was put. A chain is followed down, and a
+     loop -- which link() refuses, but a second device could still make --
+     is simply left as it was. */
+  function byNeeds(order, key) {
+    var at = {}, out = [], placed = {};
+    order.forEach(function (step, i) { if (!(step.task.id in at)) at[step.task.id] = i; });
+    function place(i, depth) {
+      if (placed[i] || depth > 8) return;
+      var step = order[i];
+      Store.needsOf(step.task, key).forEach(function (need) {
+        if (need.id in at) place(at[need.id], depth + 1);
+      });
+      if (placed[i]) return;
+      placed[i] = true;
+      out.push(step);
+    }
+    order.forEach(function (step, i) { place(i, 0); });
+    return out;
+  }
+
+  /* What the AI is given to plan from: everything tonight could hold, the
+     evening's fixed things, bedtime, what you said about yourself, and the
+     rules' own plan as a place to start. */
+  function aiInput(about) {
+    var key = Store.dayKey();
+    var base = tonight(true);
+    var at = Math.max(Store.minutesNow(), DAY_START);
+    var tasks = [], seen = {};
+    function add(task, practice) {
+      if (seen[task.id] || tasks.length >= 40) return;
+      seen[task.id] = true;
+      var tag = Store.tagsOf(task)[0];
+      tasks.push({ id: task.id, title: task.title, tag: tag ? tag.name : null,
+        due: Store.dueFor(task, key) || null, left: leftOf(task), practice: !!practice,
+        needs: Store.needsOf(task, key).map(function (t) { return t.id; }),
+        rank: typeof task.rank === 'number' ? task.rank : null });
+    }
+    Store.tasks().filter(function (t) { return !Store.isDone(t, key); })
+      .map(function (t) { return { task: t, due: Store.dueFor(t, key) }; })
+      .filter(function (x) {
+        var practising = Store.tagsOf(x.task).some(function (t) { return t.kind === 'practice'; });
+        return x.due && !(practising && !x.task.due) && daysBetween(key, x.due) <= 21;
+      })
+      .sort(function (a, b) { return a.due < b.due ? -1 : a.due > b.due ? 1 : 0; })
+      .forEach(function (x) { add(x.task, false); });
+    practiceDrills(key).forEach(function (d) { add(d.task, true); });
+    if (!tasks.length) return null;
+    var next = new Date(key + 'T12:00'); next.setDate(next.getDate() + 1);
+    return {
+      today: key,
+      tomorrow: Store.dayKey(next),
+      weekday: new Date(key + 'T12:00').toLocaleDateString('en', { weekday: 'long' }).toLowerCase(),
+      now: hhmm(at % (24 * 60)),
+      bed: hhmm(DAY_END % (24 * 60)),
+      free: base.free,
+      events: fixedFrom(key, at).filter(function (b) { return b.start < DAY_END; }).map(function (b) {
+        return { title: b.title || 'busy', start: hhmm(b.start % (24 * 60)), mins: b.end - b.start };
+      }),
+      tasks: tasks,
+      about: String(about || '').slice(0, 1200),
+      baseline: base.order.map(function (step) { return { id: step.task.id, mins: step.mins }; })
     };
   }
 
@@ -2894,7 +3207,8 @@ window.Plan = (function () {
       row.appendChild(node('span', 'plan-at', when === null ? '' : label(when % (24 * 60))));
       row.appendChild(node('span', 'plan-name', step.task.title));
       var why;
-      if (step.kind === 'practice') why = step.rest ? 'practice, the rest' : 'practice';
+      if (step.why) why = step.why;
+      else if (step.kind === 'practice') why = step.rest ? 'practice, the rest' : 'practice';
       else if (step.days < 0) why = 'overdue';
       else if (step.days === 0) why = 'due today';
       else if (step.days === 1) why = 'due tomorrow';
@@ -2958,7 +3272,7 @@ window.Plan = (function () {
     if (plan.waits.length) {
       box.appendChild(node('p', 'plan-sub', 'can wait till tomorrow'));
       plan.waits.forEach(function (job) {
-        box.appendChild(line({ task: job.task, mins: job.mins, kind: 'work', days: job.days,
+        box.appendChild(line({ task: job.task, mins: job.mins, kind: 'work', days: job.days, why: job.why,
           deadline: Store.dueFor(job.task, key), whole: leftOf(job.task),
           part: job.mins < leftOf(job.task) ? Math.round(job.mins / leftOf(job.task) * 100) : 0 }, null));
       });
@@ -3167,6 +3481,11 @@ window.Plan = (function () {
         : 'deadlines are covered \u2014 the rest is yours'));
     }
 
+    if (plan && window.Ai && Ai.on() && Ai.usable()) {
+      el.aim.appendChild(aiLine(plan));
+      Ai.suggestions().slice(0, 2).forEach(function (link) { el.aim.appendChild(aiLink(link)); });
+    }
+
     /* And what exactly is on the bar. A filled bar you cannot account for is
        worse than no bar: it says the thing is wrong without saying how. */
     /* Two things the bars can be asked: what the rest of the evening holds,
@@ -3219,6 +3538,64 @@ window.Plan = (function () {
       }
       el.aim.appendChild(what);
     }
+  }
+
+  /* One line: who planned tonight -- the AI, with its note, or the rules
+     while it thinks or when it cannot -- and a way to ask it again now. */
+  function aiLine(plan) {
+    var said = Ai.status();
+    var thinking = said.busy && said.kind === 'plan';
+    var row = node('div', 'ai-line' + (thinking ? ' is-busy' : '') + (plan.ai ? ' is-ai' : '') +
+      (!thinking && said.error && !plan.ai ? ' is-trouble' : ''));
+    row.appendChild(node('span', 'ai-spark', '\u2726'));
+    var words = thinking ? 'thinking about tonight\u2026'
+      : plan.ai ? (plan.ai.note || 'tonight, planned with AI')
+      : said.error ? said.error + ' \u2014 using pip\u2019s own plan'
+      : 'pip\u2019s own plan for now';
+    row.appendChild(node('span', 'ai-words', words));
+    if (plan.ai && !thinking) {
+      row.title = 'Planned with AI ' + agoLabel(plan.ai.at) + (plan.ai.judged ? ' \u2014 two answers compared' : '');
+    }
+    var again = node('button', 'ai-again', '\u21bb');
+    again.type = 'button';
+    again.disabled = thinking;
+    again.title = 'Plan tonight again with AI';
+    again.setAttribute('aria-label', 'Plan tonight again with AI');
+    again.addEventListener('click', function () { Ai.now(); });
+    row.appendChild(again);
+    return row;
+  }
+
+  function agoLabel(at) {
+    var mins = Math.round((Date.now() - at) / 60000);
+    return mins < 1 ? 'just now' : mins < 60 ? mins + 'm ago' : Math.round(mins / 60) + 'h ago';
+  }
+
+  /* Something it noticed has to come before something else. Yours to agree
+     with: a link changes what the planner will do. */
+  function aiLink(link) {
+    var first = Store.taskById(link.first), then = Store.taskById(link.then);
+    var row = node('div', 'ai-link');
+    var text = node('span', 'ai-link-text');
+    text.appendChild(node('b', '', first.title));
+    text.appendChild(document.createTextNode(' before '));
+    text.appendChild(node('b', '', then.title));
+    text.appendChild(document.createTextNode('?'));
+    row.appendChild(text);
+    if (link.why) row.title = link.why;
+    var yes = node('button', 'ai-yes', 'yes');
+    yes.type = 'button';
+    yes.addEventListener('click', function () {
+      Ai.accept(link);
+      if (window.Motion) Motion.toast('linked \u2014 ' + first.title + ' comes first');
+    });
+    var no = node('button', 'ai-no', '\u00d7');
+    no.type = 'button';
+    no.setAttribute('aria-label', 'No, they are not linked');
+    no.addEventListener('click', function () { Ai.decline(link); });
+    row.appendChild(yes);
+    row.appendChild(no);
+    return row;
   }
 
   /* ---------- the week ---------- */
@@ -3442,6 +3819,7 @@ window.Plan = (function () {
       renderTools();
       renderSheet();
       renderAdders();
+      renderAiCards();
       renderTasks();
       renderTagGrid();
       renderTimeline();
@@ -3482,6 +3860,7 @@ window.Plan = (function () {
       doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'), addHint: $('addHint'),
       findRow: $('findRow'), findInput: $('findInput'), findClear: $('findClear'),
       taskMore: $('taskMore'), taskTools: $('taskTools'),
+      aiAdd: $('aiAdd'), aiCards: $('aiCards'),
       addHelp: $('addHelp'), addSheet: $('addSheet'),
       sortBtn: $('sortBtn'), sortRow: $('sortRow'), sortPicks: $('sortPicks'), sortDir: $('sortDir'),
       weekBtn: $('weekBtn'), weekWrap: $('weekWrap'), week: $('week'),
@@ -3530,6 +3909,7 @@ window.Plan = (function () {
     day: viewDate,
     goToDay: function (key) { ui.date = key === Store.dayKey() ? null : key; render(); },
     currentBlock: function () { return Store.currentBlock(); },
-    openTimeline: openTimeline
+    openTimeline: openTimeline,
+    aiInput: aiInput
   };
 })();

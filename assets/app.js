@@ -1338,6 +1338,12 @@
       Calendar.init();
       Calendar.onChange(function () { if (window.Plan) Plan.render(); });
     }
+    // the AI plans tonight when things have changed and gone quiet; when it
+    // starts thinking, finishes, or cannot, the plan shows it
+    if (window.Ai) {
+      Ai.init();
+      Ai.onChange(function () { if (window.Plan) Plan.render(); });
+    }
     wirePanel();
     el.soundBtn.setAttribute('aria-pressed', String(settings.sound));
     el.notifyBtn.setAttribute('aria-pressed', String(settings.notify));

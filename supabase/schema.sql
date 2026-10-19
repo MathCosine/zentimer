@@ -123,6 +123,8 @@ alter table public.tags add column if not exists daily int;
 -- the order within one tag.
 alter table public.tags  add column if not exists rank int;
 alter table public.tasks add column if not exists rank int;
+-- what has to be finished first: readings before the quiz on them
+alter table public.tasks add column if not exists needs jsonb not null default '[]'::jsonb;
 
 -- ---------------------------------------------------------------------------
 -- stamps, indexes and row security, applied to every table the same way
@@ -211,3 +213,42 @@ end $$;
 
 revoke all on function public.pip_delete_me() from public, anon;
 grant execute on function public.pip_delete_me() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- the AI's daily allowance
+-- ---------------------------------------------------------------------------
+
+-- The AI relay (supabase/functions/ai) calls this once per question, as the
+-- person asking. It counts their questions today and says how many are left,
+-- or -1 once they are out. Calling it yourself only spends your own allowance.
+create table if not exists public.ai_usage (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  day     date not null default current_date,
+  calls   int  not null default 0,
+  primary key (user_id, day)
+);
+
+alter table public.ai_usage enable row level security;
+
+drop policy if exists "read your own allowance" on public.ai_usage;
+create policy "read your own allowance" on public.ai_usage
+  for select using (auth.uid() = user_id);
+
+create or replace function public.ai_take(cap int)
+returns int language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if auth.uid() is null then
+    raise exception 'not signed in';
+  end if;
+  insert into public.ai_usage (user_id, day, calls) values (auth.uid(), current_date, 1)
+  on conflict (user_id, day) do update set calls = public.ai_usage.calls + 1
+  returning calls into n;
+  if n > cap then
+    return -1;
+  end if;
+  return cap - n;
+end $$;
+
+revoke all on function public.ai_take(int) from public, anon;
+grant execute on function public.ai_take(int) to authenticated;
