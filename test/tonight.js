@@ -221,6 +221,34 @@ const seed = () => {
   check('and what is due tomorrow is all it offers', after.rows,
     ['PHY Workbook Week 5', 'PHY Mastering Week 5']);
 
+  console.log('\n--- opening tonight, then closing it, gives the day its room back ---');
+  {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } });
+    const p = await ctx.newPage();
+    p.on('pageerror', e => errs.push('room ' + e.message));
+    await p.clock.install({ time: new Date(2026, 8, 27, 16, 0) });
+    await p.goto('http://127.0.0.1:8899/app/'); await p.clock.runFor(1500);
+    await p.evaluate(() => {
+      const on = n => { const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + n); return Store.dayKey(d); };
+      for (let i = 0; i < 9; i++) Store.addTask({ title: 'LATIN Load ' + i, due: on(1 + (i % 3)), mins: 40 });
+    });
+    await p.clock.runFor(800);
+    await p.click('#timesBtn'); await p.clock.runFor(600);
+    // the day drawn to fit its box: its height follows the box's, whatever the box is
+    const fit = () => p.evaluate(() => {
+      const wrap = document.getElementById('timelineWrap').clientHeight, day = document.getElementById('timeline').offsetHeight;
+      return { wrap, fits: Math.abs(wrap - 16 - day) <= 2 };
+    });
+    const before = await fit();
+    await p.locator('.aim-why', { hasText: /^tonight/ }).click(); await p.clock.runFor(600);
+    const open = await fit();
+    await p.locator('.aim-why', { hasText: /^tonight/ }).click(); await p.clock.runFor(600);
+    const after = await fit();
+    check('opened, the day is redrawn to the smaller box', [open.wrap < before.wrap, open.fits], [true, true]);
+    check('closed, it is as big as before, not left squashed', [after.wrap, after.fits], [before.wrap, true]);
+    await ctx.close();
+  }
+
   console.log('\n--- a school morning is not tonight ---');
   {
     const ctx = await b.newContext({ viewport: { width: 646, height: 1000 } });

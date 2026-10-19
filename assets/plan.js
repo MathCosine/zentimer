@@ -2231,8 +2231,8 @@ window.Plan = (function () {
       return;
     }
 
+    // packed by refit(), once everything above them has its new size
     tiles.forEach(function (tile) { el.tagGrid.appendChild(tagTile(tile, key)); });
-    packTiles();
   }
 
   /* Not done, and asked for today: a daily drill is open every day, a weekly
@@ -4393,7 +4393,43 @@ window.Plan = (function () {
       renderAim();
       renderBlockBar();
       renderNow();
+      refit();
     });
+  }
+
+  /* The day and the tiles are sized to the room they have -- which tonight's
+     list opening above them, the AI's line arriving or a font loading can all
+     change. They used to be measured at the start of a redraw, before any of
+     that moved: so opening tonight pushed the day down, and closing it again
+     left it squashed into the room it had lost. Now they are fitted last, and
+     again whenever their room changes size on its own. */
+  var packedFor = '';     // the room the tiles were last packed into
+
+  function refit(watching) {
+    var before = boxTarget;
+    sizeTimeline();
+    if (Math.abs(boxTarget - before) > 2) renderTimeline();
+    if (!ui.tagsView) return;
+    // a redraw made new tiles, so they always need packing; a resize only
+    // when the room really is different (never in answer to the packing)
+    var room = el.tagGrid.clientWidth + 'x' + el.tagGrid.clientHeight;
+    if (watching && room === packedFor) return;
+    packedFor = room;
+    packTiles();
+  }
+
+  function watchRoom() {
+    if (!window.ResizeObserver) return;
+    var queued = 0;
+    var watch = new ResizeObserver(function () {
+      if (queued) return;
+      queued = requestAnimationFrame(function () {
+        queued = 0;
+        if (!dragging) refit(true);
+      });
+    });
+    watch.observe(el.timelineWrap);
+    watch.observe(el.tagGrid);
   }
 
   /* Once a minute. The clock moving changes more than the timeline: it is
@@ -4450,6 +4486,7 @@ window.Plan = (function () {
       renderTimeline();
       if (ui.tagsView) packTiles();
     });
+    watchRoom();
     render();
   }
 
