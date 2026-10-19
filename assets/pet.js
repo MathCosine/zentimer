@@ -268,7 +268,9 @@ window.Pet = (function () {
     halfway:    ['halfway!', 'keep going', 'doing great'],
     nearly:     ['nearly there', 'last stretch', 'almost!'],
     idle:       ['still here', 'you got this', 'hi again', '*pootles about*'],
-    chat:       ['hi pop!', 'hi pip!', 'hehe', '*chats*', 'how goes it?']
+    chat:       ['hi pop!', 'hi pip!', 'hehe', '*chats*', 'how goes it?'],
+    tick:       ['nice!', 'one down', 'yay!', 'ticked!', 'look at you go'],
+    allDone:    ['all done!!', 'free evening!', 'you did it all', 'yippee!']
   };
 
   function make(name, skin, crest) {
@@ -932,7 +934,15 @@ window.Pet = (function () {
     },
 
     event: function (kind) {
+      if (!cast.length) return;
       if (kind === 'complete') cast.forEach(function (c) { react(c, 'cheer'); });
+      else if (kind === 'allDone') cast.forEach(function (c) { react(c, 'cheer'); say(c, pick(LINES.allDone)); });
+      else if (kind === 'tick') {
+        // one of them notices, and only now and then says so
+        var who = cast[Math.floor(Math.random() * cast.length)];
+        if (enabled && who.state !== 'cheer') { who.state = 'cheer'; who.until = clock + 1.4; }
+        if (Math.random() < 0.45) say(who, pick(LINES.tick));
+      }
       else if (kind === 'alarm') cast.forEach(function (c) { react(c, 'startle'); });
       else if (LINES[kind]) say(cast[Math.floor(Math.random() * cast.length)], pick(LINES[kind]));
     },

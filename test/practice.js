@@ -41,7 +41,7 @@ const { chromium } = require('./browser');
   check('and a day’s worth defaults to most of it', await p.evaluate(() => {
     const t = Store.tags().find(x => x.name === 'EXTRA'); return Store.practiceToday(t.id); }),
     { done: 0, want: 3, enough: false, of: 5 });
-  await p.click('#settingsBtn'); await p.waitForTimeout(600);
+  await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.waitForTimeout(600);
   check('the settings say so too', await p.evaluate(() =>
     [...document.querySelectorAll('.tag-kind')].map(k => k.textContent)), ['practice','subject','subject']);
   const flipExtra = () => p.evaluate(() => {
@@ -105,7 +105,7 @@ const { chromium } = require('./browser');
   const titles = async () => (await queue(p)).map(r => r.title);
   const first = await titles();
 
-  await p.click('#settingsBtn'); await p.waitForTimeout(600);
+  await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.waitForTimeout(600);
   const rankOf = name => p.evaluate(n => {
     const row = [...document.querySelectorAll('.tag-row')]
       .find(r => r.querySelector('.tag-name') && r.querySelector('.tag-name').value === n);
@@ -158,7 +158,7 @@ const { chromium } = require('./browser');
   await p.waitForTimeout(800);
 
   console.log('\n--- and inside a tag, which drill comes first ---');
-  await p.click('#settingsBtn'); await p.waitForTimeout(600);
+  await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.waitForTimeout(600);
   const order = () => p.evaluate(() => [...document.querySelectorAll('.tag-order-row')].map(r =>
     r.querySelector('.tag-rank').textContent + ' ' + r.querySelector('.tag-order-name').textContent));
   const tapTask = title => p.evaluate(t => {
@@ -227,7 +227,7 @@ const { chromium } = require('./browser');
   await p.waitForTimeout(700);
 
   console.log('\n--- and the guess is only a guess ---');
-  await p.click('#settingsBtn'); await p.waitForTimeout(600);
+  await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.waitForTimeout(600);
   await flipExtra(); await p.waitForTimeout(500);
   check('one tap makes it a subject', await p.evaluate(() => {
     const t = Store.tags().find(x => x.name === 'EXTRA'); return [t.kind, t.daily]; }), ['work', null]);

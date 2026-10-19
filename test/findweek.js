@@ -15,8 +15,8 @@ const { chromium } = require('./browser');
     { await p.fill('#taskInput',t); await p.press('#taskInput','Enter'); await p.waitForTimeout(80); }
 
   console.log('--- finding ---');
-  await p.click('#findBtn'); await p.waitForTimeout(350);
-  check('the box opens and takes focus', await p.evaluate(() =>
+  await p.click('#findInput'); await p.waitForTimeout(350);
+  check('the box is always there and takes focus', await p.evaluate(() =>
     !document.getElementById('findRow').hidden && document.activeElement.id === 'findInput'), true);
   await p.fill('#findInput','phy'); await p.waitForTimeout(400);
   check('matches by title', await titles(p), ['PHY Mastering Week 5','PHY Workbook']);

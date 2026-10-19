@@ -33,18 +33,40 @@
 
 <main class="app">
 
-  <header class="card bar" data-perch>
-    <div class="bar-clock">
+  <header class="top">
+    <div class="top-clock">
       <button class="clock" id="clock" type="button" title="Switch 12 / 24 hour">
         <span id="clockTime">--:--</span><span class="secs" id="clockSecs">00</span><span class="mer" id="meridiem"></span>
       </button>
       <p class="clock-meta">
         <span id="dateLabel">&nbsp;</span>
-        <span class="dot" aria-hidden="true">•</span>
+        <span class="dot" aria-hidden="true">·</span>
         <span id="zoneLabel">&nbsp;</span>
       </p>
     </div>
+    <div class="tools">
+      <button id="alarmBtn" type="button" class="tool" aria-expanded="false" title="Alarms">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"></circle><path d="M12 9.5V13l2.2 1.6M4.5 5.5l2.5-2M19.5 5.5l-2.5-2"></path></svg>
+        <span class="tool-note" id="alarmNote" hidden></span>
+        <span class="sr">Alarms</span>
+      </button>
+      <button id="musicBtn" type="button" class="tool" aria-pressed="false" aria-expanded="false" title="Study ambience">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 15v-3a7.5 7.5 0 0 1 15 0v3"></path><rect x="2.8" y="14" width="4" height="6" rx="1.6"></rect><rect x="17.2" y="14" width="4" height="6" rx="1.6"></rect></svg>
+        <span class="sr">Music</span>
+      </button>
+      <button id="syncBtn" type="button" class="tool" aria-expanded="false" title="Your account">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"></circle><path d="M4.8 19.5c1.2-3.4 4-5 7.2-5s6 1.6 7.2 5"></path></svg>
+        <span class="tool-dot" id="syncDot" aria-hidden="true"></span>
+        <span class="sr">Account</span>
+      </button>
+      <button id="menuBtn" type="button" class="tool" aria-expanded="false" title="More">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg>
+        <span class="sr">More</span>
+      </button>
+    </div>
+  </header>
 
+  <section class="card bar" aria-label="Timer">
     <div class="bar-timer">
       <div class="dial">
         <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
@@ -61,26 +83,24 @@
       <div class="timer-side">
         <p class="phase" id="phase" role="status" aria-live="polite">ready</p>
         <p class="timer-doing" id="timerDoing"></p>
-        <div class="presets" id="presets" role="group" aria-label="Session lengths in minutes"></div>
-        <div class="controls">
-          <button class="nudge" id="minus" type="button" aria-label="Five minutes less">−5</button>
-          <button class="go" id="startPause" type="button">start</button>
-          <button class="nudge" id="plus" type="button" aria-label="Five minutes more">+5</button>
-          <button class="ghost reset is-gone" id="reset" type="button" tabindex="-1" aria-hidden="true">reset</button>
-        </div>
+        <p class="today-line" id="stats">no sessions yet</p>
+        <div class="pips" id="pips" aria-hidden="true"></div>
+      </div>
+
+      <div class="controls">
+        <button class="go" id="startPause" type="button">start</button>
+        <button class="ghost reset is-gone" id="reset" type="button" tabindex="-1" aria-hidden="true">reset</button>
       </div>
     </div>
-  </header>
 
-  <section class="card plan-card" aria-label="Today's plan">
-    <div class="plan-head">
-      <button class="day-step" id="dayPrev" type="button" aria-label="Day before">‹</button>
-      <button class="day-label" id="dayLabel" type="button" title="Back to today">today</button>
-      <button class="day-step" id="dayNext" type="button" aria-label="Day after">›</button>
-      <span class="day-sum" id="daySum"></span>
-      <button class="pin" id="weekBtn" type="button" aria-pressed="false" title="The whole week">▤</button>
-      <button class="pin" id="pinBtn" type="button" aria-pressed="false" title="Open the whole day">▣</button>
+    <div class="timer-lengths">
+      <button class="nudge" id="minus" type="button" aria-label="Five minutes less">−5</button>
+      <div class="presets" id="presets" role="group" aria-label="Session lengths in minutes"></div>
+      <button class="nudge" id="plus" type="button" aria-label="Five minutes more">+5</button>
     </div>
+  </section>
+
+<section class="card plan-card" aria-label="Today's plan">
     <div class="now-strip" id="nowStrip">
       <span class="now-dot" aria-hidden="true"></span>
       <div class="now-text">
@@ -88,10 +108,22 @@
         <span id="nowWhen"></span>
       </div>
       <button class="now-shift" id="nowShift" type="button" hidden></button>
-      <button class="now-times" id="timesBtn" type="button" aria-pressed="false" title="Show the hours">times ▾</button>
     </div>
     <div class="aim" id="aim" hidden></div>
     <div class="queue" id="queue" hidden></div>
+    <div class="plan-head">
+      <button class="day-step" id="dayPrev" type="button" aria-label="Day before">‹</button>
+      <button class="day-label" id="dayLabel" type="button" title="Back to today">today</button>
+      <button class="day-step" id="dayNext" type="button" aria-label="Day after">›</button>
+      <span class="day-sum" id="daySum"></span>
+      <button class="now-times" id="timesBtn" type="button" aria-pressed="false" title="Show the hours">hours ▾</button>
+      <button class="pin" id="weekBtn" type="button" aria-pressed="false" title="The whole week">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg>
+      </button>
+      <button class="pin" id="pinBtn" type="button" aria-pressed="false" title="Open the whole day">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
+      </button>
+    </div>
     <div class="timeline-wrap" id="timelineWrap">
       <div class="timeline" id="timeline"></div>
     </div>
@@ -104,24 +136,33 @@
   <section class="card tasks-card" aria-label="Tasks">
     <div class="task-head">
       <div class="views" id="views" role="group" aria-label="Lists"></div>
-      <div class="task-tools">
-        <button id="listBtn" type="button" title="New list">+ list</button>
-        <button id="bulkBtn" type="button" title="Paste many tasks">paste</button>
-        <button id="findBtn" type="button" aria-pressed="false" title="Find a task">find</button>
-        <button id="sortBtn" type="button" aria-pressed="false" title="What order the list comes in">sort</button>
-        <button id="tagsBtn" type="button" aria-pressed="false" title="Every tag at once">tags</button>
-        <button id="splitBtn" type="button" aria-pressed="false" title="Two panes, split by tag">split</button>
-        <button id="doneBtn" type="button" aria-pressed="false" title="Show finished">done</button>
-      </div>
+    </div>
+    <div class="find-row" id="findRow">
+      <label class="find-box">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"></circle><path d="M15 15l5 5"></path></svg>
+        <input id="findInput" type="search" autocomplete="off" placeholder="find a task…" aria-label="Find a task">
+        <button id="findClear" type="button" aria-label="Stop looking" hidden>✕</button>
+      </label>
+      <button id="tagsBtn" type="button" class="icon-btn" aria-pressed="false" title="Every tag at once">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"></rect><rect x="13" y="4" width="7" height="7" rx="2"></rect><rect x="4" y="13" width="7" height="7" rx="2"></rect><rect x="13" y="13" width="7" height="7" rx="2"></rect></svg>
+        <span class="sr">tags</span>
+      </button>
+      <button id="taskMore" type="button" class="icon-btn" aria-expanded="false" title="Sort, split, paste and more">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="12" r="2"></circle><circle cx="18" cy="17" r="2"></circle></svg>
+        <span class="sr">more</span>
+      </button>
+    </div>
+    <div class="task-tools" id="taskTools" hidden>
+      <button id="sortBtn" type="button" aria-pressed="false" title="What order the list comes in">sort</button>
+      <button id="splitBtn" type="button" aria-pressed="false" title="Two panes, split by tag">split</button>
+      <button id="doneBtn" type="button" aria-pressed="false" title="Show finished">done</button>
+      <button id="bulkBtn" type="button" title="Paste many tasks">paste</button>
+      <button id="listBtn" type="button" title="New list">+ list</button>
     </div>
     <div class="sort-row" id="sortRow" hidden>
       <span class="chip-label">order by</span>
       <span class="pick-row" id="sortPicks"></span>
       <button id="sortDir" type="button" class="sort-dir" aria-pressed="false"></button>
-    </div>
-    <div class="find-row" id="findRow" hidden>
-      <input id="findInput" type="search" autocomplete="off" placeholder="find a task…" aria-label="Find a task">
-      <button id="findClear" type="button" aria-label="Stop looking">✕</button>
     </div>
     <div class="chips" id="tagChips" hidden></div>
     <div class="add-panel" id="addPanel" hidden></div>
@@ -137,22 +178,6 @@
     <p class="task-foot"><span id="taskCount">0 open</span></p>
   </section>
 
-  <div class="extras">
-    <section class="card today-card" data-perch aria-label="Today">
-      <h2 class="card-title">today</h2>
-      <div class="pips" id="pips" aria-hidden="true"></div>
-      <p class="today-line" id="stats">no sessions yet</p>
-    </section>
-
-    <section class="card alarm-card" data-perch aria-label="Alarms">
-      <h2 class="card-title">alarms</h2>
-      <ul class="alarm-list" id="alarmList"></ul>
-      <button class="alarm-add" id="alarmAdd" type="button">+ alarm</button>
-      <input class="alarm-input" id="alarmInput" type="text" spellcheck="false" hidden
-             placeholder="16:30" aria-label="Alarm time, for example 16:30, 4:30pm, or 45m from now">
-    </section>
-  </div>
-
   <section class="card settings-card" id="settingsCard" aria-label="Settings" hidden>
     <div class="settings-head">
       <h2>settings</h2>
@@ -165,42 +190,44 @@
 
 <canvas id="petCanvas" aria-hidden="true"></canvas>
 
-<div class="tools">
-  <button id="soundBtn" type="button" class="tool" aria-pressed="true" title="Sound on / off">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"></path><path class="wave" d="M16 9.2a4 4 0 0 1 0 5.6"></path><path class="wave" d="M18.6 6.6a7.6 7.6 0 0 1 0 10.8"></path><path class="mute" d="M16.5 9.8l5 4.4M21.5 9.8l-5 4.4"></path></svg>
-    <span class="sr">Sound</span>
-  </button>
-  <button id="musicBtn" type="button" class="tool" aria-pressed="false" aria-expanded="false" title="Study ambience">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 15v-3a7.5 7.5 0 0 1 15 0v3"></path><rect x="2.8" y="14" width="4" height="6" rx="1.6"></rect><rect x="17.2" y="14" width="4" height="6" rx="1.6"></rect></svg>
-    <span class="sr">Music</span>
-  </button>
-  <button id="notifyBtn" type="button" class="tool" aria-pressed="false" title="Notify me when time is up">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 14 6 10z"></path><path d="M10.2 18.5a2 2 0 0 0 3.6 0"></path></svg>
-    <span class="sr">Notify</span>
-  </button>
-  <button id="petBtn" type="button" class="tool" aria-pressed="true" title="Hide / show the pets">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 15.5c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5v3H5z"></path><path d="M9 13.5h.01M15 13.5h.01" stroke-width="2.2"></path><path d="M8 18.5v2M12 18.5v2M16 18.5v2"></path></svg>
-    <span class="sr">Pets</span>
-  </button>
-  <button id="syncBtn" type="button" class="tool" aria-expanded="false" title="Sync">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17.5A5.5 5.5 0 0 1 7 6.5h.6A6.5 6.5 0 0 1 19 9a4.3 4.3 0 0 1-.5 8.5z"></path></svg>
-    <span class="sr">Sync</span>
-  </button>
-  <button id="themeBtn" type="button" class="tool" title="Day / night">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 0 1 9.5 4 8.2 8.2 0 1 0 20 14.5z"></path><g class="sun"><circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"></path></g></svg>
-    <span class="sr">Theme</span>
-  </button>
-  <button id="settingsBtn" type="button" class="tool is-apart" aria-pressed="false" title="Settings, tags and this week">
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<div class="menu-pop pop" id="menuPop" hidden>
+  <button id="settingsBtn" type="button" class="menu-row" aria-pressed="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7h9M19 7h1.5M3.5 12h5M15 12h5.5M3.5 17h11M21 17h-0.5"></path><circle cx="15" cy="7" r="2.3"></circle><circle cx="11" cy="12" r="2.3"></circle><circle cx="17.5" cy="17" r="2.3"></circle></svg>
-    <span class="sr">Settings</span>
+    <span class="menu-label">settings<small>tags, calendar, bedtime</small></span>
   </button>
-  <button id="fullBtn" type="button" class="tool" title="Fullscreen">
+  <button id="soundBtn" type="button" class="menu-row" aria-pressed="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"></path><path class="wave" d="M16 9.2a4 4 0 0 1 0 5.6"></path><path class="wave" d="M18.6 6.6a7.6 7.6 0 0 1 0 10.8"></path><path class="mute" d="M16.5 9.8l5 4.4M21.5 9.8l-5 4.4"></path></svg>
+    <span class="menu-label">sound</span><span class="switch" aria-hidden="true"></span>
+  </button>
+  <button id="notifyBtn" type="button" class="menu-row" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 14 6 10z"></path><path d="M10.2 18.5a2 2 0 0 0 3.6 0"></path></svg>
+    <span class="menu-label">notifications</span><span class="switch" aria-hidden="true"></span>
+  </button>
+  <button id="petBtn" type="button" class="menu-row" aria-pressed="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 15.5c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5v3H5z"></path><path d="M9 13.5h.01M15 13.5h.01" stroke-width="2.2"></path><path d="M8 18.5v2M12 18.5v2M16 18.5v2"></path></svg>
+    <span class="menu-label">pets</span><span class="switch" aria-hidden="true"></span>
+  </button>
+  <button id="themeBtn" type="button" class="menu-row" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 0 1 9.5 4 8.2 8.2 0 1 0 20 14.5z"></path><g class="sun"><circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"></path></g></svg>
+    <span class="menu-label">night mode</span><span class="switch" aria-hidden="true"></span>
+  </button>
+  <button id="fullBtn" type="button" class="menu-row">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
-    <span class="sr">Fullscreen</span>
+    <span class="menu-label">full screen</span>
   </button>
 </div>
 
-<div class="music-pop" id="musicPop" hidden>
+<div class="alarm-pop pop" id="alarmPop" hidden>
+  <h3>alarms</h3>
+  <ul class="alarm-list" id="alarmList"></ul>
+  <button class="alarm-add" id="alarmAdd" type="button">+ alarm</button>
+  <input class="alarm-input" id="alarmInput" type="text" spellcheck="false" hidden
+         placeholder="16:30" aria-label="Alarm time, for example 16:30, 4:30pm, or 45m from now">
+</div>
+
+<div class="music-pop pop" id="musicPop" hidden>
   <div class="music-row">
     <button class="music-play" id="musicPlay" type="button" aria-label="Play ambience">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path class="play-icon" d="M8 5.5l11 6.5-11 6.5z"></path><g class="pause-icon"><rect x="7.5" y="5.5" width="3.5" height="13" rx="1"></rect><rect x="13" y="5.5" width="3.5" height="13" rx="1"></rect></g></svg>
@@ -218,7 +245,7 @@
   </label>
 </div>
 
-<div class="sync-pop" id="syncPop" hidden>
+<div class="sync-pop pop" id="syncPop" hidden>
   <h3 id="authTitle">your desk, everywhere</h3>
   <p class="sync-status" id="syncStatus">local only</p>
 
@@ -272,6 +299,7 @@
 </div>
 
 <script src="../assets/config.js"></script>
+<script src="../assets/motion.js"></script>
 <script src="../assets/music.js"></script>
 <script src="../assets/sync.js"></script>
 <script src="../assets/store.js"></script>

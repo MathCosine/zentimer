@@ -15,6 +15,7 @@ const { chromium } = require('./browser');
     for (const t of ['PHY Mastering','MSB Reading','EXTRA OTIS','LATIN Vocab','WELL Run']) {
       await p.fill('#taskInput', t); await p.press('#taskInput','Enter'); await p.waitForTimeout(70); }
   });
+  await step('more tools', async () => { await p.click('#taskMore'); await p.waitForTimeout(200); });
   await step('paste panel', async () => { await p.click('#bulkBtn'); await p.waitForTimeout(200);
     await p.fill('#addPanel textarea', 'ART Sketch\nCLUB Meeting'); await p.click('#addPanel button'); });
   await step('new list', async () => { await p.click('#listBtn'); await p.waitForTimeout(200);
@@ -58,20 +59,23 @@ const { chromium } = require('./browser');
   await step('edit inside pane', async () => { await p.locator('#taskList .task-body').first().click(); await p.keyboard.press('Escape'); });
   await step('split off', async () => { await p.click('#splitBtn'); });
   await step('timer', async () => { await p.click('#startPause'); await p.waitForTimeout(400); await p.click('#startPause');
-    await p.click('#reset'); await p.locator('#presets button').nth(2).click(); await p.click('#plus'); await p.click('#minus'); });
-  await step('tools', async () => { for (const id of ['soundBtn','notifyBtn','petBtn','themeBtn']) {
-    const n = p.locator('#' + id); if (await n.count()) { await n.click(); await p.waitForTimeout(150); await n.click(); } } });
+    await p.click('#reset'); await p.click('#countdown'); await p.waitForTimeout(150);
+    await p.locator('#presets button').nth(2).click(); await p.click('#plus'); await p.click('#minus'); });
+  await step('tools', async () => { await p.click('#menuBtn'); await p.waitForTimeout(200);
+    for (const id of ['soundBtn','notifyBtn','petBtn','themeBtn']) {
+    const n = p.locator('#' + id); if (await n.count()) { await n.click(); await p.waitForTimeout(150); await n.click(); } }
+    await p.keyboard.press('Escape'); });
   await step('music panel', async () => { const n = p.locator('#musicBtn');
     if (await n.count()) { await n.click(); await p.waitForTimeout(250); await p.keyboard.press('Escape'); } });
   await step('sync panel', async () => { const n = p.locator('#syncBtn');
     if (await n.count()) { await n.click(); await p.waitForTimeout(400); await p.keyboard.press('Escape'); } });
-  await step('alarm', async () => { await p.click('#alarmAdd'); await p.waitForTimeout(250); await p.keyboard.press('Escape'); });
+  await step('alarm', async () => { await p.click('#alarmBtn'); await p.waitForTimeout(200); await p.click('#alarmAdd'); await p.waitForTimeout(250); await p.keyboard.press('Escape'); });
   await step('resize', async () => { for (const vp of [{width:380,height:700},{width:1280,height:800},{width:450,height:954}]) {
     await p.setViewportSize(vp); await p.waitForTimeout(300); } });
   /* The settings page was never opened here, and it is the busiest page in the
      app: tags, lists, the bin, the day's shape, how full a day is allowed to
      get, and the data buttons. */
-  await step('open settings', async () => { await p.click('#settingsBtn'); await p.waitForTimeout(500); });
+  await step('open settings', async () => { await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.waitForTimeout(500); });
   await step('a full day', async () => {
     for (const n of await p.locator('#settingsBody .set-number').all()) {
       await n.fill('4'); await n.press('Enter'); await p.waitForTimeout(120); } });

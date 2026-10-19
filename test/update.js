@@ -65,7 +65,7 @@ const TYPES = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
   check('and the app still works', await p.evaluate(() => typeof window.Store), 'object');
 
   console.log('\n--- and it can say which version it is running ---');
-  await p.click('#settingsBtn'); await p.waitForTimeout(900);
+  await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.waitForTimeout(900);
   const says = () => p.evaluate(() => {
     const n = document.querySelector('.app-version'); return n ? n.textContent : null; });
   check('the settings name it', /^pip-/.test(await says() || ''), true);

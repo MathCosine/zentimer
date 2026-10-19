@@ -20,6 +20,7 @@ const { chromium } = require('./browser');
     'MID Middle task 12/10 8am'
   ]) { await p.fill('#taskInput', t); await p.press('#taskInput','Enter'); await p.waitForTimeout(120); }
 
+  await p.click('#taskMore'); await p.waitForTimeout(250);
   await p.click('#sortBtn'); await p.waitForTimeout(400);
   check('the picker opens', await p.evaluate(() => !document.getElementById('sortRow').hidden), true);
 

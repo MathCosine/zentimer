@@ -31,7 +31,7 @@ const { chromium } = require('./browser');
   await p.locator('.task-edit button', { hasText: /delete|remove/i }).first().click();
   await p.waitForTimeout(400);
   await p.evaluate(() => document.querySelector('.undo-bar')?.remove());
-  await p.click('#settingsBtn'); await p.waitForTimeout(600);
+  await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.waitForTimeout(600);
   check('the bin lists it', await p.evaluate(() => {
     const heads = [...document.querySelectorAll('.set-title')].map(t=>t.textContent);
     return heads.includes('the bin'); }), true);

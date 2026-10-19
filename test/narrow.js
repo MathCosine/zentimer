@@ -35,6 +35,8 @@ const WIDTHS = [260, 280, 300, 320, 360, 380, 412, 430];
         if (cs.overflowX === 'auto' || cs.overflowX === 'scroll' || cs.position === 'fixed') return;
         // text clipped on purpose is not a layout fault
         if (cs.textOverflow === 'ellipsis') return;
+        // nor is a name kept for screen readers, which is a pixel wide on purpose
+        if (n.classList.contains('sr')) return;
         if (n.scrollWidth > n.clientWidth + 1 && n.clientWidth > 0)
           spill.push((n.id || String(n.className).split(' ')[0]) + ' ' + n.clientWidth + '<' + n.scrollWidth);
       });

@@ -26,7 +26,7 @@ const { chromium } = require('./browser');
   check('the strip is not shown by default', await p.evaluate(() =>
     document.getElementById('timelineWrap').hidden), true);
   check('a button offers them', await p.evaluate(() =>
-    document.getElementById('timesBtn').textContent.trim()), 'times ▾');
+    document.getElementById('timesBtn').textContent.trim()), 'hours ▾');
   await p.click('#timesBtn'); await p.waitForTimeout(600);
   check('and they appear', await p.evaluate(() => ({
     shown: !document.getElementById('timelineWrap').hidden,

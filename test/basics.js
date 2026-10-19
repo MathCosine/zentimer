@@ -131,7 +131,7 @@ const CONTRAST = `(() => {
     await q.goto('http://127.0.0.1:8899/app/'); await q.waitForTimeout(900);
     const root = () => q.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
     check('a step up from the browser\u2019s size to begin with', await root(), 18);
-    await q.click('#settingsBtn'); await q.waitForTimeout(500);
+    await q.click('#menuBtn'); await q.click('#settingsBtn'); await q.waitForTimeout(500);
     await q.locator('.set-row', { hasText: 'text size' }).locator('.pick', { hasText: /^larger$/ }).click();
     await q.waitForTimeout(400);
     check('larger is larger', await root(), 20);
@@ -142,7 +142,7 @@ const CONTRAST = `(() => {
     check('but a very narrow phone keeps the size it has room for', await root(), 16);
     // nothing tiny left: no text smaller than 10px anywhere on the desk
     await q.setViewportSize({ width: 390, height: 844 }); await q.waitForTimeout(300);
-    await q.click('#settingsBtn'); await q.waitForTimeout(400);
+    await q.click('#menuBtn'); await q.click('#settingsBtn'); await q.waitForTimeout(400);
     await q.locator('.set-row', { hasText: 'text size' }).locator('.pick', { hasText: /^normal$/ }).click();
     await q.click('#settingsClose'); await q.waitForTimeout(400);
     await q.evaluate(() => {

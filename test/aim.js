@@ -285,7 +285,7 @@ const { chromium } = require('./browser');
     'more than a day holds — push something back or accept a late one');
 
   console.log('--- the ceiling is yours to set ---');
-  await p.click('#settingsBtn'); await p.waitForTimeout(700);
+  await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.waitForTimeout(700);
   check('it shows the hours', await p.evaluate(() => {
     const g = [...document.querySelectorAll('.set-group')].find(x =>
       x.querySelector('.set-title') && x.querySelector('.set-title').textContent === 'a full day');

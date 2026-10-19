@@ -61,7 +61,7 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
 
   const { ctx, p } = await device();
   const connect = async (link) => {
-    await p.click('#settingsBtn'); await p.clock.runFor(500);
+    await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.clock.runFor(500);
     await p.fill('.cal-link', link);
     await p.click('.cal-add .set-add'); await p.clock.runFor(2500);
   };
@@ -152,7 +152,7 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
   check('the day still has it', await calendarBlocks(p), ['Tutoring 960-1020', 'Robotics club 1140-1200']);
 
   console.log('\n--- the wrong link gets a useful answer ---');
-  await p.click('#settingsBtn'); await p.clock.runFor(500);
+  await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.clock.runFor(500);
   await p.fill('.cal-link', 'https://calendar.google.com/calendar/u/0/r');
   await p.click('.cal-add .set-add'); await p.clock.runFor(800);
   check('it says which link it needs', await p.evaluate(() => /Secret address in iCal format/.test(document.querySelector('.cal-said').textContent)), true);

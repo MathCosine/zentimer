@@ -29,8 +29,7 @@ const { chromium } = require('./browser');
                // all of it at once was the point: not the grid, not the page
                pageFits: document.documentElement.scrollHeight <= innerHeight + 1,
                // and the rows the tiles make redundant are folded away for them
-               folded: getComputedStyle(document.getElementById('tagChips')).display === 'none' &&
-                       getComputedStyle(document.querySelector('.extras')).display === 'none' };
+               folded: getComputedStyle(document.getElementById('tagChips')).display === 'none' };
     });
     check(`${n} tags at ${width}px: all on screen, nothing scrolls`, r,
       { tiles: n, scrolls: false, lastInside: true, listHidden: true, pageFits: true, folded: true });

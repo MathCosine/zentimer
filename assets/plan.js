@@ -32,6 +32,7 @@ window.Plan = (function () {
     sort: 'due',             // due | added | tag | name | at
     desc: false,             // the other way round
     times: false,            // the hours, rather than a line saying where you are
+    tools: false,            // sort, split, done, paste and new list, shown
     tagsView: false          // every tag at once, instead of the list
   };
 
@@ -46,12 +47,13 @@ window.Plan = (function () {
       if (saved.sort) ui.sort = saved.sort;
       ui.desc = !!saved.desc;
       ui.times = !!saved.times;
+      ui.tools = !!saved.tools;
     } catch (e) { /* private mode, or nothing saved yet */ }
   }
   function savePrefs() {
     try {
       localStorage.setItem(PREF, JSON.stringify({
-        split: ui.split, top: ui.top, sort: ui.sort, desc: ui.desc, times: ui.times
+        split: ui.split, top: ui.top, sort: ui.sort, desc: ui.desc, times: ui.times, tools: ui.tools
       }));
     } catch (e) {}
   }
@@ -640,6 +642,14 @@ window.Plan = (function () {
     at:    ['earliest first', 'latest first']
   };
 
+  function renderTools() {
+    if (!el.taskTools) return;
+    el.taskTools.hidden = !ui.tools;
+    el.taskMore.setAttribute('aria-expanded', String(!!ui.tools));
+    var quietlyOn = ui.split || ui.showDone || !!ui.sorting || ui.sort !== 'due' || ui.desc;
+    el.taskMore.classList.toggle('is-on', quietlyOn && !ui.tools);
+  }
+
   function renderSort() {
     if (!el.sortRow) return;
     el.sortRow.hidden = !ui.sorting;
@@ -719,9 +729,11 @@ window.Plan = (function () {
     var tick = document.createElement('button');
     tick.type = 'button';
     tick.className = 'task-tick';
+    var tone = Store.tagsOf(task)[0];
+    if (tone && tone.color) tick.style.setProperty('--tick-tone', 'var(--' + tone.color + ')');
     tick.setAttribute('aria-pressed', String(done));
     tick.setAttribute('aria-label', done ? 'Mark not done' : 'Mark done');
-    tick.addEventListener('click', function () { Store.toggleDone(task.id, key); });
+    tick.addEventListener('click', function () { tickOff(task, key, tick); });
     item.appendChild(tick);
 
     if (ui.editing === task.id) {
@@ -790,7 +802,9 @@ window.Plan = (function () {
 
     var when = document.createElement('button');
     when.type = 'button';
-    when.className = 'task-due' + (task.due ? (task.due < key ? ' is-late' : ' is-set') : '');
+    var soon = task.due ? daysBetween(key, task.due) : null;
+    when.className = 'task-due' + (task.due ? (task.due < key ? ' is-late' : ' is-set') : '') +
+      (soon === 0 ? ' is-today' : soon === 1 || soon === 2 ? ' is-soon' : '');
     when.textContent = task.due ? dueLabel(task.due) : 'due';
     when.title = 'Set a deadline';
     when.addEventListener('click', function (event) {
@@ -829,6 +843,29 @@ window.Plan = (function () {
     item.appendChild(plan);
     if (ui.dueFor === task.id) item.appendChild(duePicker(task));
     return item;
+  }
+
+  /* Ticking something off is the best moment in the app, so it is marked:
+     the box pops, the pets notice, and the tick that finishes the evening's
+     homework gets a little confetti. Unticking is just unticking. */
+  function tickOff(task, key, button) {
+    var was = Store.isDone(task, key);
+    var before = was ? null : todaysAim();
+    if (!was && window.Motion) {
+      var tone = (Store.tagsOf(task)[0] || {}).color;
+      Motion.burst(button, tone ? getComputedStyle(document.documentElement).getPropertyValue('--' + tone).trim() : null);
+    }
+    Store.toggleDone(task.id, key);
+    if (was) return;
+    var after = todaysAim();
+    var homeworkDone = before.workLeft > 0 && after.workLeft === 0;
+    var practiceDone = before.practiceWant > 0 && before.practiceDone < before.practiceWant &&
+                       after.practiceDone >= after.practiceWant;
+    if (homeworkDone || practiceDone) {
+      if (window.Motion) Motion.confetti();
+      if (window.Pet) Pet.event('allDone');
+      if (window.Motion) Motion.toast(homeworkDone ? 'that\u2019s today\u2019s homework done \u2726' : 'practice done for today \u2726', null, { tone: 'happy' });
+    } else if (window.Pet) Pet.event('tick');
   }
 
   /* Today, tomorrow, the next of each weekday, and a date for anything else.
@@ -1120,6 +1157,8 @@ window.Plan = (function () {
     return names.length ? names.join(' \u00b7 ') : '';
   }
 
+  var justEdited = false;     // closing an editor is a redraw, not a reshuffle
+
   /* Split is a grouping, not a second window. One list scrolls, the two groups
      sit in it under headings that stick -- so a long group is never crushed to
      make room for a short one, and nothing is capped at a row and a half. */
@@ -1132,24 +1171,30 @@ window.Plan = (function () {
 
     document.body.classList.toggle('split', ui.split);
     el.splitBtn.setAttribute('aria-pressed', String(ui.split));
-    el.taskList.textContent = '';
+    if (window.Motion && !ui.editing && !justEdited) Motion.flip(el.taskList, 'data-id', drawTasks);
+    else drawTasks();
+    justEdited = !!ui.editing;
 
-    if (hunting) {
-      section('found', tasks.length);
-      fillList(tasks, key, scheduled, 'nothing matches \u201c' + ui.find.trim() + '\u201d');
-    } else if (!ui.split) {
-      fillList(tasks, key, scheduled, ui.tags.length ? 'nothing with those tags' : 'nothing here yet');
-    } else {
-      var up = [], down = [];
-      tasks.forEach(function (task) {
-        var mine = (task.tags || []).some(function (t) { return ui.top.indexOf(t) !== -1; });
-        (mine ? up : down).push(task);
-      });
-      var name = paneName(ui.top);
-      section(name || 'top of the list', up.length);
-      fillList(up, key, scheduled, name ? 'nothing tagged ' + name + ' today' : 'tap a tag above to fill this');
-      section(name ? 'everything else' : 'everything', down.length);
-      fillList(down, key, scheduled, 'nothing here yet');
+    function drawTasks() {
+      el.taskList.textContent = '';
+
+      if (hunting) {
+        section('found', tasks.length);
+        fillList(tasks, key, scheduled, 'nothing matches \u201c' + ui.find.trim() + '\u201d');
+      } else if (!ui.split) {
+        fillList(tasks, key, scheduled, ui.tags.length ? 'nothing with those tags' : 'nothing here yet');
+      } else {
+        var up = [], down = [];
+        tasks.forEach(function (task) {
+          var mine = (task.tags || []).some(function (t) { return ui.top.indexOf(t) !== -1; });
+          (mine ? up : down).push(task);
+        });
+        var name = paneName(ui.top);
+        section(name || 'top of the list', up.length);
+        fillList(up, key, scheduled, name ? 'nothing tagged ' + name + ' today' : 'tap a tag above to fill this');
+        section(name ? 'everything else' : 'everything', down.length);
+        fillList(down, key, scheduled, 'nothing here yet');
+      }
     }
 
     revealEditor();
@@ -1556,6 +1601,7 @@ window.Plan = (function () {
   }
 
   function renderNow() {
+    el.nowStrip.classList.remove('is-empty');
     if (!isToday()) {
       allDayLine();
       var sum = Store.daySummary(viewDate());
@@ -1597,6 +1643,8 @@ window.Plan = (function () {
       paint(el.nowTitle, 'nothing planned');
       paint(el.nowWhen, 'tap + on a task to put it on the day');
     }
+    // nothing on now and nothing coming: up next already says what to do
+    el.nowStrip.classList.toggle('is-empty', !block && !over && !next);
   }
 
   /* ---------- opening and closing ---------- */
@@ -1834,19 +1882,9 @@ window.Plan = (function () {
 
     function setFind(text) {
       ui.find = text || '';
-      el.findRow.hidden = !ui.find && !findOpen;
-      el.findBtn.setAttribute('aria-pressed', String(findOpen));
+      el.findClear.hidden = !ui.find;
       render();
     }
-
-    var findOpen = false;
-    el.findBtn.addEventListener('click', function () {
-      findOpen = !findOpen;
-      el.findRow.hidden = !findOpen;
-      el.findBtn.setAttribute('aria-pressed', String(findOpen));
-      if (findOpen) el.findInput.focus();
-      else { el.findInput.value = ''; setFind(''); }
-    });
 
     el.findInput.dataset.focusKey = 'find';
     el.findInput.addEventListener('input', function () { setFind(el.findInput.value); });
@@ -1854,13 +1892,19 @@ window.Plan = (function () {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
       el.findInput.value = '';
-      findOpen = false;
+      el.findInput.blur();
       setFind('');
     });
     el.findClear.addEventListener('click', function () {
       el.findInput.value = '';
-      findOpen = false;
       setFind('');
+    });
+
+    el.taskMore.addEventListener('click', function () {
+      ui.tools = !ui.tools;
+      savePrefs();
+      render();
+      if (ui.tools && window.Motion) Motion.grow(el.taskTools);
     });
 
     el.tagsBtn.addEventListener('click', function () {
@@ -2521,7 +2565,9 @@ window.Plan = (function () {
       var name = node('span', 'queue-title', pick.task.title);
       row.appendChild(name);
       var tags = Store.tagsOf(pick.task);
+      row.dataset.qid = pick.task.id;
       if (tags.length) {
+        row.classList.add('tone-' + tags[0].color);
         var badge = node('span', 'queue-tag tone-' + tags[0].color, tags[0].name);
         row.appendChild(badge);
       }
@@ -3034,6 +3080,7 @@ window.Plan = (function () {
   }
 
   var caps = { work: 330, practice: 240 };      // the point at which a day is too full
+  var barWas = {};                              // how full each bar was last time it was drawn
 
   function renderAim() {
     if (!el.aim) return;
@@ -3052,7 +3099,14 @@ window.Plan = (function () {
       line.appendChild(node('span', 'aim-name', label));
       var track = node('span', 'aim-track');
       var fill = node('span', 'aim-fill');
-      fill.style.width = Math.min(100, want ? Math.round(got / want * 100) : 100) + '%';
+      // the bar grows from where it was, rather than being redrawn already full
+      var width = Math.min(100, want ? Math.round(got / want * 100) : 100);
+      var was = barWas[label];
+      barWas[label] = width;
+      if (typeof was === 'number' && was !== width) {
+        fill.style.width = was + '%';
+        requestAnimationFrame(function () { requestAnimationFrame(function () { fill.style.width = width + '%'; }); });
+      } else fill.style.width = width + '%';
       track.appendChild(fill);
       line.appendChild(track);
       line.appendChild(node('span', 'aim-num',
@@ -3120,11 +3174,13 @@ window.Plan = (function () {
     var asks = node('div', 'aim-asks');
     if (plan && (plan.order.length || plan.waits.length)) {
       var planBtn = node('button', 'aim-why', ui.aimPlan ? 'tonight\u2019s plan \u25b4' : 'tonight\u2019s plan \u25be');
+      planBtn.setAttribute('aria-expanded', String(!!ui.aimPlan));
       planBtn.type = 'button';
       planBtn.addEventListener('click', function () { ui.aimPlan = !ui.aimPlan; if (ui.aimPlan) ui.aimWhy = false; render(); });
       asks.appendChild(planBtn);
     }
     var show = node('button', 'aim-why', ui.aimWhy ? 'what counted \u25b4' : 'what counted \u25be');
+    show.setAttribute('aria-expanded', String(!!ui.aimWhy));
     show.type = 'button';
     show.addEventListener('click', function () { ui.aimWhy = !ui.aimWhy; if (ui.aimWhy) ui.aimPlan = false; render(); });
     asks.appendChild(show);
@@ -3191,8 +3247,9 @@ window.Plan = (function () {
     el.timelineWrap.hidden = ui.week || !ui.times;
     el.timesBtn.hidden = ui.week;
     el.timesBtn.setAttribute('aria-pressed', String(ui.times));
-    el.timesBtn.textContent = ui.times ? 'times \u25b4' : 'times \u25be';
+    el.timesBtn.textContent = ui.times ? 'hours \u25b4' : 'hours \u25be';
     el.pinBtn.hidden = ui.week || !ui.times;
+    el.planCard.classList.toggle('is-compact', !ui.week && !ui.times);
     el.weekBtn.setAttribute('aria-pressed', String(ui.week));
     if (!ui.week) return;
 
@@ -3323,30 +3380,14 @@ window.Plan = (function () {
 
   /* ---------- putting something back ---------- */
 
-  var undoTimer = 0;
-
   /* A line that appears where you were looking, says what went, and offers it
      back. It leaves on its own, because a bar that needs dismissing is a
      second thing to do after the thing you just did. */
   function sayUndo(what, back) {
-    clearTimeout(undoTimer);
-    var old = document.querySelector('.undo-bar');
-    if (old) old.remove();
-
-    var bar = document.createElement('div');
-    bar.className = 'undo-bar';
-    bar.appendChild(node('span', 'undo-what', what));
-    var go = document.createElement('button');
-    go.type = 'button';
-    go.className = 'undo-go';
-    go.textContent = 'undo';
-    go.addEventListener('click', function () {
-      back();
-      bar.remove();
-    });
-    bar.appendChild(go);
-    document.body.appendChild(bar);
-    undoTimer = setTimeout(function () { bar.remove(); }, 7000);
+    var note = Motion.toast(what, { label: 'undo', run: back }, { ms: 7000 }).node;
+    note.classList.add('undo-bar');
+    note.querySelector('.toast-text').classList.add('undo-what');
+    note.querySelector('.toast-go').classList.add('undo-go');
   }
 
   function offerUndo() {
@@ -3398,6 +3439,7 @@ window.Plan = (function () {
       renderViews();
       renderChips();
       renderSort();
+      renderTools();
       renderSheet();
       renderAdders();
       renderTasks();
@@ -3438,7 +3480,8 @@ window.Plan = (function () {
       views: $('views'), tagChips: $('tagChips'), taskList: $('taskList'), taskCount: $('taskCount'),
       taskAdd: $('taskAdd'), taskInput: $('taskInput'), bulkBtn: $('bulkBtn'), listBtn: $('listBtn'),
       doneBtn: $('doneBtn'), addPanel: $('addPanel'), splitBtn: $('splitBtn'), addHint: $('addHint'),
-      findBtn: $('findBtn'), findRow: $('findRow'), findInput: $('findInput'), findClear: $('findClear'),
+      findRow: $('findRow'), findInput: $('findInput'), findClear: $('findClear'),
+      taskMore: $('taskMore'), taskTools: $('taskTools'),
       addHelp: $('addHelp'), addSheet: $('addSheet'),
       sortBtn: $('sortBtn'), sortRow: $('sortRow'), sortPicks: $('sortPicks'), sortDir: $('sortDir'),
       weekBtn: $('weekBtn'), weekWrap: $('weekWrap'), week: $('week'),

@@ -26,7 +26,10 @@
     authTitle: $('authTitle'), authForm: $('authForm'), authSwap: $('authSwap'), authForgot: $('authForgot'),
     authAccount: $('authAccount'), authWho: $('authWho'), authOut: $('authOut'),
     authDelete: $('authDelete'), authWarn: $('authWarn'),
-    authDeleteYes: $('authDeleteYes'), authDeleteNo: $('authDeleteNo'), syncAdvanced: $('syncAdvanced')
+    authDeleteYes: $('authDeleteYes'), authDeleteNo: $('authDeleteNo'), syncAdvanced: $('syncAdvanced'),
+    alarmBtn: $('alarmBtn'), alarmPop: $('alarmPop'), alarmNote: $('alarmNote'),
+    menuBtn: $('menuBtn'), menuPop: $('menuPop'), syncDot: $('syncDot'),
+    bar: document.querySelector('.bar')
   };
 
   var MIN = 60000, HOUR = 3600000, DAY = 86400000;
@@ -675,7 +678,12 @@
       el.alarmList.appendChild(item);
     });
 
-    el.alarmAdd.textContent = alarms.length ? '+' : '+ alarm';
+    el.alarmAdd.textContent = alarms.length ? '+ another' : '+ alarm';
+    var next = alarms[0];
+    el.alarmNote.hidden = !next;
+    el.alarmNote.textContent = next ? (next.ringing ? '!' : timeOfDay(next.at)) : '';
+    el.alarmBtn.classList.toggle('is-on', !!next);
+    el.alarmBtn.classList.toggle('is-ringing', alarms.some(function (a) { return a.ringing; }));
   }
 
   function render() {
@@ -711,6 +719,8 @@
     el.input.value = clockFace(timer.duration);
     el.countdown.hidden = true;
     el.input.hidden = false;
+    clearTimeout(settingDone);
+    el.bar.classList.add('is-setting');
     el.input.focus();
     el.input.select();
   }
@@ -723,8 +733,13 @@
     }
     el.input.hidden = true;
     el.countdown.hidden = false;
+    // the lengths stay a moment, so a tap on one of them still lands
+    clearTimeout(settingDone);
+    settingDone = setTimeout(function () { el.bar.classList.remove('is-setting'); }, 4000);
     render();
   }
+
+  var settingDone = 0;
 
   el.countdown.addEventListener('click', beginEdit);
   el.input.addEventListener('blur', function () { endEdit(true); });
@@ -736,6 +751,7 @@
   /* ---------- adding an alarm ---------- */
 
   function beginAlarm() {
+    if (el.alarmPop.hidden) openPop('alarm', true);
     el.alarmInput.value = '';
     el.alarmInput.hidden = false;
     el.alarmAdd.hidden = true;
@@ -967,22 +983,65 @@
     paintMusic();
   }
 
-  function toggleMusicPanel(force) {
-    var open = typeof force === 'boolean' ? force : el.musicPop.hidden;
-    el.musicPop.hidden = !open;
-    el.musicBtn.setAttribute('aria-expanded', String(open));
+  /* The four buttons in the top corner each open a small panel just under
+     themselves. One at a time; a click anywhere else, or Escape, puts it away. */
+  var POPS = {
+    alarm: { btn: el.alarmBtn, pop: el.alarmPop },
+    music: { btn: el.musicBtn, pop: el.musicPop },
+    sync:  { btn: el.syncBtn,  pop: el.syncPop },
+    menu:  { btn: el.menuBtn,  pop: el.menuPop }
+  };
+  var openedAt = 0;
+
+  function openPop(name, force) {
+    var want = POPS[name];
+    var open = typeof force === 'boolean' ? force : want.pop.hidden;
+    Object.keys(POPS).forEach(function (other) {
+      if (other === name) return;
+      POPS[other].pop.hidden = true;
+      POPS[other].btn.setAttribute('aria-expanded', 'false');
+    });
+    want.pop.hidden = !open;
+    want.btn.setAttribute('aria-expanded', String(open));
+    if (open) {
+      openedAt = Date.now();
+      if (name === 'sync') renderSync();
+      if (window.Motion) Motion.place(want.pop, want.btn);
+    }
   }
 
-  el.musicBtn.addEventListener('click', function (event) {
-    event.stopPropagation();
-    toggleMusicPanel();
+  function closePops() {
+    var any = false;
+    Object.keys(POPS).forEach(function (name) {
+      if (!POPS[name].pop.hidden) { any = true; openPop(name, false); }
+    });
+    return any;
+  }
+
+  function toggleMusicPanel(force) { openPop('music', force); }
+
+  Object.keys(POPS).forEach(function (name) {
+    POPS[name].btn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      openPop(name);
+    });
+    POPS[name].pop.addEventListener('click', function (event) { event.stopPropagation(); });
   });
 
-  el.musicPop.addEventListener('click', function (event) { event.stopPropagation(); });
+  // the menu's rows do their thing and the menu gets out of the way
+  ['settingsBtn', 'fullBtn'].forEach(function (id) {
+    el[id].addEventListener('click', function () { openPop('menu', false); });
+  });
 
   document.addEventListener('click', function () {
-    if (!el.musicPop.hidden) toggleMusicPanel(false);
-    if (!el.syncPop.hidden) toggleSyncPanel(false);
+    if (Date.now() - openedAt < 60) return;     // the click that opened it, still on its way up
+    closePops();
+  });
+
+  window.addEventListener('resize', function () {
+    Object.keys(POPS).forEach(function (name) {
+      if (!POPS[name].pop.hidden && window.Motion) Motion.place(POPS[name].pop, POPS[name].btn);
+    });
   });
 
   el.musicPlay.addEventListener('click', function () {
@@ -1037,22 +1096,13 @@
       : status === 'off' ? (baked ? 'starting…' : 'local only (this browser)')
       : status;
     paint(el.syncStatus, 'textContent', text);
-
+    var dot = !inside ? '' : status === 'synced' ? (waiting ? 'is-waiting' : 'is-synced')
+      : status === 'syncing' || status === 'connecting' ? 'is-waiting' : 'is-trouble';
+    el.syncDot.className = 'tool-dot ' + dot;
+    el.syncBtn.title = inside ? 'Your account \u00b7 ' + text.replace(/^\u2713 /, '') : 'Sign in to keep your desk everywhere';
   }
 
-  function toggleSyncPanel(force) {
-    var open = typeof force === 'boolean' ? force : el.syncPop.hidden;
-    el.syncPop.hidden = !open;
-    el.syncBtn.setAttribute('aria-expanded', String(open));
-    if (open) { renderSync(); toggleMusicPanel(false); }
-  }
-
-  el.syncBtn.addEventListener('click', function (event) {
-    event.stopPropagation();
-    toggleSyncPanel();
-  });
-
-  el.syncPop.addEventListener('click', function (event) { event.stopPropagation(); });
+  function toggleSyncPanel(force) { openPop('sync', force); }
 
   function authTrouble(err) {
     var why = (err && err.message) || String(err);
@@ -1132,6 +1182,7 @@
   function applyTheme() {
     if (settings.theme === 'auto') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', settings.theme);
+    el.themeBtn.setAttribute('aria-pressed', String(effectiveTheme() === 'dark'));
   }
 
   /* Everything in the app is sized from the root, so one number makes all of
@@ -1174,8 +1225,7 @@
       dismissRinging();
       return;
     }
-    if (event.key === 'Escape' && !el.musicPop.hidden) { toggleMusicPanel(false); return; }
-    if (event.key === 'Escape' && !el.syncPop.hidden) { toggleSyncPanel(false); return; }
+    if (event.key === 'Escape' && closePops()) return;
 
     switch (event.key) {
       case ' ': case 'Spacebar':
@@ -1308,7 +1358,7 @@
     window.addEventListener('hashchange', openFromHash);
     // the sync status changes on its own -- when rows arrive, when a push
     // fails, when a session expires -- so the panel follows it
-    Store.subscribe(function () { if (!el.syncPop.hidden) renderSync(); });
+    Store.subscribe(function () { renderSync(); });
     Pet.init();
     Pet.setEnabled(settings.pet);
     document.body.classList.toggle('pets-off', !settings.pet);
