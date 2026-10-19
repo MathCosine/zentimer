@@ -17,6 +17,7 @@ window.Sync = (function () {
   var OUTBOX = 'pip.sync.outbox';
   var CURSOR = 'pip.sync.cursor';
   var WHO = 'pip.sync.who';          // whose rows the cursor counts
+  var BEHIND = 'pip.sync.behind';    // columns held back from a database a version behind
 
   /* ---------- what each table looks like on the wire ---------- */
 
@@ -204,12 +205,28 @@ window.Sync = (function () {
   }
 
   /* first migrate, then pull everything, then send anything waiting */
+  /* Rows sent while the database was a version behind went without a column
+     it did not have. Once it might have it, they go again, whole; if it still
+     does not, they are held back again and nothing is lost. */
+  function sendHeldBack() {
+    var behind = load(BEHIND, {});
+    Object.keys(behind).forEach(function (name) {
+      var table = TABLES.filter(function (t) { return t.name === name; })[0];
+      if (!table) return;
+      var box = outbox[name] || (outbox[name] = {});
+      app.rows(table.key).forEach(function (row) { if (row.needs && row.needs.length) box[row.id] = 1; });
+    });
+    keep(OUTBOX, outbox);
+  }
+
   function start() {
     keep(WHO, userId);
     say('syncing');
     return migrate()
       .then(pullAll)
       .then(function () {
+        // after the pull, so another device's newer edit is here before ours goes up
+        sendHeldBack();
         ready = true;
         listen();
         return flush();
@@ -296,6 +313,8 @@ window.Sync = (function () {
       } else if ((row.updated || 0) > (here[at].updated || 0)) {
         // keep any purely local field the server does not carry
         var wasRoutine = here[at].routine;
+        // a database a version behind has no links column: its silence is not "no links"
+        if (table.name === 'tasks' && !('needs' in row) && here[at].needs && here[at].needs.length) mapped.needs = here[at].needs;
         here[at] = mapped;
         if (wasRoutine !== undefined) here[at].routine = wasRoutine;
         touched = true;
@@ -380,6 +399,11 @@ window.Sync = (function () {
         keep(OUTBOX, outbox);
         sent = true;
         app.stamped();
+        // it took every column: nothing is held back for this table any more
+        if (!(missing[table.name] || []).length) {
+          var behind = load(BEHIND, {});
+          if (behind[table.name]) { delete behind[table.name]; keep(BEHIND, behind); }
+        }
       })
       .catch(function (err) {
         // leave the ids in the outbox: they go up on the next try
@@ -391,6 +415,9 @@ window.Sync = (function () {
         var name = col && (col[1] || col[2]);
         if (name && !retried && (missing[table.name] || []).indexOf(name) === -1) {
           (missing[table.name] = missing[table.name] || []).push(name);
+          var behind = load(BEHIND, {});
+          behind[table.name] = true;
+          keep(BEHIND, behind);
           say('run supabase/schema.sql again — this version added a column');
           return flushTable(table, true);
         }
@@ -433,6 +460,12 @@ window.Sync = (function () {
     status: function () { return status; },
     configured: function () { return !!creds(); },
     client: function () { return client; },
+    // columns this database does not have yet, as table.column
+    behind: function () {
+      var out = [];
+      Object.keys(missing).forEach(function (t) { missing[t].forEach(function (c) { out.push(t + '.' + c); }); });
+      return out;
+    },
     userId: function () { return userId; },
 
     /* Small things that belong to the account rather than to a device -- a

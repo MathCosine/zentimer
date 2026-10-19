@@ -39,6 +39,7 @@
     focusMs: 30 * MIN, breakMs: 10 * MIN,
     presets: [15, 30, 45, 60, 90, 120],
     dayStart: 5 * 60, dayEnd: 24 * 60,
+    freeFrom: 15 * 60 + 30, weekendFrom: 9 * 60,   // when homework can start
     capWork: 330, capPractice: 240,     // when a day is asking too much
 
     music: { track: 0, volume: 0.35 }
@@ -877,6 +878,14 @@
         save();
       },
 
+      freeFrom: function () { return { weekday: settings.freeFrom, weekend: settings.weekendFrom }; },
+      setFreeFrom: function (weekday, weekend) {
+        if (typeof weekday === 'number') settings.freeFrom = Math.max(0, Math.min(1380, weekday));
+        if (typeof weekend === 'number') settings.weekendFrom = Math.max(0, Math.min(1380, weekend));
+        if (window.Plan) Plan.setFreeFrom(settings.freeFrom, settings.weekendFrom);
+        save();
+      },
+
       setLoad: function (work, practice) {
         settings.capWork = work;
         settings.capPractice = practice;
@@ -1075,6 +1084,8 @@
       : status === 'connecting' ? 'connecting…'
       : status === 'off' ? (baked ? 'starting…' : 'this browser only')
       : status;
+    // the database is a version behind this page: whoever runs it needs to know
+    if (inside && window.Sync && Sync.behind && Sync.behind().length) text += ' \u00b7 the database needs supabase/schema.sql run again';
     paint(el.syncStatus, 'textContent', text);
     var dot = !inside ? '' : status === 'synced' ? (waiting ? 'is-waiting' : 'is-synced')
       : status === 'syncing' || status === 'connecting' ? 'is-waiting' : 'is-trouble';
@@ -1231,6 +1242,8 @@
         if (typeof stored.settings.dayStart === 'number') settings.dayStart = stored.settings.dayStart;
         if (typeof stored.settings.dayEnd === 'number') settings.dayEnd = stored.settings.dayEnd;
         if (typeof stored.settings.breakMs === 'number') settings.breakMs = stored.settings.breakMs;
+        if (typeof stored.settings.freeFrom === 'number') settings.freeFrom = stored.settings.freeFrom;
+        if (typeof stored.settings.weekendFrom === 'number') settings.weekendFrom = stored.settings.weekendFrom;
         if (stored.settings.music) {
           settings.music = {
             track: stored.settings.music.track || 0,
@@ -1273,6 +1286,7 @@
       Plan.init({ hour12: settings.hour12 });   // before the first render reaches into it
       Plan.setDay(settings.dayStart, settings.dayEnd);
       Plan.setCaps(settings.capWork, settings.capPractice);
+      Plan.setFreeFrom(settings.freeFrom, settings.weekendFrom);
     }
     // your calendar's events join the day; when they change, so does the plan
     if (window.Calendar) {

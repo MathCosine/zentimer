@@ -59,10 +59,17 @@ const PARSE_SCHEMA = {
   },
 };
 
+const ITEM = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['id', 'mins'],
+  properties: { id: { type: 'string' }, mins: { type: 'integer' } },
+};
+
 const PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['steps', 'later', 'links', 'note'],
+  required: ['steps', 'later', 'week', 'weekNote', 'links', 'note'],
   properties: {
     steps: {
       type: 'array',
@@ -82,6 +89,16 @@ const PLAN_SCHEMA = {
         properties: { id: { type: 'string' }, why: { type: 'string' } },
       },
     },
+    week: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['day', 'items', 'note'],
+        properties: { day: { type: 'string' }, items: { type: 'array', items: ITEM }, note: { type: 'string' } },
+      },
+    },
+    weekNote: { type: 'string' },
     links: {
       type: 'array',
       items: {
@@ -113,24 +130,27 @@ Rules:
 - "after": what has to be finished first. Each entry is either the index (as a string, "0", "1", ...) of another task in your list, or the id of one of the student's existing open tasks. Readings before the quiz on them, a draft before the final, notes before the test. Empty when nothing must come first.
 Answer with JSON only.`;
 
-const PLAN_SYSTEM = `You plan a student's evening: what to work on, in what order, and for how long, between now and bedtime.
-You get: the time now, minutes free before bed (calendar events already taken out), the open tasks with ids, deadlines, minutes left, which are daily practice, any "needs first" links, the student's own notes about their life right now, and pip's own rule-based plan as a starting point.
+const PLAN_SYSTEM = `You plan a student's evening and their week: what to work on, in what order, and for how long.
+You get: the time now, minutes free before bed tonight (calendar events already taken out), the next seven days ("days", today first) each with its free minutes, calendar events and minutes of daily practice, the open tasks with ids, deadlines, minutes left, which are daily practice, any "needs first" links, the student's own notes about their life right now, and pip's own rule-based plan for tonight and the week as a starting point.
 Rules, in order of importance:
-1. Anything due tomorrow (or overdue) comes first and gets finished, unless it truly cannot fit.
-2. Never put a task before something it needs first. Readings before the quiz on them, research before the essay.
-3. Practice matters to this student: keep at least a short practice block (often 30 minutes) unless it is late and deadlines are crowding in -- then deadlines win.
-4. Big far-off work (essays, projects) gets a slice tonight when there is room, so it is not all left to the last night.
-5. Use the student's notes: an application deadline, a test coming up, how they like to work.
-6. The total of "mins" must not exceed the minutes free. Each step's "mins" is no more than that task's minutes left.
-7. Mix in a quick task after a long one when it helps, but never at the cost of rule 1.
-"steps": the plan in order, using task ids exactly as given. "why": a few friendly words, lower case, like "due tomorrow", "read before friday's quiz", "keeps practice going".
-"later": tasks you deliberately left for another day, with a short reason.
+1. Anything due tomorrow (or overdue) is done tonight, unless it truly cannot fit.
+2. Never put a task before something it needs first -- not earlier tonight, not on an earlier day. Readings before the quiz on them, research before the essay.
+3. Practice matters to this student: keep at least a short practice block (often 30 minutes) each day unless it is late and deadlines are crowding in -- then deadlines win.
+4. Spread big work (essays, projects) over several days so it is finished a day or two before it is due and no single night is crushed.
+5. Look at the whole week: if one day is too full, move work to lighter days before it, and say so.
+6. Use the student's notes: an application deadline, a test coming up, how they like to work.
+7. Each day's minutes of work must fit that day's free minutes after practice. Tonight's total must not exceed tonight's free minutes. No task gets more minutes in total than it has left.
+8. Mix in a quick task after a long one when it helps, but never at the cost of rule 1.
+"steps": tonight's plan in order, using task ids exactly as given. "why": a few friendly words, lower case, like "due tomorrow", "read before friday's quiz", "keeps practice going".
+"later": tasks you deliberately left out of tonight, with a short reason.
+"week": one entry per day in "days", in order, each with "day" (YYYY-MM-DD), "items" (task ids and minutes for that day; the first day's items are tonight's steps) and "note" (a few words about that day, or "").
+"weekNote": one short, kind sentence about the week (which day is heavy and what you moved, or that it all fits), no more than 18 words.
 "links": "needs first" relationships you noticed that are not already listed (first = id that must be done before then = id). Only clear ones.
 "note": one short, kind sentence about tonight (no more than 14 words).
 Answer with JSON only.`;
 
 const JUDGE_SYSTEM = `Two assistants answered the same request from a student's study planner. Decide which answer is better for the student.
-Prefer, in order: no rule broken (deadlines tomorrow first, dependencies respected, fits the time); sensible estimates; keeps practice when there is room; uses the student's notes. Answer with JSON: {"pick": "A" or "B", "why": "a short reason"}.`;
+Prefer, in order: no rule broken (deadlines tomorrow first, dependencies respected, fits the time, nothing scheduled after it is due); a week that spreads big work sensibly; sensible estimates; keeps practice when there is room; uses the student's notes. Answer with JSON: {"pick": "A" or "B", "why": "a short reason"}.`;
 
 // ---------- the two of them ----------
 
@@ -196,7 +216,8 @@ async function askGemini(system: string, user: string, schema: Json): Promise<Js
 // ---------- is an answer any good ----------
 
 type Task = { id: string; title: string; due?: string | null; left: number; practice?: boolean; needs?: string[] };
-type PlanInput = { free: number; tasks: Task[]; today: string; tomorrow: string };
+type Day = { day: string; free: number; practice?: number };
+type PlanInput = { free: number; tasks: Task[]; today: string; tomorrow: string; days?: Day[] };
 
 /* A score, or null for an answer that cannot be used at all. The same rules
    the page holds an answer to, so a plan that would be thrown away there is
@@ -227,6 +248,42 @@ function scorePlan(answer: Json, input: PlanInput): number | null {
   if (input.tasks.some((t) => t.practice) && !steps.some((s) => byId.get(String(s.id))?.practice) &&
       total + 30 <= input.free) score -= 10;
   if (!steps.length && input.tasks.length && input.free >= 20) score -= 50;
+  return score + scoreWeek(answer, input, byId);
+}
+
+/* The week: nothing after it is due, nothing before what it needs, no task
+   given more than it has left, no day far over its free time, and nothing
+   due this week left out of it. */
+function scoreWeek(answer: Json, input: PlanInput, byId: Map<string, Task>): number {
+  const week = Array.isArray(answer.week) ? answer.week as Json[] : null;
+  const days = input.days || [];
+  if (!week || !days.length) return 0;
+  let score = 0;
+  const given: Record<string, number> = {}, firstDay: Record<string, string> = {}, lastDay: Record<string, string> = {};
+  const room: Record<string, number> = {};
+  days.forEach((d) => { room[d.day] = Math.max(0, (Number(d.free) || 0) - (Number(d.practice) || 0)); });
+  for (const day of week) {
+    const key = String(day.day || '');
+    if (!(key in room)) { score -= 5; continue; }
+    let sum = 0;
+    for (const item of (Array.isArray(day.items) ? day.items as Json[] : [])) {
+      const task = byId.get(String(item.id));
+      if (!task) { score -= 10; continue; }
+      const mins = Number(item.mins) || 0;
+      if (task.due && key > task.due) score -= 15;
+      given[task.id] = (given[task.id] || 0) + mins;
+      if (!firstDay[task.id] || key < firstDay[task.id]) firstDay[task.id] = key;
+      if (!lastDay[task.id] || key > lastDay[task.id]) lastDay[task.id] = key;
+      sum += mins;
+    }
+    if (sum > room[key] + 30) score -= 10;
+  }
+  for (const id of Object.keys(given)) if (given[id] > (byId.get(id)?.left || 0) + 15) score -= 10;
+  for (const id of Object.keys(firstDay)) {
+    for (const need of byId.get(id)?.needs || []) if (lastDay[need] && lastDay[need] > firstDay[id]) score -= 20;
+  }
+  const end = days[days.length - 1].day;
+  for (const t of input.tasks) if (t.due && t.due <= end && !t.practice && !given[t.id]) score -= 15;
   return score;
 }
 

@@ -1,4 +1,4 @@
-/* The AI, through a stand-in for the relay on your Supabase project: a messy
+/* The AI through your own server: a stand-in for the relay on your Supabase project: a messy
    note turned into tasks you approve, "do this first" links, tonight planned
    by it -- and every way that can go wrong being caught: steps for tasks that
    do not exist, a quiz put before its reading, a deadline left out, too many
@@ -24,6 +24,10 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
   async function device() {
     const ctx = await b.newContext({ viewport: { width: 430, height: 950 } });
     await ctx.route(CDN, r => r.fulfill({ status: 200, contentType: 'application/javascript', body: makeClient(DB, USER) }));
+    // this suite is the AI on your own server; Puter, the default, has test/puter.js
+    await ctx.addInitScript(() => {
+      if (!localStorage.getItem('pip.ai.v1')) localStorage.setItem('pip.ai.v1', JSON.stringify({ provider: 'relay' }));
+    });
     const p = await ctx.newPage();
     p.on('pageerror', e => errs.push('PAGE: ' + e.message));
     p.on('console', m => { const t = m.text();

@@ -24,14 +24,16 @@ through that account.
 |---|---|
 | [`supabase/README.md`](supabase/README.md) | the database: run `supabase/schema.sql` (safe to run again after every update) |
 | [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md) | redirect URLs, and the optional "continue with Google" |
-| [`docs/AI.md`](docs/AI.md) | the AI: two free keys (Groq, Gemini) and one Edge Function |
+| [`docs/AI.md`](docs/AI.md) | the AI: Puter needs nothing; the optional own-server AI needs two free keys |
 | [`docs/CALENDAR.md`](docs/CALENDAR.md) | the calendar relay, and where people find their iCal link |
 
 ## The AI
 
-Two free models, Groq and Gemini, answer at once through an Edge Function on your own
-Supabase project, so no key is ever in the page. Each answer is checked against what pip
-actually has, and when they disagree a third call judges between them.
+By default through [Puter](https://puter.com): each person connects their own free Puter
+account, so there is no key and no server to run. Or, optionally, Groq and Gemini through an
+Edge Function on your own Supabase project. Either way two models answer at once, each
+answer is checked against what pip actually has, and when they disagree a third call judges
+between them.
 
 - **✦ by the add box** turns a note, or a pasted class page, into task cards: class, due
   date, minutes and what comes first. You fix them or leave some out, then add them.
@@ -41,6 +43,9 @@ actually has, and when they disagree a third call judges between them.
   out. It asks only after a change that matters, once things have been quiet for 90
   seconds, and at most every half hour on its own. Whenever it can't answer, the rule-based
   planner takes over, as before.
+- **The week.** **week** in the day row shows the next seven days: how much homework
+  each holds against the time it has after school and around your calendar, big work
+  spread out, a day that is too full marked, and the AI's note on what it moved.
 - **Do this first.** A task can need others finished first. The reading takes on the quiz's
   deadline, and the quiz waits behind it. The AI suggests links it notices; you accept them.
 
@@ -138,7 +143,8 @@ assets/config.js              sync settings (and google: true for Google sign-in
 assets/store.js               the data: lists, tags, tasks, links, blocks, logs
 assets/sync.js                rows up and down to Supabase
 assets/plan.js                the planner: list, tonight, up next, timeline, week
-assets/ai.js                  asking the AI, and when
+assets/ai.js                  asking the AI (Puter, or your server), and when
+assets/ai-brain.js            what the AI is asked, and how its answers are checked
 assets/calendar.js            your calendar, read in
 assets/motion.js              the small movements
 assets/app.js                 clock, timer, breaks, alarms, the top buttons

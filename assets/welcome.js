@@ -280,10 +280,26 @@
   }
 
   function drawAbout(box) {
-    lede(box, 'the AI reads this every time it plans your evening. what’s going on, what matters, how you like to work.');
-    if (!signedIn()) {
+    lede(box, 'the AI plans tonight and your week from your tasks and this. what\u2019s going on, what matters, how you like to work.');
+    if (window.Ai && Ai.provider() === 'puter') {
+      Ai.prepare();
+      var line = node('div', 'welcome-row ai-puter');
+      line.appendChild(node('span', 'ai-spark', '\u2726'));
+      var words = node('span', 'welcome-unit', Ai.connected() ? 'the AI is connected' : 'it runs on a free Puter account \u2014 no setup');
+      line.appendChild(words);
+      if (!Ai.connected()) {
+        var go = node('button', 'go small', 'connect');
+        go.type = 'button';
+        go.style.marginLeft = 'auto';
+        go.addEventListener('click', function () {
+          Ai.connect().then(function () { draw(); }, function (err) { if (window.Motion) Motion.toast(err.message); });
+        });
+        line.appendChild(go);
+      }
+      box.appendChild(line);
+    } else if (!signedIn()) {
       var note = node('p', 'auth-small');
-      note.appendChild(document.createTextNode('the AI works through your account — '));
+      note.appendChild(document.createTextNode('the AI works through your account \u2014 '));
       var link = node('a', '', 'sign in or make one');
       link.href = '../account/?next=../welcome/';
       note.appendChild(link);
@@ -293,16 +309,16 @@
     }
     var area = node('textarea', 'ai-about welcome-about');
     area.rows = 5;
-    area.placeholder = 'e.g. applying to a summer research program — essay due nov 1. i tutor kids tue and thu. ' +
+    area.placeholder = 'e.g. applying to a summer research program \u2014 essay due nov 1. i tutor kids tue and thu. ' +
       'i want an hour of USACO most days. i focus best before 9.';
     area.value = pick.about;
     area.addEventListener('input', function () { pick.about = area.value; });
     box.appendChild(area);
-    box.appendChild(node('p', 'auth-small', 'it’s sent to the AI with your task names and deadlines when it plans. leave out anything private.'));
+    box.appendChild(node('p', 'auth-small', 'it\u2019s sent to the AI with your task names and deadlines when it plans. leave out anything private.'));
   }
 
   function saveAbout() {
-    if (window.Ai && signedIn() && pick.about !== Ai.about()) Ai.setAbout(pick.about);
+    if (window.Ai && pick.about !== Ai.about()) Ai.setAbout(pick.about);
   }
 
   function drawDone(box) {

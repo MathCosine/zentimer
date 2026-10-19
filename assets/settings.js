@@ -224,16 +224,46 @@ window.Panel = (function () {
      reads this every time it plans. */
   function drawAi() {
     if (!window.Ai) return;
-    var box = section('AI', 'plans your evening, and turns messy notes into tasks');
+    var box = section('AI', 'plans tonight and your week, and turns messy notes into tasks');
     row(box, 'use AI', toggle(Ai.on(), function (on) { Ai.setOn(on); draw(); }),
       Ai.on() ? 'pip\u2019s own rules take over whenever it cannot answer' : 'off: pip plans with its own rules');
     if (!Ai.on()) return;
 
-    var signedIn = window.Sync && Sync.signedIn && Sync.signedIn();
-    if (!signedIn) {
-      box.appendChild(node('p', 'set-note',
-        'sign in first (the person button, top right) \u2014 the AI runs through your own account'));
-      return;
+    row(box, 'runs on', choice(
+      [{ label: 'Puter (free)', value: 'puter' }, { label: 'my server', value: 'relay' }],
+      Ai.provider(), function (v) { Ai.setProvider(v); draw(); }),
+      Ai.provider() === 'puter' ? 'your own free Puter account \u2014 no keys, nothing to set up'
+        : 'Groq + Gemini through your Supabase project (docs/AI.md)');
+
+    if (Ai.provider() === 'puter') {
+      Ai.prepare();
+      var line = node('div', 'set-row ai-puter');
+      var says = node('div', 'set-label');
+      var who = node('span', null, Ai.connected() ? 'connected' : 'not connected yet');
+      says.appendChild(who);
+      says.appendChild(node('small', null, Ai.connected()
+        ? 'each month comes with a free AI allowance on Puter'
+        : 'a free Puter account, made or signed in to in a small window'));
+      line.appendChild(says);
+      var go = node('button', Ai.connected() ? 'ghost' : 'set-add wide ai-connect', Ai.connected() ? 'disconnect' : 'connect Puter');
+      go.type = 'button';
+      go.addEventListener('click', function () {
+        if (Ai.connected()) { Ai.disconnect(); draw(); return; }
+        go.textContent = 'opening\u2026';
+        Ai.connect().then(function () { draw(); }, function (err) {
+          go.textContent = 'connect Puter';
+          if (window.Motion) Motion.toast(err.message);
+        });
+      });
+      line.appendChild(go);
+      box.appendChild(line);
+      if (Ai.connected()) Ai.puterName().then(function (name) { if (name) who.textContent = 'connected as ' + name; });
+    } else {
+      var signedIn = window.Sync && Sync.signedIn && Sync.signedIn();
+      if (!signedIn) {
+        box.appendChild(node('p', 'set-note',
+          'sign in first (the person button, top right) \u2014 your server\u2019s AI is for signed-in people'));
+      }
     }
 
     box.appendChild(node('p', 'set-label-text', 'about you, right now'));
@@ -255,12 +285,12 @@ window.Panel = (function () {
     var plan = Ai.planFor(Store.dayKey());
     box.appendChild(node('small', 'set-note ai-said', said.busy ? 'thinking\u2026'
       : said.error ? said.error
-      : plan ? 'tonight was planned with AI' + (plan.judged ? ', two answers compared' : '')
-      : 'it plans tonight once things have been quiet for a minute or two'));
+      : plan ? 'tonight and the week were planned with AI' + (plan.judged ? ', two answers compared' : '')
+      : 'it plans once things have been quiet for a minute or two'));
 
-    box.appendChild(node('p', 'set-note',
-      'What it is sent: your task names, deadlines and sizes, the evening\u2019s calendar events and the note above \u2014 ' +
-      'to Groq and Google\u2019s Gemini, through your own account, to plan tonight. Not your email, not anything else.'));
+    box.appendChild(node('p', 'set-note', Ai.provider() === 'puter'
+      ? 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events and the note above \u2014 to Puter, which passes it to the AI models (Google\u2019s Gemini and OpenAI\u2019s GPT). Not your email, not anything else.'
+      : 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events and the note above \u2014 to Groq and Google\u2019s Gemini, through your own server. Not your email, not anything else.'));
   }
 
   function drawLoad() {
@@ -301,6 +331,23 @@ window.Panel = (function () {
       draw();
     });
     row(box, 'bedtime', ends, 'the evening is planned to finish by then');
+
+    /* when homework can start, so the week knows how much room each day has */
+    function fromInput(value, onPick) {
+      var input = node('input', 'set-time');
+      input.type = 'time';
+      input.value = hhmm(value);
+      input.addEventListener('change', function () {
+        var parts = input.value.split(':');
+        if (input.value) onPick((+parts[0]) * 60 + (+parts[1]));
+        draw();
+      });
+      return input;
+    }
+    var from = api.freeFrom();
+    row(box, 'school days, free from', fromInput(from.weekday, function (m) { api.setFreeFrom(m, null); }),
+      'when homework can start \u2014 the week plans from this');
+    row(box, 'weekends, free from', fromInput(from.weekend, function (m) { api.setFreeFrom(null, m); }));
 
     row(box, 'clock', choice(
       [{ label: '24 hour', value: false }, { label: '12 hour', value: true }],

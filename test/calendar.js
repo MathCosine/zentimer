@@ -100,7 +100,7 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
   });
   await p.clock.runFor(800);
   check('the queue says how long until it', await p.evaluate(() => document.querySelector('.queue-head span').textContent), '1h free');
-  await p.locator('.aim-why', { hasText: 'plan' }).click(); await p.clock.runFor(500);
+  await p.locator('.aim-why', { hasText: /^tonight/ }).click(); await p.clock.runFor(500);
   check('tonight’s plan goes round it, and says so', await p.evaluate(() =>
     [...document.querySelectorAll('.aim-plan .plan-line')].map(n =>
       n.querySelector('.plan-at').textContent + ' ' + n.querySelector('.plan-name').textContent + ' ' + n.querySelector('.plan-mins').textContent)),

@@ -165,7 +165,7 @@ const seed = () => {
     await p.clock.install({ time: new Date(2026, 8, 27, 20, 30) });
     await p.goto('http://127.0.0.1:8899/app/'); await p.clock.runFor(1500);
     await p.evaluate(seed); await p.clock.runFor(1200);
-    await p.locator('.aim-why', { hasText: 'plan' }).click(); await p.clock.runFor(500);
+    await p.locator('.aim-why', { hasText: /^tonight/ }).click(); await p.clock.runFor(500);
     const plan = await p.evaluate(() => ({
       lines: [...document.querySelectorAll('.aim-plan .plan-line')].map(n => ({
         at: n.querySelector('.plan-at').textContent, name: n.querySelector('.plan-name').textContent,
@@ -198,7 +198,7 @@ const seed = () => {
       Store.addTask({ title: 'EXTRA OTIS', repeat: 'daily', mins: 60 });
     });
     await p.clock.runFor(1200);
-    await p.locator('.aim-why', { hasText: 'plan' }).click(); await p.clock.runFor(500);
+    await p.locator('.aim-why', { hasText: /^tonight/ }).click(); await p.clock.runFor(500);
     check('at four with a heavy two days, practice is still in the plan', await p.evaluate(() =>
       [...document.querySelectorAll('.aim-plan .plan-why')].some(n => n.textContent === 'practice')), true);
     await ctx.close();

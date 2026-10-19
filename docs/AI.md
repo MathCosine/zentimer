@@ -1,27 +1,54 @@
 # The AI in pip
 
-pip can use AI for two things:
+pip uses AI for three things:
 
 - **Tonight's plan.** It decides what to do, in what order and for how long,
   around your calendar and bedtime. It also notices what has to come first,
   like a reading before the quiz on it.
+- **The week.** It gives each of the next seven days its share of the
+  homework within the time that day has, spreads big work over several
+  days, and says when a day is too full and what it moved. Press **week**
+  in the day row under up next.
 - **Adding tasks.** Type a messy note, or paste a list from a class page, and
   press ✦. It picks out each task with its class, deadline, rough length and
   what comes first, and shows them as cards for you to fix or drop before
   anything is added.
 
-It uses two free AI services at once, **Groq** and **Google's Gemini**. Their
-answers are checked against what pip actually has. When both answers are
-usable and they disagree, a third request asks which one is better. pip
-checks the result again before showing it. Whenever the AI can't answer (not
-set up, offline, out of quota, a bad answer), pip's own rule-based planner
-takes over.
+Whichever AI answers, two different models are asked at once. Their answers
+are checked against what pip actually has: real tasks, nothing before what
+it needs, nothing after it's due, minutes that fit. When both answers are
+usable and they disagree, a third request picks the better one. Whenever
+the AI can't answer (not connected, offline, out of allowance, a bad
+answer), pip's own rule-based planner takes over.
 
-## Setting it up (once per Supabase project, about 10 minutes, free)
+## The default: Puter (nothing to set up)
 
-The AI keys never go in the website. They live as secrets in a Supabase Edge
-Function, [`supabase/functions/ai/index.ts`](../supabase/functions/ai/index.ts),
-the same way the calendar relay works.
+[Puter](https://puter.com) lets a web page use AI models without an API
+key. Each person signs in to their own free Puter account, which comes with
+a free monthly AI allowance, and pays nothing. Neither do you.
+
+- In pip: settings → **AI** → **connect Puter**, the "connect" button next to
+  the ✦ line in tonight's box, or the welcome page. A small Puter window opens
+  to make or sign in to a free account.
+- It doesn't need a pip account; it works for someone using pip only in
+  their browser, too.
+- Models are set in [`assets/ai.js`](../assets/ai.js) (`PUTER_A`, `PUTER_B`,
+  `PUTER_JUDGE`). Each is a list: if a model is retired, the next one is
+  tried.
+- Puter's script is only fetched once someone reaches for the AI (✦,
+  connect, or the AI settings). After that it loads with the desk.
+- If someone's free allowance runs out for the month, pip says so and plans
+  with its own rules until it comes back.
+
+## Or: your own server (Groq + Gemini)
+
+Settings → AI → **runs on: my server**. The keys live as secrets in a
+Supabase Edge Function on your project. Set it up once:
+
+The AI keys never go in the website. They live as secrets in the Edge
+Function [`supabase/functions/ai/index.ts`](../supabase/functions/ai/index.ts),
+the same way the calendar relay works. It uses the same instructions and
+checks as [`assets/ai-brain.js`](../assets/ai-brain.js); keep the two in step.
 
 1. **A Groq key.** Sign in at [console.groq.com](https://console.groq.com) →
    **API Keys** → **Create API Key**. No card needed.
@@ -59,9 +86,9 @@ It doesn't ask the AI on every change.
   week's homework is one request, not twenty.
 - On its own it asks **at most every 30 minutes**. The exception is the first
   plan of the day.
-- It only asks when something that **matters to tonight** changed: a new
-  task, a deadline or size changing, a "do this first" link, a calendar
-  event, your bedtime, or your note about yourself. Ticking something off
+- It only asks when something that **matters to tonight or the week**
+  changed: a new task, a deadline or size changing, a "do this first" link, a
+  calendar event this week, your bedtime, or your note about yourself. Ticking something off
   never triggers a request, because the rest of the plan still holds.
 - It also asks if the evening has slid so far that what's left of the plan
   no longer fits before bed.
@@ -69,16 +96,18 @@ It doesn't ask the AI on every change.
 
 ## What it is sent
 
-Only when someone is signed in and has it switched on (settings → AI):
+Only once someone has connected it and has it switched on (settings → AI):
 
 - the names, deadlines and sizes of their open tasks
-- tonight's calendar events
+- this week's calendar events, and how much free time each day has
 - their bedtime
 - whatever they wrote under "about you, right now"
 
-It is never sent their email or password. Google may use what is sent to
-Gemini's free tier to improve its products; [privacy.html](../privacy.html)
-says so to everyone using pip.
+It is never sent their email or password. With Puter, this goes to Puter,
+which passes it to the models (Google's Gemini and OpenAI's GPT). With your
+own server, it goes to Groq and Google's Gemini. Google may use what is sent
+to Gemini's free tier to improve its products. [privacy.html](../privacy.html)
+says all of this to everyone using pip.
 
-Both services' terms generally require whoever creates the API keys to be 18
-or older.
+The services' terms generally require account holders (or whoever creates
+API keys) to be 18 or older, or to have a parent's permission.

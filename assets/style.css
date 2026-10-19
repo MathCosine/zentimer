@@ -522,6 +522,7 @@ body[data-status="running"] .countdown { cursor: default; }
 .now-shift:hover, .pin:hover { border-color: var(--accent); }
 .pin { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; color: var(--muted); }
 .pin svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pin.has-label { width: auto; padding: 0 11px 0 9px; display: inline-flex; gap: 5px; font-size: 0.7rem; }
 .pin[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 
 .timeline-wrap {
@@ -2954,7 +2955,8 @@ body.dragging-task .task-list { pointer-events: none; }
 .queue-why.is-quick { color: var(--green); font-weight: 600; }
 
 /* tonight's plan, all the way down */
-.aim-asks { display: flex; justify-content: center; gap: 8px; margin-top: 2px; }
+.aim-asks { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.aim-asks .aim-why { white-space: nowrap; }
 .aim-plan {
   display: flex;
   flex-direction: column;
@@ -3383,3 +3385,67 @@ button:not(:disabled) { -webkit-tap-highlight-color: transparent; }
 
 /* a brand new desk says where the welcome is */
 .task-empty a { color: var(--accent); font-weight: 600; }
+
+/* ---------- the week ahead ---------- */
+
+/* above the week's calendar: what each day holds against its room */
+.wk-ahead { padding: 2px 0 4px; }
+
+.wk-plan { display: grid; gap: 4px; margin-top: 2px; }
+.wk-note { margin: 0 0 4px; font-size: 0.74rem; line-height: 1.4; color: var(--ink); }
+
+.wk-day {
+  display: grid;
+  grid-template-columns: 4.6em 1fr auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 12px;
+  padding: 6px 7px;
+  cursor: pointer;
+  transition: background 160ms var(--ease), transform 260ms var(--spring);
+}
+.wk-day:hover, .wk-day.is-open { background: var(--card); }
+.wk-day:active { transform: scale(0.98); transition-duration: 90ms; }
+
+.wk-name { font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
+.wk-day.is-today .wk-name { color: var(--accent); }
+
+.wk-bar {
+  display: flex;
+  height: 10px;
+  min-width: 30px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+.wk-work { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 50%, var(--pink))); transition: width 600ms var(--bounce); }
+.wk-drill { display: block; height: 100%; background: color-mix(in srgb, var(--coral) 60%, var(--yellow)); opacity: 0.8; transition: width 600ms var(--bounce); }
+.wk-day.is-over .wk-work { background: linear-gradient(90deg, var(--coral), var(--pink)); }
+
+.wk-num { font-size: 0.7rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wk-day.is-over .wk-num { color: color-mix(in srgb, var(--coral) 60%, var(--ink)); font-weight: 600; }
+
+.wk-items {
+  display: grid;
+  gap: 1px;
+  margin: 0 0 4px 1.2em;
+  padding-left: 9px;
+  border-left: 2px solid var(--hair);
+  animation: pop-in 260ms var(--bounce) both;
+}
+.wk-day-note { margin: 2px 0 3px; font-size: 0.7rem; color: var(--accent); }
+.wk-drills { margin: 2px 0 0 6px; font-size: 0.7rem; color: var(--muted); }
+.plan-note.is-over { color: color-mix(in srgb, var(--coral) 60%, var(--ink)); }
+
+.ai-invite .ai-words { color: var(--ink); }
+.ai-connect { width: auto; }
+
+/* every tag at once is about the tags: the AI's invitation can wait */
+body.tiles-on .ai-invite { display: none; }

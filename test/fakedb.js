@@ -28,6 +28,12 @@ function start(port) {
           if (typeof q.gt === 'number') hit = hit.filter(r => (r.updated || 0) > q.gt);
           if (q.eq) Object.keys(q.eq).forEach(k => { hit = hit.filter(r => r[k] === q.eq[k]); });
           out = { data: hit.map(r => ({ ...r })), error: null };
+        } else if (req.url === '/upsert' && db.columns && db.columns[q.table] &&
+                   q.rows.some(r => Object.keys(r).some(k => !db.columns[q.table].includes(k)))) {
+          // as PostgREST does for a column the database has not got yet
+          const col = Object.keys(q.rows.find(r => Object.keys(r).some(k => !db.columns[q.table].includes(k))))
+            .find(k => !db.columns[q.table].includes(k));
+          out = { data: null, error: { code: 'PGRST204', message: "Could not find the '" + col + "' column of '" + q.table + "' in the schema cache" } };
         } else if (req.url === '/upsert') {
           const written = q.rows.map(incoming => {
             const key = incoming.id !== undefined ? 'id' : 'user_id';
@@ -91,6 +97,33 @@ function start(port) {
           } else out = { ok: true };
         }
         else if (req.url === '/__auth') { db.confirmEmail = !!q.confirmEmail; out = { log: db.authLog || [], users: Object.keys(db.users || {}) }; }
+        else if (req.url === '/__columns') { db.columns = q.columns || null; out = { ok: true }; }
+        else if (req.url === '/__puter') { db.puter = q; db.puterAsked = []; out = { ok: true }; }
+        else if (req.url === '/__puterAsked') { out = { asked: db.puterAsked || [] }; }
+        else if (req.url === '/puter/signin') {
+          const cfg = db.puter || {};
+          out = cfg.signinError ? { error: cfg.signinError } : { user: { username: 'sam_k', uuid: 'p-1' } };
+        }
+        else if (req.url === '/puter/chat') {
+          // which question, from the schema's name or the words of it
+          const kind = q.name || (/turn a student/.test(q.system) ? 'parse' : /plan a student/.test(q.system) ? 'plan' : 'judge');
+          const family = /^gemini/.test(q.model || '') ? 'A' : 'B';
+          let input = null; try { input = JSON.parse(q.user); } catch (e) {}
+          (db.puterAsked = db.puterAsked || []).push({ model: q.model, kind, strict: q.strict, input });
+          const cfg = db.puter || {};
+          const want = (cfg[kind] || {});
+          if (cfg.broke) out = { error: cfg.broke };
+          else if ((cfg.retired || []).includes(q.model)) out = { error: 'model ' + q.model + ' not found' };
+          else if (q.strict && (cfg.noSchema || []).includes(q.model)) out = { error: 'outputFormat is not supported for this model' };
+          else if (kind === 'judge' && want.preferLinks && input) {
+            // the judge reads both: whichever noticed something comes first
+            const linked = x => ((x && x.tasks) || []).some(t => (t.after || []).length);
+            out = { content: { pick: linked(input.B) && !linked(input.A) ? 'B' : 'A', why: 'it noticed what comes first' } };
+          }
+          else if (kind === 'judge') out = { content: want.answer || { pick: 'A', why: 'fits' } };
+          else if (want[family] === undefined) out = { error: 'no answer seeded' };
+          else out = { content: typeof want[family] === 'function' ? want[family](input) : want[family] };
+        }
         else if (req.url === '/__seedLegacy') {
           db.tables.pip_state.push({ id: 'plan', user_id: q.user, data: q.doc, updated: db.stamp() });
           out = { ok: true };

@@ -1,6 +1,9 @@
-/* The AI side of pip. It asks the relay on your own Supabase project (which
-   asks Groq and Gemini, and has them checked against each other), and it
-   decides *when* to ask: not on every keystroke, not twenty times while you
+/* The AI side of pip. By default it asks through Puter, from the page: each
+   person signs in to their own free Puter account once, and pip needs no key
+   and no server. Two different models answer, both answers are checked
+   against what pip actually has, and when they disagree a third call judges.
+   Or, if you run the relay on your own Supabase project, through that (Groq
+   and Gemini, compared the same way). Either way it decides *when* to ask: not on every keystroke, not twenty times while you
    paste in a week of homework, and never more than every half hour on its
    own -- only when something that matters to tonight has changed and then
    gone quiet for a minute and a half.
@@ -16,9 +19,19 @@ window.Ai = (function () {
   var GAP = 30 * 60 * 1000;          // and on its own, never more often than this
   var STALE_PLAN = 8 * 3600 * 1000;  // a plan from this morning is not tonight's
 
+  /* Puter: two families, so their mistakes are not the same mistakes, and a
+     small quick model to judge between them. Each a list -- when one is
+     retired or busy, the next is tried. */
+  var PUTER_SRC = 'https://js.puter.com/v2/';
+  var PUTER_A = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+  var PUTER_B = ['gpt-5.4-nano', 'gpt-5.5'];
+  var PUTER_JUDGE = ['gpt-5.4-nano', 'gemini-3.5-flash-lite'];
+
   var saved = read() || {};
   var state = {
     on: saved.on !== false,
+    provider: saved.provider === 'relay' ? 'relay' : 'puter',
+    linked: !!saved.linked,          // Puter was connected on this device, so load it at start
     plan: saved.plan || null,        // { day, at, sig, steps, later, links, note, used, judged }
     asked: saved.asked || 0,         // when it last asked on its own
     declined: saved.declined || {}   // links you said no to: 'first>then'
@@ -31,7 +44,8 @@ window.Ai = (function () {
   function read() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
   function keep() {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ on: state.on, plan: state.plan, asked: state.asked, declined: state.declined }));
+      localStorage.setItem(KEY, JSON.stringify({ on: state.on, provider: state.provider, linked: state.linked,
+        plan: state.plan, asked: state.asked, declined: state.declined }));
     } catch (e) { /* private mode */ }
   }
   function tell() { listeners.forEach(function (fn) { try { fn(); } catch (e) {} }); }
@@ -40,11 +54,189 @@ window.Ai = (function () {
   function signedIn() {
     try { return !!(window.Store && Store.remote && Store.remote.signedIn()); } catch (e) { return false; }
   }
-  /* Usable means: switched on, signed in (the relay is for signed-in people),
-     and online. */
-  function usable() { return state.on && signedIn() && !!client() && navigator.onLine !== false; }
+  /* ---------- Puter ---------- */
+
+  var puterLoading = null;
+
+  /* Its script is someone else's, so it is only fetched once you are using
+     it: when you connect, or at start if this device connected before. */
+  function loadPuter() {
+    if (window.puter) return Promise.resolve(window.puter);
+    if (puterLoading) return puterLoading;
+    puterLoading = new Promise(function (resolve, reject) {
+      var tag = document.createElement('script');
+      tag.src = PUTER_SRC;
+      tag.async = true;
+      tag.onload = function () {
+        if (!window.puter) { puterLoading = null; reject(new Error('Puter did not load')); return; }
+        try { window.puter.quiet = true; } catch (e) {}
+        resolve(window.puter);
+        tell();
+      };
+      tag.onerror = function () { puterLoading = null; reject(new Error('Puter could not be reached')); };
+      document.head.appendChild(tag);
+    });
+    return puterLoading;
+  }
+
+  function puterReady() {
+    try { return !!(window.puter && window.puter.auth && window.puter.auth.isSignedIn()); } catch (e) { return false; }
+  }
+
+  /* Signing in to Puter opens its own small window, which browsers only allow
+     straight from a click -- so this is called from one, with the script
+     already loaded by then (it starts loading the moment anything hints you
+     might want the AI). */
+  function connect() {
+    if (puterReady()) { state.linked = true; keep(); return Promise.resolve(true); }
+    if (!window.puter) {
+      loadPuter().catch(function () {});
+      return Promise.reject(new Error('one moment \u2014 Puter is still loading, tap again'));
+    }
+    return window.puter.auth.signIn().then(function () {
+      state.linked = true;
+      keep();
+      tell();
+      consider();
+      return true;
+    }, function (err) {
+      var why = String((err && (err.error || err.code || err.message)) || err || '');
+      throw new Error(/closed|cancel/i.test(why) ? 'Puter sign-in was closed before it finished'
+        : /popup/i.test(why) ? 'the browser blocked Puter\u2019s sign-in window \u2014 allow pop-ups for this site'
+        : 'could not sign in to Puter just now');
+    });
+  }
+
+  function disconnect() {
+    try { if (window.puter && window.puter.auth) window.puter.auth.signOut(); } catch (e) {}
+    state.linked = false;
+    keep();
+    tell();
+  }
+
+  /* Who is signed in to Puter, for settings to say. */
+  function puterName() {
+    if (!puterReady()) return Promise.resolve(null);
+    return Promise.resolve(window.puter.auth.getUser()).then(function (user) {
+      return user && (user.username || user.email) || 'your Puter account';
+    }, function () { return 'your Puter account'; });
+  }
+
+  /* Usable means: switched on, online, and connected -- to Puter, or for the
+     relay, signed in to pip (the relay is for signed-in people). */
+  function usable() {
+    if (!state.on || navigator.onLine === false) return false;
+    return state.provider === 'puter' ? puterReady() : signedIn() && !!client();
+  }
+
+  /* When it is not usable: why, in a few words, and what would fix it. */
+  function blocker() {
+    if (!state.on) return { text: 'the AI is switched off in settings' };
+    if (navigator.onLine === false) return { text: 'the AI needs the internet' };
+    if (state.provider === 'puter') {
+      loadPuter().catch(function () {});
+      return { text: 'the AI runs on a free Puter account \u2014 connect it once', fix: 'connect' };
+    }
+    return { text: 'sign in to use the AI', fix: 'signin' };
+  }
 
   /* ---------- asking ---------- */
+
+  function ask(kind, input) {
+    return state.provider === 'puter' ? askPuter(kind, input) : askRelay(kind, input);
+  }
+
+  function puterTrouble(err) {
+    var why = String((err && (err.message || (err.error && (err.error.message || err.error)) || err.code)) || err || '');
+    if (/insufficient|funds|credit|allowance|quota|402|payment|upgrade/i.test(why)) {
+      return new Error('your free Puter AI allowance is used up for this month');
+    }
+    if (/401|unauthori|not signed|sign in|auth/i.test(why)) return new Error('connect Puter again to use the AI');
+    if (/network|fetch|failed to|timeout/i.test(why)) return new Error('Puter could not be reached just now');
+    return new Error('the AI could not answer just now');
+  }
+
+  function stopper(err) {
+    return /insufficient|funds|credit|allowance|quota|402|payment|upgrade|401|unauthori/i.test(
+      String((err && (err.message || (err.error && (err.error.message || err.error)) || err.code)) || err || ''));
+  }
+
+  function textOf(reply) {
+    var content = reply && reply.message ? reply.message.content : reply;
+    if (Array.isArray(content)) return content.map(function (part) { return part && part.text || ''; }).join('');
+    if (content && typeof content === 'object' && !Array.isArray(content)) return content;
+    return content || (reply && reply.text) || String(reply || '');
+  }
+
+  /* One model, with the schema enforced where it can be; if a model will not
+     take the schema as an option, the same question again with the schema
+     only in words; then the next model on the list. */
+  function chatJson(models, system, user, schema, name) {
+    var tries = [];
+    models.forEach(function (model) { tries.push([model, true], [model, false]); });
+    var at = 0, last = null;
+    function next() {
+      if (at >= tries.length) return Promise.reject(last || new Error('no model answered'));
+      var model = tries[at][0], strict = tries[at][1];
+      at++;
+      var options = { model: model, temperature: 0.3 };
+      if (strict) options.outputFormat = { type: 'json_schema', name: name, strict: true, schema: schema };
+      return Promise.resolve(window.puter.ai.chat([
+        { role: 'system', content: system + '\nThe JSON must match this schema:\n' + JSON.stringify(schema) },
+        { role: 'user', content: user }
+      ], options)).then(function (reply) {
+        return { model: model, answer: AiBrain.readJson(textOf(reply)) };
+      }).catch(function (err) {
+        last = err;
+        if (stopper(err)) throw err;           // out of allowance, or signed out: no use trying more
+        return next();
+      });
+    }
+    return next();
+  }
+
+  function settle(promise) {
+    return promise.then(function (v) { return { ok: true, value: v }; }, function (e) { return { ok: false, error: e }; });
+  }
+
+  function askPuter(kind, input) {
+    if (!window.puter || !puterReady()) return Promise.reject(new Error('connect Puter to use the AI'));
+    var brain = AiBrain[kind];
+    var user = JSON.stringify(input);
+    return Promise.all([
+      settle(chatJson(PUTER_A, brain.system, user, brain.schema, kind)),
+      settle(chatJson(PUTER_B, brain.system, user, brain.schema, kind))
+    ]).then(function (asked) {
+      var heard = [], trouble = {};
+      asked.forEach(function (got, i) {
+        var who = i ? 'gpt' : 'gemini';
+        if (!got.ok) { trouble[who] = String((got.error && got.error.message) || got.error).slice(0, 160); return; }
+        var score = brain.score(got.value.answer, input);
+        if (score === null || score === undefined) { trouble[who] = 'answer did not check out'; return; }
+        heard.push({ who: who, model: got.value.model, answer: got.value.answer, score: score });
+      });
+      if (!heard.length) {
+        var first = asked.filter(function (a) { return !a.ok; })[0];
+        throw first ? puterTrouble(first.error) : new Error('neither AI gave a usable answer');
+      }
+      heard.sort(function (a, b) { return b.score - a.score; });
+      var meta = { used: heard[0].who, judged: false, verdict: '', heard: heard.map(function (h) { return h.who; }), trouble: trouble };
+      var done = function (pick) { meta.used = pick.who; return { result: pick.answer, meta: meta }; };
+      /* Both usable, really different, and neither clearly worse: a third
+         reads both, labelled A and B in a random order. */
+      if (heard.length < 2 || AiBrain.sameOrder(heard[0].answer, heard[1].answer) || heard[0].score - heard[1].score >= 25) {
+        return done(heard[0]);
+      }
+      var flip = Math.random() < 0.5;
+      var a = flip ? heard[1] : heard[0], b = flip ? heard[0] : heard[1];
+      return chatJson(PUTER_JUDGE, AiBrain.judge.system, JSON.stringify({ request: input, A: a.answer, B: b.answer }),
+        AiBrain.judge.schema, 'judge').then(function (ruling) {
+        meta.judged = true;
+        meta.verdict = String(ruling.answer.why || '').slice(0, 160);
+        return done(ruling.answer.pick === 'B' ? b : a);
+      }, function () { return done(heard[0]); });
+    });
+  }
 
   function trouble(error) {
     var status = error && error.context && error.context.status;
@@ -59,7 +251,7 @@ window.Ai = (function () {
     return body.then(function (said) { return new Error(said || fallback); });
   }
 
-  function ask(kind, input) {
+  function askRelay(kind, input) {
     var c = client();
     if (!c || !c.functions) return Promise.reject(new Error('sign in to use the AI'));
     return c.functions.invoke('ai', { body: { kind: kind, input: input } }).then(function (res) {
@@ -124,7 +316,7 @@ window.Ai = (function () {
   }
 
   function parse(text) {
-    if (!usable()) return Promise.reject(new Error(state.on ? 'sign in to use the AI' : 'the AI is switched off in settings'));
+    if (!usable()) return Promise.reject(new Error(blocker().text));
     var key = Store.dayKey();
     var open = Store.tasks().filter(function (t) { return !Store.isDone(t, key) && !Store.repeats(t); })
       .slice(0, 60).map(function (t) { return { id: t.id, title: t.title, due: t.due || null }; });
@@ -177,7 +369,12 @@ window.Ai = (function () {
       (input.tasks || []).map(function (t) {
         return [t.id, t.due, Math.round(t.left / 15), (t.needs || []).join('+')].join(':');
       }),
-      (input.events || []).map(function (e) { return e.title + '@' + e.start; })
+      (input.events || []).map(function (e) { return e.title + '@' + e.start; }),
+      // the week's fixed things, and how much room each day has
+      // (not today's: tonight's room shrinks every minute, which is not news)
+      (input.days || []).filter(function (d) { return d.day > input.today; }).map(function (d) {
+        return d.day + ':' + Math.round((d.free || 0) / 30) + ':' + (d.busy || []).map(function (e) { return e.title + '@' + e.start; }).join(',');
+      })
     ]);
   }
 
@@ -196,6 +393,10 @@ window.Ai = (function () {
     if (!a || !b) return true;
     if (a[0] !== b[0] || a[1] !== b[1]) return true;
     if (JSON.stringify(a[3]) !== JSON.stringify(b[3])) return true;
+    // the week's events: a new one, or one moved -- the days themselves move on by one each day
+    var weekBefore = {};
+    (a[4] || []).forEach(function (d) { weekBefore[d] = true; });
+    if ((b[4] || []).some(function (d) { return !weekBefore[d] && (a[4] || []).length; })) return true;
     var before = {};
     a[2].forEach(function (t) { before[t] = true; });
     return b[2].some(function (t) { return !before[t]; });
@@ -222,6 +423,8 @@ window.Ai = (function () {
         steps: Array.isArray(result.steps) ? result.steps.slice(0, 30) : [],
         later: Array.isArray(result.later) ? result.later.slice(0, 30) : [],
         links: Array.isArray(result.links) ? result.links.slice(0, 10) : [],
+        week: Array.isArray(result.week) ? result.week.slice(0, 7) : [],
+        weekNote: typeof result.weekNote === 'string' ? result.weekNote.slice(0, 160) : '',
         note: typeof result.note === 'string' ? result.note.slice(0, 120) : '',
         used: (data.meta && data.meta.used) || '',
         judged: !!(data.meta && data.meta.judged),
@@ -328,6 +531,15 @@ window.Ai = (function () {
     tell();
   }
 
+  function setProvider(which) {
+    state.provider = which === 'relay' ? 'relay' : 'puter';
+    keep();
+    if (state.provider === 'puter') loadPuter().catch(function () {});
+    tell();
+    consider();
+    if (window.Plan) Plan.render();
+  }
+
   function setOn(on) {
     state.on = !!on;
     keep();
@@ -355,13 +567,25 @@ window.Ai = (function () {
     setInterval(function () { adopt(); consider(); }, 60 * 1000);
     window.addEventListener('online', consider);
     setTimeout(function () { adopt(); consider(); }, 2500);
+    // connected before on this device: Puter comes back with the page
+    if (state.on && state.provider === 'puter' && state.linked) {
+      loadPuter().then(function () { tell(); consider(); }, function () {});
+    }
   }
 
   return {
     init: init,
     on: function () { return state.on; },
     setOn: setOn,
+    provider: function () { return state.provider; },
+    setProvider: setProvider,
     usable: usable,
+    blocker: blocker,
+    prepare: function () { if (state.provider === 'puter') loadPuter().catch(function () {}); },
+    connect: connect,
+    disconnect: disconnect,
+    connected: puterReady,
+    puterName: puterName,
     about: function () { return about; },
     setAbout: setAbout,
     status: function () { return { busy: status.busy, kind: status.kind, error: status.error }; },

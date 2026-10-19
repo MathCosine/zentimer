@@ -1919,10 +1919,15 @@ window.Plan = (function () {
   function askAi(text, then) {
     text = String(text || '').trim();
     if (!text) { if (window.Motion) Motion.nudge(el.taskAdd); return; }
-    if (!window.Ai || !Ai.usable()) {
+    if (!window.Ai) return;
+    if (!Ai.usable()) {
+      var stuck = Ai.blocker();
       if (window.Motion) {
-        Motion.toast(window.Ai && !Ai.on() ? 'the AI is switched off in settings' : 'sign in to use the AI',
-          window.Ai && !Ai.on() ? null : { label: 'sign in', run: function () { var b = document.getElementById('syncBtn'); if (b) b.click(); } });
+        Motion.toast(stuck.text, stuck.fix === 'connect' ? { label: 'connect', run: function () {
+          // a click, so Puter's sign-in window is allowed; then on with what you asked
+          Ai.connect().then(function () { askAi(text, then); }, function (err) { Motion.toast(err.message); });
+        } } : stuck.fix === 'signin' ? { label: 'sign in', run: function () { location.href = '../account/#signin'; } } : null,
+        { ms: 9000 });
       }
       return;
     }
@@ -2948,6 +2953,136 @@ window.Plan = (function () {
       .sort(function (a, b) { return a.start - b.start; });
   }
 
+  /* ---------- the week ahead ---------- */
+
+  /* When an ordinary day's evening starts -- school is not homework time --
+     and a weekend's. Both yours to set in settings. */
+  var FREE_FROM = 15 * 60 + 30, WEEKEND_FROM = 9 * 60;
+
+  function addDays(key, n) {
+    var d = new Date(key + 'T12:00');
+    d.setDate(d.getDate() + n);
+    return Store.dayKey(d);
+  }
+
+  function startOf(key) {
+    var day = new Date(key + 'T12:00').getDay();
+    return Math.max(DAY_START, day === 0 || day === 6 ? WEEKEND_FROM : FREE_FROM);
+  }
+
+  /* The minutes a day has for work: from when its evening starts to bedtime,
+     less anything fixed in it. Today, from now -- or from when the evening
+     starts, if that is still to come. */
+  function freeOn(key) {
+    var from = startOf(key);
+    if (key === Store.dayKey()) from = Math.max(from, Store.minutesNow());
+    var free = Math.max(0, DAY_END - from);
+    Store.blocks(key).forEach(function (b) {
+      if (b.done || b.taskId) return;
+      var a = Math.max(b.start, from), z = Math.min(b.end, DAY_END);
+      if (z > a) free -= z - a;
+    });
+    return Math.max(0, free);
+  }
+
+  /* A day's worth of practice, in minutes: the drills each practice tag asks
+     for that day, in the order you gave them. */
+  function practiceOn(key) {
+    var mins = 0, date = new Date(key + 'T12:00');
+    Store.tags().forEach(function (tag) {
+      if (tag.kind !== 'practice') return;
+      var how = Store.practiceToday(tag.id, key);
+      if (!how) return;
+      Store.tasks().filter(function (t) {
+        return (t.tags || [])[0] === tag.id && !t.due && (!Store.repeats(t) || Store.dueOn(t, date));
+      }).sort(function (a, b) {
+        var ra = typeof a.rank === 'number' ? a.rank : 99, rb = typeof b.rank === 'number' ? b.rank : 99;
+        return ra !== rb ? ra - rb : leftOf(a) - leftOf(b);
+      }).slice(0, how.want).forEach(function (t) { mins += t.mins || 30; });
+    });
+    return mins;
+  }
+
+  function isPractice(task) {
+    return !task.due && Store.tagsOf(task).some(function (t) { return t.kind === 'practice'; });
+  }
+
+  /* The seven days from today: what each holds, how much room it has, and
+     whether that is too much. Today is tonight's plan; after that, each task
+     takes its share day by day the way the planner gives it out -- spread out
+     if it is big, all of it once its day has come -- or, with the AI's week,
+     what the AI gave each day, checked. */
+  function weekAhead() {
+    var today = Store.dayKey();
+    var plan = tonight();
+    var ai = plan.ai && window.Ai ? Ai.planFor(today) : null;
+    var left = {};
+    Store.tasks().forEach(function (t) {
+      if (!Store.isDone(t, today) && !Store.repeats(t) && !isPractice(t)) left[t.id] = leftOf(t);
+    });
+    var days = [];
+    var first = { key: today, items: [] };
+    var mergedToday = {};
+    plan.order.forEach(function (step) {
+      if (step.kind === 'practice') return;
+      var have = mergedToday[step.task.id];
+      if (have) { have.mins += step.mins; return; }
+      have = mergedToday[step.task.id] = { task: step.task, mins: step.mins, why: step.why || '' };
+      first.items.push(have);
+      if (step.task.id in left) left[step.task.id] = Math.max(0, left[step.task.id] - step.mins);
+    });
+    days.push(first);
+
+    var byDay = {};
+    if (ai && Array.isArray(ai.week)) {
+      ai.week.forEach(function (day) { if (day && typeof day.day === 'string') byDay[day.day] = day; });
+    }
+
+    for (var n = 1; n < 7; n++) {
+      var key = addDays(today, n), date = new Date(key + 'T12:00');
+      var items = [];
+      Store.tasks().forEach(function (t) {
+        if (Store.repeats(t) && Store.dueOn(t, date) && !isPractice(t)) items.push({ task: t, mins: t.mins || 30 });
+      });
+      var theirs = byDay[key];
+      if (theirs) {
+        (theirs.items || []).forEach(function (item) {
+          var task = Store.taskById(item && item.id);
+          if (!task || !(task.id in left) || left[task.id] <= 0) return;      // gone, done, or given out already
+          var due = Store.dueFor(task, today);
+          if (due && key > due) return;                                     // after it is due: no
+          var mins = clamp(Math.round(Number(item.mins) || 0), 5, left[task.id]);
+          left[task.id] -= mins;
+          items.push({ task: task, mins: mins });
+        });
+      } else {
+        Store.tasks().filter(function (t) { return left[t.id] > 0; })
+          .sort(function (a, b) { return (Store.dueFor(a, key) || '9') < (Store.dueFor(b, key) || '9') ? -1 : 1; })
+          .forEach(function (t) {
+            var deadline = Store.dueFor(t, key);
+            if (!deadline) return;
+            var slack = Math.max(0, daysBetween(key, deadline) - EARLY_DAYS);
+            var share = !slack ? left[t.id] : left[t.id] < BIG ? 0 : Math.max(5, Math.round(left[t.id] / (slack + 1) / 5) * 5);
+            share = Math.min(share, left[t.id]);
+            if (!share) return;
+            left[t.id] -= share;
+            items.push({ task: t, mins: share });
+          });
+      }
+      days.push({ key: key, items: items, note: theirs && typeof theirs.note === 'string' ? theirs.note.slice(0, 60) : '' });
+    }
+
+    days.forEach(function (day, i) {
+      day.today = i === 0;
+      day.work = day.items.reduce(function (sum, it) { return sum + it.mins; }, 0);
+      day.practice = i === 0 ? plan.practiceRoom || 0 : practiceOn(day.key);
+      day.free = freeOn(day.key);
+      day.over = day.work + day.practice > day.free + 15;
+      if (i === 0 && ai && Array.isArray(ai.week) && ai.week[0] && ai.week[0].day === today) day.note = String(ai.week[0].note || '').slice(0, 60);
+    });
+    return { days: days, note: ai ? String(ai.weekNote || '') : '', ai: !!ai };
+  }
+
   /* What fits before bed, in the order it should be done.
 
        first    anything overdue, due today or due tomorrow -- tonight is the
@@ -3173,9 +3308,27 @@ window.Plan = (function () {
     practiceDrills(key).forEach(function (d) { add(d.task, true); });
     if (!tasks.length) return null;
     var next = new Date(key + 'T12:00'); next.setDate(next.getDate() + 1);
+    var days = [];
+    for (var n = 0; n < 7; n++) {
+      var day = addDays(key, n);
+      var from = n ? startOf(day) : at;
+      days.push({
+        day: day,
+        weekday: new Date(day + 'T12:00').toLocaleDateString('en', { weekday: 'long' }).toLowerCase(),
+        free: n ? freeOn(day) : base.free,
+        practice: n ? practiceOn(day) : base.practice,
+        busy: fixedFrom(day, from).filter(function (b) { return b.start < DAY_END; }).map(function (b) {
+          return { title: b.title || 'busy', start: hhmm(b.start % (24 * 60)), mins: b.end - b.start };
+        })
+      });
+    }
+    // and more of the tasks: whatever is due inside the week
+    Store.tasks().filter(function (t) { return !Store.isDone(t, key) && !Store.repeats(t) && !isPractice(t); })
+      .forEach(function (t) { var due = Store.dueFor(t, key); if (due && due <= days[6].day) add(t, false); });
     return {
       today: key,
       tomorrow: Store.dayKey(next),
+      days: days,
       weekday: new Date(key + 'T12:00').toLocaleDateString('en', { weekday: 'long' }).toLowerCase(),
       now: hhmm(at % (24 * 60)),
       bed: hhmm(DAY_END % (24 * 60)),
@@ -3287,6 +3440,75 @@ window.Plan = (function () {
           part: job.mins < leftOf(job.task) ? Math.round(job.mins / leftOf(job.task) * 100) : 0 }, null));
       });
     }
+    return box;
+  }
+
+  /* The week, a day to a row: how much work it holds against how much room
+     it has, practice on top, red when it is more than the day can take. A
+     day opens to say what is in it. */
+  function weekList() {
+    var week = weekAhead();
+    var box = node('div', 'wk-plan');
+    if (week.note) {
+      var said = node('p', 'wk-note');
+      said.appendChild(node('span', 'ai-spark', '\u2726'));
+      said.appendChild(document.createTextNode(' ' + week.note));
+      box.appendChild(said);
+    }
+    var total = 0, room = 0;
+    week.days.forEach(function (day) {
+      total += day.work;
+      room += Math.max(0, day.free - day.practice);
+      var open = ui.weekOpen === day.key;
+      var row = node('button', 'wk-day' + (day.over ? ' is-over' : '') + (day.today ? ' is-today' : '') + (open ? ' is-open' : ''));
+      row.type = 'button';
+      row.setAttribute('aria-expanded', String(open));
+      row.dataset.day = day.key;
+      var name = day.today ? 'today' : new Date(day.key + 'T12:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }).toLowerCase();
+      row.appendChild(node('span', 'wk-name', name));
+      var bar = node('span', 'wk-bar');
+      var scale = Math.max(day.free, day.work + day.practice, 60);
+      var work = node('span', 'wk-work');
+      work.style.width = Math.round(day.work / scale * 100) + '%';
+      var drill = node('span', 'wk-drill');
+      drill.style.width = Math.round(day.practice / scale * 100) + '%';
+      bar.appendChild(work);
+      bar.appendChild(drill);
+      row.appendChild(bar);
+      row.appendChild(node('span', 'wk-num', (day.work ? spanLabel(day.work) : 'free') +
+        (day.over ? ' \u00b7 ' + spanLabel(day.free) + ' free' : '')));
+      row.title = spanLabel(day.work) + ' of homework, ' + spanLabel(day.practice) + ' of practice, ' +
+        spanLabel(day.free) + ' free' + (day.over ? ' \u2014 more than the day has' : '');
+      row.addEventListener('click', function () { ui.weekOpen = open ? null : day.key; render(); });
+      box.appendChild(row);
+      if (!open) return;
+      var list = node('div', 'wk-items');
+      if (day.note) list.appendChild(node('p', 'wk-day-note', day.note));
+      if (!day.items.length) list.appendChild(node('p', 'aim-none', day.practice ? 'just practice' : 'nothing \u2014 a free day'));
+      day.items.forEach(function (item) {
+        var line = node('button', 'plan-line');
+        line.type = 'button';
+        line.title = 'Open it';
+        line.appendChild(node('span', 'plan-name', item.task.title));
+        var due = Store.dueFor(item.task, Store.dayKey());
+        line.appendChild(node('span', 'plan-why', item.why || (due ? (due === day.key ? 'due that day' : 'due ' + dueLabel(due)) : '')));
+        line.appendChild(node('span', 'plan-mins', spanLabel(item.mins)));
+        line.addEventListener('click', function () {
+          if (!Store.taskById(item.task.id)) return;
+          ui.tagsView = false;
+          ui.editing = item.task.id;
+          ui.focusTask = item.task.id;
+          reveal = item.task.id;
+          render();
+        });
+        list.appendChild(line);
+      });
+      if (day.practice) list.appendChild(node('p', 'wk-drills', '+ ' + spanLabel(day.practice) + ' of practice'));
+      box.appendChild(list);
+    });
+    box.appendChild(node('p', 'plan-note' + (total > room ? ' is-over' : ''), total > room
+      ? spanLabel(total) + ' of homework this week, with ' + spanLabel(room) + ' to do it in \u2014 something has to give'
+      : spanLabel(total) + ' of homework this week \u2014 it fits'));
     return box;
   }
 
@@ -3494,6 +3716,8 @@ window.Plan = (function () {
     if (plan && window.Ai && Ai.on() && Ai.usable()) {
       el.aim.appendChild(aiLine(plan));
       Ai.suggestions().slice(0, 2).forEach(function (link) { el.aim.appendChild(aiLink(link)); });
+    } else if (plan && window.Ai && Ai.on() && Ai.provider() === 'puter' && !ui.aiNudged) {
+      el.aim.appendChild(aiInvite());
     }
 
     /* And what exactly is on the bar. A filled bar you cannot account for is
@@ -3502,7 +3726,7 @@ window.Plan = (function () {
        all the way down, and what is already behind you. */
     var asks = node('div', 'aim-asks');
     if (plan && (plan.order.length || plan.waits.length)) {
-      var planBtn = node('button', 'aim-why', ui.aimPlan ? 'tonight\u2019s plan \u25b4' : 'tonight\u2019s plan \u25be');
+      var planBtn = node('button', 'aim-why', ui.aimPlan ? 'tonight \u25b4' : 'tonight \u25be');
       planBtn.setAttribute('aria-expanded', String(!!ui.aimPlan));
       planBtn.type = 'button';
       planBtn.addEventListener('click', function () { ui.aimPlan = !ui.aimPlan; if (ui.aimPlan) ui.aimWhy = false; render(); });
@@ -3576,6 +3800,32 @@ window.Plan = (function () {
     return row;
   }
 
+  /* The AI is on but not connected: one line saying what it would do, and
+     the button that connects it. Put away for this visit with the cross. */
+  function aiInvite() {
+    var row = node('div', 'ai-line ai-invite');
+    row.appendChild(node('span', 'ai-spark', '\u2726'));
+    row.appendChild(node('span', 'ai-words', 'let the AI plan tonight and your week'));
+    var go = node('button', 'ai-yes', 'connect');
+    go.type = 'button';
+    go.title = 'A free Puter account, in a small window';
+    // Puter's script is fetched only once you reach for this, so the click
+    // that follows can open its sign-in window
+    ['pointerenter', 'touchstart', 'focus'].forEach(function (kind) {
+      go.addEventListener(kind, function () { Ai.prepare(); }, { once: true, passive: true });
+    });
+    go.addEventListener('click', function () {
+      Ai.connect().then(function () { render(); }, function (err) { if (window.Motion) Motion.toast(err.message); });
+    });
+    var no = node('button', 'ai-no', '\u00d7');
+    no.type = 'button';
+    no.setAttribute('aria-label', 'Not now');
+    no.addEventListener('click', function () { ui.aiNudged = true; render(); });
+    row.appendChild(go);
+    row.appendChild(no);
+    return row;
+  }
+
   function agoLabel(at) {
     var mins = Math.round((Date.now() - at) / 60000);
     return mins < 1 ? 'just now' : mins < 60 ? mins + 'm ago' : Math.round(mins / 60) + 'h ago';
@@ -3638,6 +3888,11 @@ window.Plan = (function () {
     el.pinBtn.hidden = ui.week || !ui.times;
     el.planCard.classList.toggle('is-compact', !ui.week && !ui.times);
     el.weekBtn.setAttribute('aria-pressed', String(ui.week));
+    if (el.weekAhead) {
+      el.weekAhead.hidden = !ui.week;
+      el.weekAhead.textContent = '';
+      if (ui.week) el.weekAhead.appendChild(weekList());
+    }
     if (!ui.week) return;
 
     var days = weekDays();
@@ -3873,7 +4128,7 @@ window.Plan = (function () {
       aiAdd: $('aiAdd'), aiCards: $('aiCards'),
       addHelp: $('addHelp'), addSheet: $('addSheet'),
       sortBtn: $('sortBtn'), sortRow: $('sortRow'), sortPicks: $('sortPicks'), sortDir: $('sortDir'),
-      weekBtn: $('weekBtn'), weekWrap: $('weekWrap'), week: $('week'),
+      weekBtn: $('weekBtn'), weekWrap: $('weekWrap'), week: $('week'), weekAhead: $('weekAhead'),
       timesBtn: $('timesBtn'), queue: $('queue'), aim: $('aim'),
       tagsBtn: $('tagsBtn'), tagGrid: $('tagGrid'),
       timelineWrap: $('timelineWrap'), timeline: $('timeline'), pinBtn: $('pinBtn'), blockBar: $('blockBar'),
@@ -3920,6 +4175,13 @@ window.Plan = (function () {
     goToDay: function (key) { ui.date = key === Store.dayKey() ? null : key; render(); },
     currentBlock: function () { return Store.currentBlock(); },
     openTimeline: openTimeline,
-    aiInput: aiInput
+    aiInput: aiInput,
+    week: weekAhead,
+    setFreeFrom: function (weekday, weekend) {
+      if (typeof weekday === 'number') FREE_FROM = clamp(weekday, 0, 1380);
+      if (typeof weekend === 'number') WEEKEND_FROM = clamp(weekend, 0, 1380);
+      render();
+    },
+    freeFrom: function () { return { weekday: FREE_FROM, weekend: WEEKEND_FROM }; }
   };
 })();
