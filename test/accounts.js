@@ -96,7 +96,7 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
     ['applying to a summer program. i tutor tue and thu.']);
 
   console.log('\n--- the account button on the desk ---');
-  await p.click('#syncBtn'); await p.waitForTimeout(400);
+  await p.click('#menuBtn'); await p.waitForTimeout(400);
   check('it says who, and links to the account page', await p.evaluate(() => ({
     who: document.getElementById('authWho').textContent,
     link: document.getElementById('acctLink').getAttribute('href') })),
@@ -162,7 +162,7 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
 
   console.log('\n--- signed out, the desk says where to go ---');
   await p.goto(SITE + '/app/'); await p.waitForTimeout(1500);
-  await p.click('#syncBtn'); await p.waitForTimeout(400);
+  await p.click('#menuBtn'); await p.waitForTimeout(400);
   check('to the sign-in page', await p.evaluate(() => ({
     signIn: document.getElementById('signInLink').getAttribute('href'),
     make: document.getElementById('makeLink').getAttribute('href') })),

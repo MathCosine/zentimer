@@ -90,7 +90,7 @@ const TYPES = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
     var VERSION = 'pip-old';
     var SHELL = ['./', './app/', './app/index.html', './assets/plan.js', './assets/store.js',
                  './assets/style.css', './assets/app.js', './assets/offline.js', './assets/sync.js',
-                 './assets/settings.js', './assets/pet.js', './assets/music.js', './assets/config.js'];
+                 './assets/settings.js', './assets/pet.js', './assets/config.js'];
     self.addEventListener('install', function (e) {
       e.waitUntil(caches.open(VERSION).then(function (c) {
         return Promise.all(SHELL.map(function (u) {

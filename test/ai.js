@@ -149,6 +149,14 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
     const l = document.querySelector('.ai-line'); return [l.classList.contains('is-ai'), l.querySelector('.ai-words').textContent]; }),
     [true, 'reading first so wednesday is easy.']);
   check('up next follows it', await p.evaluate(() => document.querySelector('.queue-row .queue-title').textContent), 'ANALYSIS Problem set 3');
+  const queue = await p.evaluate(() => [...document.querySelectorAll('.queue-row')].map(r => ({
+    name: r.querySelector('.queue-title').textContent, why: r.querySelector('.queue-why').textContent,
+    mins: r.querySelector('.queue-mins').textContent })));
+  check('all three rows, in the order it planned -- the quiz waits for its reading', queue.map(r => r.name),
+    ['ANALYSIS Problem set 3', 'BIO Read chapter 5', 'EXTRA USACO silver']);
+  check('with its reasons and its slices', queue.slice(1).map(r => [r.why, r.mins]),
+    [['read before the quiz', '40m'], ['keeps practice going', '30m of 1h']]);
+  check('and marked as the AI’s order', await p.evaluate(() => !!document.querySelector('.queue-head .queue-ai')), true);
 
   console.log('\n--- a link it noticed is yours to agree with ---');
   check('it is offered', await p.evaluate(() => document.querySelector('.ai-link-text').textContent),

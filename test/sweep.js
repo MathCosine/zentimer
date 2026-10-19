@@ -65,10 +65,8 @@ const { chromium } = require('./browser');
     for (const id of ['soundBtn','notifyBtn','petBtn','themeBtn']) {
     const n = p.locator('#' + id); if (await n.count()) { await n.click(); await p.waitForTimeout(150); await n.click(); } }
     await p.keyboard.press('Escape'); });
-  await step('music panel', async () => { const n = p.locator('#musicBtn');
-    if (await n.count()) { await n.click(); await p.waitForTimeout(250); await p.keyboard.press('Escape'); } });
-  await step('sync panel', async () => { const n = p.locator('#syncBtn');
-    if (await n.count()) { await n.click(); await p.waitForTimeout(400); await p.keyboard.press('Escape'); } });
+  await step('account, in the menu', async () => { await p.click('#menuBtn'); await p.waitForTimeout(400);
+    await p.keyboard.press('Escape'); });
   await step('alarm', async () => { await p.click('#alarmBtn'); await p.waitForTimeout(200); await p.click('#alarmAdd'); await p.waitForTimeout(250); await p.keyboard.press('Escape'); });
   await step('resize', async () => { for (const vp of [{width:380,height:700},{width:1280,height:800},{width:450,height:954}]) {
     await p.setViewportSize(vp); await p.waitForTimeout(300); } });

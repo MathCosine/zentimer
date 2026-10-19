@@ -112,7 +112,7 @@ localStorage document the same way on first load.
 ### Settings
 
 Currently local-only (`pip.state.v1`): session lengths, break, day start/end,
-theme, sound, notify, pets, 12/24h, music. These should follow the account, so
+theme, sound, notify, pets, 12/24h. These should follow the account, so
 they go in `prefs.data`. **The running timer stays local** — a session counting
 down on the laptop must not count down on the phone.
 

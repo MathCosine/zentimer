@@ -42,7 +42,7 @@ const OLD_TASKS = ['id', 'user_id', 'list_id', 'title', 'tags', 'due', 'repeat',
   check('the tasks still sync', (await serverTasks()).map(r => r.title).sort(), ['BIO Chapter 5 quiz', 'BIO Read chapter 5']);
   check('without the column the database does not have', (await serverTasks()).some(r => 'needs' in r), false);
   check('it knows which column the database is missing', await a.evaluate(() => Sync.behind()), ['tasks.needs']);
-  await a.click('#syncBtn'); await a.waitForTimeout(300);
+  await a.click('#menuBtn'); await a.waitForTimeout(300);
   check('and says what to run', await a.evaluate(() => /needs supabase\/schema\.sql run again/.test(document.getElementById('syncStatus').textContent)), true);
   await a.keyboard.press('Escape');
   check('and the link stays here', await a.evaluate(() => Store.tasks().find(t => /quiz/.test(t.title)).needs.length), 1);

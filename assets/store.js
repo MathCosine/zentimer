@@ -402,6 +402,9 @@ window.Store = (function () {
     var own = task.due || null;
     if (task.repeat && task.repeat !== 'none') {
       if (dueOn(task, new Date(when + 'T12:00'))) own = when;
+      // a date written on a routine that has since gone by is not "overdue"
+      // every day forever after
+      else if (own && own < when) own = null;
     }
     seen = seen || {};
     if (seen[task.id]) return own;

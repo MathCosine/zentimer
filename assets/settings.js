@@ -289,8 +289,8 @@ window.Panel = (function () {
       : 'it plans once things have been quiet for a minute or two'));
 
     box.appendChild(node('p', 'set-note', Ai.provider() === 'puter'
-      ? 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events and the note above \u2014 to Puter, which passes it to the AI models (Google\u2019s Gemini and OpenAI\u2019s GPT). Not your email, not anything else.'
-      : 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events and the note above \u2014 to Groq and Google\u2019s Gemini, through your own server. Not your email, not anything else.'));
+      ? 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events, the note above and anything you told it for today or this week \u2014 to Puter, which passes it to the AI models (Google\u2019s Gemini and OpenAI\u2019s GPT). Not your email, not anything else.'
+      : 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events, the note above and anything you told it for today or this week \u2014 to Groq and Google\u2019s Gemini, through your own server. Not your email, not anything else.'));
   }
 
   function drawLoad() {

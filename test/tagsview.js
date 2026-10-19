@@ -20,11 +20,12 @@ const { chromium } = require('./browser');
     await p.click('#tagsBtn'); await p.waitForTimeout(600);
     const r = await p.evaluate(() => {
       const g = document.getElementById('tagGrid');
-      const last = g.lastElementChild.getBoundingClientRect();
       const box = g.getBoundingClientRect();
-      return { tiles: g.children.length,
+      const tiles = [...g.querySelectorAll('.tag-tile')];
+      return { tiles: tiles.length,
                scrolls: g.scrollHeight > g.clientHeight + 1,
-               lastInside: last.bottom <= box.bottom + 1 && last.right <= box.right + 1,
+               lastInside: tiles.every(t => { const r = t.getBoundingClientRect();
+                 return r.bottom <= box.bottom + 1 && r.right <= box.right + 1 && r.left >= box.left - 1; }),
                listHidden: document.getElementById('taskList').hidden,
                // all of it at once was the point: not the grid, not the page
                pageFits: document.documentElement.scrollHeight <= innerHeight + 1,
@@ -33,6 +34,49 @@ const { chromium } = require('./browser');
     });
     check(`${n} tags at ${width}px: all on screen, nothing scrolls`, r,
       { tiles: n, scrolls: false, lastInside: true, listHidden: true, pageFits: true, folded: true });
+    await p.close();
+  }
+
+  console.log('\n--- a tile is as big as what is in it ---');
+  {
+    const p = await (await b.newContext({viewport:{width:1280,height:900}})).newPage();
+    p.on('pageerror', e => errs.push('SIZE: ' + e.message));
+    await p.clock.install({ time: new Date(2026, 8, 28, 16, 0) });     // a monday
+    await p.goto('http://127.0.0.1:8899/app/'); await p.waitForTimeout(900);
+    await seed(p, ['PHY one','PHY two','PHY three','PHY four','MSB one','WELL log']);
+    await p.evaluate(() => {
+      const t = Store.tasks().find(x => x.title === 'WELL log'); Store.toggleDone(t.id, Store.dayKey());
+      // a weekly drill on another day: not open today, anywhere
+      Store.addTask({ title: 'MSB weekly drill', repeat: 'weekly', weekday: 3, mins: 30 });
+    });
+    await p.waitForTimeout(300);
+    await p.click('#tagsBtn'); await p.waitForTimeout(600);
+    const r = await p.evaluate(() => {
+      const tiles = [...document.querySelectorAll('.tag-tile')];
+      const h = n => tiles.find(t => t.querySelector('.tile-name').textContent === n).getBoundingClientRect().height;
+      return { phy: h('PHY'), msb: h('MSB'), well: h('WELL'),
+        cols: document.querySelectorAll('#tagGrid .tile-col').length,
+        sum: tiles.reduce((n, t) => n + +t.querySelector('.tile-count').textContent, 0),
+        everything: +document.querySelector('#views .view-count').textContent,
+        foot: parseInt(document.getElementById('taskCount').textContent),
+        drill: [...document.querySelectorAll('.tile-task-name')].some(n => /weekly/.test(n.textContent)) };
+    });
+    check('a tag with more open is taller, and an empty one is shortest', r.phy > r.msb && r.msb > r.well, true);
+    check('packed into columns that each read in your order', r.cols, 2);
+    check('the tiles, "everything" and the count below all agree', [r.sum, r.everything, r.foot], [5, 5, 5]);
+    check('a weekly drill on another day is not open today', r.drill, false);
+
+    await p.evaluate(() => { const id = Store.addList('Other'); });
+    await p.waitForTimeout(300);
+    await p.evaluate(() => {
+      const other = Store.lists().find(l => l.name === 'Other');
+      const t = Store.tasks().find(x => x.title === 'PHY one'); Store.updateTask(t.id, { listId: other.id });
+    });
+    await p.waitForTimeout(300);
+    await p.locator('#views button', { hasText: 'Other' }).click(); await p.waitForTimeout(400);
+    check('inside one list, the tiles are that list', await p.evaluate(() =>
+      [...document.querySelectorAll('.tag-tile')].map(t => t.querySelector('.tile-name').textContent + ' ' + t.querySelector('.tile-count').textContent)),
+      ['PHY 1']);
     await p.close();
   }
 

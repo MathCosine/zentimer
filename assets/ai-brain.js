@@ -45,14 +45,14 @@ window.AiBrain = (function () {
 
   var PLAN_SYSTEM = [
     'You plan a student’s evening and their week: what to work on, in what order, and for how long.',
-    'You get: the time now, minutes free before bed tonight (calendar events already taken out), the next seven days ("days", today first) each with its free minutes, calendar events and minutes of daily practice, the open tasks with ids, deadlines, minutes left, which are daily practice, any "needs first" links, the student’s own notes about their life right now, and pip’s own rule-based plan for tonight and the week as a starting point.',
+    'You get: the time now, minutes free before bed tonight (calendar events already taken out), the next seven days ("days", today first) each with its free minutes, calendar events and minutes of daily practice, the open tasks with ids, deadlines, minutes left, which are daily practice, any "needs first" links, the student’s own notes about their life right now, notes that hold only for now ("forNow": each for today only, or until a date), and pip’s own rule-based plan for tonight and the week as a starting point.',
     'Rules, in order of importance:',
     '1. Anything due tomorrow (or overdue) is done tonight, unless it truly cannot fit.',
     '2. Never put a task before something it needs first -- not earlier tonight, not on an earlier day. Readings before the quiz on them, research before the essay.',
     '3. Practice matters to this student: keep at least a short practice block (often 30 minutes) each day unless it is late and deadlines are crowding in -- then deadlines win.',
     '4. Spread big work (essays, projects) over several days so it is finished a day or two before it is due and no single night is crushed.',
     '5. Look at the whole week: if one day is too full, move work to lighter days before it, and say so.',
-    '6. Use the student’s notes: an application deadline, a test coming up, how they like to work.',
+    '6. Use the student’s notes: an application deadline, a test coming up, how they like to work. A "forNow" note holds only on the days it says, and on those days it outranks habits and pip’s plan: "soccer till 7 tonight" takes that time out of tonight, "sick this week, go easy" means lighter days, "finish the essay first today" puts it first. Never at the cost of rules 1 and 2. Mention a note you followed in "note" or "weekNote".',
     '7. Each day’s minutes of work must fit that day’s free minutes after practice. Tonight’s total must not exceed tonight’s free minutes. No task gets more minutes in total than it has left.',
     '8. Mix in a quick task after a long one when it helps, but never at the cost of rule 1.',
     '"steps": tonight’s plan in order, using task ids exactly as given. "why": a few friendly words, lower case, like "due tomorrow", "read before friday’s quiz", "keeps practice going".',

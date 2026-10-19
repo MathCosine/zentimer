@@ -147,6 +147,51 @@ const day = n => { const d = new Date(AT); d.setDate(d.getDate() + n);
   check('and the last good plan stays', await p.evaluate(() => document.querySelector('.ai-line').classList.contains('is-ai')), true);
   await post('/__puter', {});
 
+  console.log('\n--- telling it something for today, or this week ---');
+  const plansSoFar = async () => (await asked()).filter(a => a.kind === 'plan');
+  const chips = () => p.evaluate(() => [...document.querySelectorAll('.ai-note')].map(c =>
+    [c.querySelector('.ai-note-when').textContent, c.querySelector('.ai-note-text').textContent]));
+  let n0 = (await plansSoFar()).length;
+  await p.click('.ai-tell-btn'); await p.clock.runFor(300);
+  check('"tell it" opens a box right there, ready to type', await p.evaluate(() => document.activeElement.className), 'ai-tell-input');
+  await p.keyboard.type('soccer till 7');
+  await p.clock.runFor(61 * 1000);
+  check('what you are typing survives the minute ticking over', await p.evaluate(() =>
+    [document.querySelector('.ai-tell-input').value, document.activeElement.className]), ['soccer till 7', 'ai-tell-input']);
+  check('nothing was asked while you typed', (await plansSoFar()).length, n0);
+  await p.keyboard.press('Enter'); await p.clock.runFor(300);
+  check('it shows what it was told, and for how long', await chips(), [['today', 'soccer till 7']]);
+  check('and the box goes away', await p.evaluate(() => !!document.querySelector('.ai-tell')), false);
+  await p.clock.runFor(5000);
+  let told = (await plansSoFar()).slice(n0);
+  check('it plans again within seconds, not on its half-hour clock', told.length > 0, true);
+  check('with the note, marked as just for today', told.length && told[told.length - 1].input.forNow,
+    [{ note: 'soccer till 7', for: 'today only' }]);
+
+  n0 = (await plansSoFar()).length;
+  await p.click('.ai-tell-btn'); await p.clock.runFor(300);
+  await p.locator('.ai-tell .pick', { hasText: 'this week' }).click(); await p.clock.runFor(200);
+  await p.fill('.ai-tell-input', 'sick this week, go easy');
+  await p.click('.ai-tell .ai-yes'); await p.clock.runFor(5000);
+  told = (await plansSoFar()).slice(n0);
+  check('one for the week holds for the seven days the week shows', told.length && told[told.length - 1].input.forNow,
+    [{ note: 'soccer till 7', for: 'today only' }, { note: 'sick this week, go easy', for: 'until ' + day(6) }]);
+  check('both shown', await chips(), [['today', 'soccer till 7'], ['this week', 'sick this week, go easy']]);
+  check('and kept on this device', await p.evaluate(() => JSON.parse(localStorage.getItem('pip.ai.v1.notes')).map(n => n.until)),
+    [day(0), day(6)]);
+
+  n0 = (await plansSoFar()).length;
+  await p.locator('.ai-note', { hasText: 'soccer' }).locator('.ai-note-drop').click(); await p.clock.runFor(5000);
+  told = (await plansSoFar()).slice(n0);
+  check('× forgets one, and the plan is asked again without it', told.length && told[told.length - 1].input.forNow,
+    [{ note: 'sick this week, go easy', for: 'until ' + day(6) }]);
+  await p.evaluate(() => Ai.addNote('game tonight', 'today')); await p.clock.runFor(5000);
+  await p.clock.fastForward(24 * 3600 * 1000); await p.clock.runFor(3000);
+  check('the next day, today’s note has gone and the week’s is still there', await p.evaluate(() => Ai.notes().map(n => n.text)),
+    ['sick this week, go easy']);
+  await p.clock.fastForward(6 * 24 * 3600 * 1000); await p.clock.runFor(3000);
+  check('and a week on, that has gone too', await p.evaluate(() => Ai.notes().length), 0);
+
   console.log('\n--- settings ---');
   await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.clock.runFor(500);
   check('it says who is connected, and which AI', await p.evaluate(() => ({

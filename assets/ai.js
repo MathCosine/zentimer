@@ -37,6 +37,7 @@ window.Ai = (function () {
     declined: saved.declined || {}   // links you said no to: 'first>then'
   };
   var about = '';                    // what you told it about your life right now (synced)
+  var notes = [];                    // things true only for now: today, or this week (synced)
   var status = { busy: false, error: '', kind: '' };
   var listeners = [];
   var settleTimer = 0, pendingSig = null;
@@ -374,7 +375,9 @@ window.Ai = (function () {
       // (not today's: tonight's room shrinks every minute, which is not news)
       (input.days || []).filter(function (d) { return d.day > input.today; }).map(function (d) {
         return d.day + ':' + Math.round((d.free || 0) / 30) + ':' + (d.busy || []).map(function (e) { return e.title + '@' + e.start; }).join(',');
-      })
+      }),
+      // what you said about today or this week
+      (input.forNow || []).map(function (n) { return n.for + ':' + n.note; })
     ]);
   }
 
@@ -393,6 +396,7 @@ window.Ai = (function () {
     if (!a || !b) return true;
     if (a[0] !== b[0] || a[1] !== b[1]) return true;
     if (JSON.stringify(a[3]) !== JSON.stringify(b[3])) return true;
+    if (JSON.stringify(a[5] || []) !== JSON.stringify(b[5] || [])) return true;
     // the week's events: a new one, or one moved -- the days themselves move on by one each day
     var weekBefore = {};
     (a[4] || []).forEach(function (d) { weekBefore[d] = true; });
@@ -410,9 +414,20 @@ window.Ai = (function () {
     return plan;
   }
 
+  /* What the planner hands over, with what you said about today and this week
+     on top -- each saying how long it holds. */
+  function planInput() {
+    var input = Plan.aiInput(about);
+    if (!input) return null;
+    input.forNow = activeNotes().map(function (n) {
+      return { note: n.text, for: n.scope === 'today' ? 'today only' : 'until ' + n.until };
+    });
+    return input;
+  }
+
   function replan(why) {
     if (!usable() || !window.Plan || !Plan.aiInput) return Promise.resolve(null);
-    var input = Plan.aiInput(about);
+    var input = planInput();
     if (!input) return Promise.resolve(null);
     var sig = signature(input);
     busy('plan', true);
@@ -443,7 +458,7 @@ window.Ai = (function () {
      timer; the asking happens once things have been quiet for a while. */
   function consider() {
     if (!usable() || !window.Plan || !Plan.aiInput) return;
-    var input = Plan.aiInput(about);
+    var input = planInput();
     if (!input) return;
     var plan = planFor(input.today);
     var sig = signature(input);
@@ -531,6 +546,61 @@ window.Ai = (function () {
     tell();
   }
 
+  /* Just for now: "soccer till 7 tonight", "sick this week -- go easy".
+     Each holds for today, or for the seven days the week view shows, and
+     then quietly goes. Telling it something is asking it: the plan follows
+     in a few seconds, not on its half-hour clock. */
+  function dayAfter(key, n) {
+    var d = new Date(key + 'T12:00');
+    d.setDate(d.getDate() + n);
+    return Store.dayKey(d);
+  }
+
+  function activeNotes() {
+    var today = Store.dayKey();
+    return notes.filter(function (n) { return n && typeof n.text === 'string' && n.until >= today; });
+  }
+
+  function keepNotes(share) {
+    notes = activeNotes();
+    try { localStorage.setItem(KEY + '.notes', JSON.stringify(notes)); } catch (e) {}
+    if (share && window.Sync && Sync.setPref) Promise.resolve(Sync.setPref('notes', notes)).catch(function () {});
+  }
+
+  var tellTimer = 0;
+  function planSoon() {
+    clearTimeout(tellTimer);
+    tellTimer = setTimeout(function () {
+      tellTimer = 0;
+      if (!usable()) return;
+      if (status.busy) { planSoon(); return; }        // after the one already under way
+      now();
+    }, 4000);
+  }
+
+  function addNote(text, scope) {
+    text = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!text) return null;
+    var today = Store.dayKey();
+    var week = scope === 'week';
+    var note = { id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      text: text, scope: week ? 'week' : 'today', from: today, until: week ? dayAfter(today, 6) : today };
+    notes = activeNotes().concat([note]).slice(-12);
+    keepNotes(true);
+    planSoon();
+    tell();
+    return note;
+  }
+
+  function removeNote(id) {
+    var before = notes.length;
+    notes = notes.filter(function (n) { return n.id !== id; });
+    if (notes.length === before) return;
+    keepNotes(true);
+    planSoon();
+    tell();
+  }
+
   function setProvider(which) {
     state.provider = which === 'relay' ? 'relay' : 'puter';
     keep();
@@ -550,6 +620,8 @@ window.Ai = (function () {
 
   function init() {
     try { about = localStorage.getItem(KEY + '.about') || ''; } catch (e) {}
+    try { notes = JSON.parse(localStorage.getItem(KEY + '.notes') || '[]') || []; } catch (e) { notes = []; }
+    if (!Array.isArray(notes)) notes = [];
     // another device's note about you wins once it arrives
     var adopted = false;
     function adopt() {
@@ -561,7 +633,18 @@ window.Ai = (function () {
           try { localStorage.setItem(KEY + '.about', about); } catch (e) {}
           tell();
         }
-      }, function () { adopted = false; });
+        return Sync.getPref('notes');
+      }).then(function (theirs) {
+        // both devices' notes for now, each once
+        if (!Array.isArray(theirs)) return;
+        var have = {};
+        notes.forEach(function (n) { have[n.id] = true; });
+        var fresh = theirs.filter(function (n) { return n && n.id && !have[n.id] && typeof n.text === 'string'; });
+        if (!fresh.length) return;
+        notes = notes.concat(fresh).slice(-12);
+        keepNotes(false);
+        tell();
+      }).catch(function () { adopted = false; });
     }
     if (window.Store) Store.subscribe(function () { adopt(); consider(); });
     setInterval(function () { adopt(); consider(); }, 60 * 1000);
@@ -588,6 +671,9 @@ window.Ai = (function () {
     puterName: puterName,
     about: function () { return about; },
     setAbout: setAbout,
+    notes: function () { return activeNotes().slice(); },
+    addNote: addNote,
+    removeNote: removeNote,
     status: function () { return { busy: status.busy, kind: status.kind, error: status.error }; },
     onChange: function (fn) { listeners.push(fn); },
     parse: parse,

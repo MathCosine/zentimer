@@ -50,18 +50,10 @@
         <span class="tool-note" id="alarmNote" hidden></span>
         <span class="sr">Alarms</span>
       </button>
-      <button id="musicBtn" type="button" class="tool" aria-pressed="false" aria-expanded="false" title="Study ambience">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 15v-3a7.5 7.5 0 0 1 15 0v3"></path><rect x="2.8" y="14" width="4" height="6" rx="1.6"></rect><rect x="17.2" y="14" width="4" height="6" rx="1.6"></rect></svg>
-        <span class="sr">Music</span>
-      </button>
-      <button id="syncBtn" type="button" class="tool" aria-expanded="false" title="Your account">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"></circle><path d="M4.8 19.5c1.2-3.4 4-5 7.2-5s6 1.6 7.2 5"></path></svg>
+      <button id="menuBtn" type="button" class="tool" aria-expanded="false" title="Settings and your account">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.8l1.6 2.3 2.7-.6.6 2.7 2.3 1.6-1.2 2.5 1.2 2.5-2.3 1.6-.6 2.7-2.7-.6L12 21.2l-1.6-2.3-2.7.6-.6-2.7-2.3-1.6 1.2-2.5-1.2-2.5 2.3-1.6.6-2.7 2.7.6z"></path></svg>
         <span class="tool-dot" id="syncDot" aria-hidden="true"></span>
-        <span class="sr">Account</span>
-      </button>
-      <button id="menuBtn" type="button" class="tool" aria-expanded="false" title="More">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg>
-        <span class="sr">More</span>
+        <span class="sr">Settings</span>
       </button>
     </div>
   </header>
@@ -197,6 +189,23 @@
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <div class="menu-pop pop" id="menuPop" hidden>
+  <section class="menu-acct" aria-label="Your account">
+    <div class="acct-card">
+      <span class="acct-face" id="authFace" aria-hidden="true"></span>
+      <span class="acct-text">
+        <b class="sync-who" id="authWho">your desk, everywhere</b>
+        <span class="sync-status" id="syncStatus">this browser only</span>
+      </span>
+    </div>
+    <div class="sync-row" id="authForm">
+      <a class="go small" id="signInLink" href="../account/#signin">sign in</a>
+      <a class="ghost small" id="makeLink" href="../account/#signup">make an account</a>
+    </div>
+    <div class="sync-row" id="authAccount" hidden>
+      <a class="go small" id="acctLink" href="../account/">your account</a>
+      <button id="authOut" type="button" class="ghost small">sign out</button>
+    </div>
+  </section>
   <button id="settingsBtn" type="button" class="menu-row" aria-pressed="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7h9M19 7h1.5M3.5 12h5M15 12h5.5M3.5 17h11M21 17h-0.5"></path><circle cx="15" cy="7" r="2.3"></circle><circle cx="11" cy="12" r="2.3"></circle><circle cx="17.5" cy="17" r="2.3"></circle></svg>
     <span class="menu-label">settings<small>tags, calendar, bedtime</small></span>
@@ -231,45 +240,6 @@
          placeholder="16:30" aria-label="Alarm time, for example 16:30, 4:30pm, or 45m from now">
 </div>
 
-<div class="music-pop pop" id="musicPop" hidden>
-  <div class="music-row">
-    <button class="music-play" id="musicPlay" type="button" aria-label="Play ambience">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="play-icon" d="M8 5.5l11 6.5-11 6.5z"></path><g class="pause-icon"><rect x="7.5" y="5.5" width="3.5" height="13" rx="1"></rect><rect x="13" y="5.5" width="3.5" height="13" rx="1"></rect></g></svg>
-    </button>
-    <div class="music-now">
-      <strong id="musicTrack">drift</strong>
-      <span id="musicNote">warm chords</span>
-    </div>
-    <button class="music-skip" id="musicNext" type="button" aria-label="Next track">›</button>
-  </div>
-  <div class="music-tracks" id="musicTracks" role="group" aria-label="Tracks"></div>
-  <label class="music-vol">
-    <span class="sr">Volume</span>
-    <input type="range" id="musicVol" min="0" max="100" step="1" value="35">
-  </label>
-</div>
-
-<div class="sync-pop pop" id="syncPop" hidden>
-  <h3 id="authTitle">your desk, everywhere</h3>
-  <p class="sync-status" id="syncStatus">this browser only</p>
-
-  <div id="authForm">
-    <p class="sync-lede">sign in to keep your desk on every device, and to let the AI plan with you</p>
-    <div class="sync-row">
-      <a class="go small" id="signInLink" href="../account/#signin">sign in</a>
-      <a class="ghost" id="makeLink" href="../account/#signup">make an account</a>
-    </div>
-  </div>
-
-  <div id="authAccount" hidden>
-    <p class="sync-who" id="authWho"></p>
-    <div class="sync-row">
-      <a class="go small" id="acctLink" href="../account/">your account</a>
-      <button id="authOut" type="button" class="ghost">sign out</button>
-    </div>
-  </div>
-</div>
-
 <div class="ring-overlay" id="ringOverlay" hidden>
   <div class="ring-card" role="alertdialog" aria-labelledby="ringHeading">
     <svg class="ring-clock" viewBox="0 0 11 12" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="0" width="1" height="1" fill="currentColor"/><rect x="8" y="0" width="1" height="1" fill="currentColor"/><rect x="1" y="1" width="1" height="1" fill="currentColor"/><rect x="2" y="1" width="1" height="1" fill="currentColor"/><rect x="3" y="1" width="1" height="1" fill="currentColor"/><rect x="7" y="1" width="1" height="1" fill="currentColor"/><rect x="8" y="1" width="1" height="1" fill="currentColor"/><rect x="9" y="1" width="1" height="1" fill="currentColor"/><rect x="2" y="2" width="1" height="1" fill="currentColor"/><rect x="3" y="2" width="1" height="1" fill="currentColor"/><rect x="4" y="2" width="1" height="1" fill="currentColor"/><rect x="5" y="2" width="1" height="1" fill="currentColor"/><rect x="6" y="2" width="1" height="1" fill="currentColor"/><rect x="7" y="2" width="1" height="1" fill="currentColor"/><rect x="8" y="2" width="1" height="1" fill="currentColor"/><rect x="1" y="3" width="1" height="1" fill="currentColor"/><rect x="2" y="3" width="1" height="1" fill="var(--card)"/><rect x="3" y="3" width="1" height="1" fill="var(--card)"/><rect x="4" y="3" width="1" height="1" fill="var(--card)"/><rect x="5" y="3" width="1" height="1" fill="var(--card)"/><rect x="6" y="3" width="1" height="1" fill="var(--card)"/><rect x="7" y="3" width="1" height="1" fill="var(--card)"/><rect x="8" y="3" width="1" height="1" fill="var(--card)"/><rect x="9" y="3" width="1" height="1" fill="currentColor"/><rect x="0" y="4" width="1" height="1" fill="currentColor"/><rect x="1" y="4" width="1" height="1" fill="var(--card)"/><rect x="2" y="4" width="1" height="1" fill="var(--card)"/><rect x="3" y="4" width="1" height="1" fill="var(--card)"/><rect x="4" y="4" width="1" height="1" fill="currentColor"/><rect x="5" y="4" width="1" height="1" fill="var(--card)"/><rect x="6" y="4" width="1" height="1" fill="var(--card)"/><rect x="7" y="4" width="1" height="1" fill="var(--card)"/><rect x="8" y="4" width="1" height="1" fill="var(--card)"/><rect x="9" y="4" width="1" height="1" fill="var(--card)"/><rect x="10" y="4" width="1" height="1" fill="currentColor"/><rect x="0" y="5" width="1" height="1" fill="currentColor"/><rect x="1" y="5" width="1" height="1" fill="var(--card)"/><rect x="2" y="5" width="1" height="1" fill="var(--card)"/><rect x="3" y="5" width="1" height="1" fill="var(--card)"/><rect x="4" y="5" width="1" height="1" fill="currentColor"/><rect x="5" y="5" width="1" height="1" fill="var(--card)"/><rect x="6" y="5" width="1" height="1" fill="var(--card)"/><rect x="7" y="5" width="1" height="1" fill="var(--card)"/><rect x="8" y="5" width="1" height="1" fill="var(--card)"/><rect x="9" y="5" width="1" height="1" fill="var(--card)"/><rect x="10" y="5" width="1" height="1" fill="currentColor"/><rect x="0" y="6" width="1" height="1" fill="currentColor"/><rect x="1" y="6" width="1" height="1" fill="var(--card)"/><rect x="2" y="6" width="1" height="1" fill="var(--card)"/><rect x="3" y="6" width="1" height="1" fill="var(--card)"/><rect x="4" y="6" width="1" height="1" fill="currentColor"/><rect x="5" y="6" width="1" height="1" fill="currentColor"/><rect x="6" y="6" width="1" height="1" fill="currentColor"/><rect x="7" y="6" width="1" height="1" fill="var(--card)"/><rect x="8" y="6" width="1" height="1" fill="var(--card)"/><rect x="9" y="6" width="1" height="1" fill="var(--card)"/><rect x="10" y="6" width="1" height="1" fill="currentColor"/><rect x="0" y="7" width="1" height="1" fill="currentColor"/><rect x="1" y="7" width="1" height="1" fill="var(--card)"/><rect x="2" y="7" width="1" height="1" fill="var(--card)"/><rect x="3" y="7" width="1" height="1" fill="var(--card)"/><rect x="4" y="7" width="1" height="1" fill="var(--card)"/><rect x="5" y="7" width="1" height="1" fill="var(--card)"/><rect x="6" y="7" width="1" height="1" fill="var(--card)"/><rect x="7" y="7" width="1" height="1" fill="var(--card)"/><rect x="8" y="7" width="1" height="1" fill="var(--card)"/><rect x="9" y="7" width="1" height="1" fill="var(--card)"/><rect x="10" y="7" width="1" height="1" fill="currentColor"/><rect x="0" y="8" width="1" height="1" fill="currentColor"/><rect x="1" y="8" width="1" height="1" fill="var(--card)"/><rect x="2" y="8" width="1" height="1" fill="var(--card)"/><rect x="3" y="8" width="1" height="1" fill="var(--card)"/><rect x="4" y="8" width="1" height="1" fill="var(--card)"/><rect x="5" y="8" width="1" height="1" fill="var(--card)"/><rect x="6" y="8" width="1" height="1" fill="var(--card)"/><rect x="7" y="8" width="1" height="1" fill="var(--card)"/><rect x="8" y="8" width="1" height="1" fill="var(--card)"/><rect x="9" y="8" width="1" height="1" fill="var(--card)"/><rect x="10" y="8" width="1" height="1" fill="currentColor"/><rect x="1" y="9" width="1" height="1" fill="currentColor"/><rect x="2" y="9" width="1" height="1" fill="var(--card)"/><rect x="3" y="9" width="1" height="1" fill="var(--card)"/><rect x="4" y="9" width="1" height="1" fill="var(--card)"/><rect x="5" y="9" width="1" height="1" fill="var(--card)"/><rect x="6" y="9" width="1" height="1" fill="var(--card)"/><rect x="7" y="9" width="1" height="1" fill="var(--card)"/><rect x="8" y="9" width="1" height="1" fill="var(--card)"/><rect x="9" y="9" width="1" height="1" fill="currentColor"/><rect x="2" y="10" width="1" height="1" fill="currentColor"/><rect x="3" y="10" width="1" height="1" fill="currentColor"/><rect x="4" y="10" width="1" height="1" fill="currentColor"/><rect x="5" y="10" width="1" height="1" fill="currentColor"/><rect x="6" y="10" width="1" height="1" fill="currentColor"/><rect x="7" y="10" width="1" height="1" fill="currentColor"/><rect x="8" y="10" width="1" height="1" fill="currentColor"/><rect x="1" y="11" width="1" height="1" fill="currentColor"/><rect x="9" y="11" width="1" height="1" fill="currentColor"/></svg>
@@ -281,7 +251,6 @@
 
 <script src="../assets/config.js"></script>
 <script src="../assets/motion.js"></script>
-<script src="../assets/music.js"></script>
 <script src="../assets/sync.js"></script>
 <script src="../assets/store.js"></script>
 <script src="../assets/calendar.js"></script>

@@ -616,7 +616,7 @@ window.Plan = (function () {
     options.forEach(function (option) {
       var count = Store.tasks().filter(function (t) {
         if (option.id !== 'all' && t.listId !== option.id) return false;
-        return !Store.isDone(t, key) && (!Store.repeats(t) || Store.dueOn(t, new Date()));
+        return openToday(t, key);
       }).length;
       var button = document.createElement('button');
       button.type = 'button';
@@ -810,10 +810,12 @@ window.Plan = (function () {
 
     var when = document.createElement('button');
     when.type = 'button';
-    var soon = task.due ? daysBetween(key, task.due) : null;
-    when.className = 'task-due' + (task.due ? (task.due < key ? ' is-late' : ' is-set') : '') +
+    // a routine comes round again: a date on it that has gone by is not late
+    var due = Store.repeats(task) && task.due && task.due < key ? null : task.due;
+    var soon = due ? daysBetween(key, due) : null;
+    when.className = 'task-due' + (due ? (due < key ? ' is-late' : ' is-set') : '') +
       (soon === 0 ? ' is-today' : soon === 1 || soon === 2 ? ' is-soon' : '');
-    when.textContent = task.due ? dueLabel(task.due) : 'due';
+    when.textContent = due ? dueLabel(due) : 'due';
     when.title = 'Set a deadline';
     when.addEventListener('click', function (event) {
       event.stopPropagation();
@@ -849,7 +851,10 @@ window.Plan = (function () {
       peek();
     });
     item.appendChild(plan);
-    if (ui.dueFor === task.id) item.appendChild(duePicker(task));
+    if (ui.dueFor === task.id) {
+      item.classList.add('is-picking');
+      item.appendChild(duePicker(task));
+    }
     return item;
   }
 
@@ -1263,7 +1268,8 @@ window.Plan = (function () {
 
     revealEditor();
 
-    var open = Store.tasks().filter(function (t) { return !Store.isDone(t, key); }).length;
+    // the same count as "everything" above, or the two disagree by a weekly drill
+    var open = Store.tasks().filter(function (t) { return openToday(t, key); }).length;
     paint(el.taskCount, open + ' open');
   }
 
@@ -2117,6 +2123,13 @@ window.Plan = (function () {
     el.tagsBtn.addEventListener('click', function () {
       ui.tagsView = !ui.tagsView;
       render();
+      if (ui.tagsView) {
+        el.tagGrid.classList.add('is-opening');
+        Array.prototype.forEach.call(el.tagGrid.querySelectorAll('.tag-tile'), function (tile, i) {
+          tile.style.animationDelay = Math.min(i * 30, 240) + 'ms';
+        });
+        setTimeout(function () { el.tagGrid.classList.remove('is-opening'); }, 600);
+      }
       // on a phone the tiles are a scroll down: go there, rather than leave
       // them just out of sight below the button that asked for them
       var card = el.tagGrid.closest('.tasks-card');
@@ -2164,10 +2177,10 @@ window.Plan = (function () {
 
   /* ---------- every tag at once ---------- */
 
-  /* The point is seeing all of them together, so this never scrolls: the
-     tiles get smaller as there are more of them, and drop what they cannot
-     fit -- the count survives longest, because it is the thing you are
-     scanning for. */
+  /* The point is seeing all of them together, so this never scrolls. A tile is
+     as tall as what is in it -- a tag with nothing open is a line, not a
+     quarter of the screen -- and when they will not all fit, the longest ones
+     show their first few tasks and say how many more. */
   function renderTagGrid() {
     if (!el.tagGrid) return;
     el.tagGrid.hidden = !ui.tagsView;
@@ -2178,8 +2191,12 @@ window.Plan = (function () {
     if (!ui.tagsView) return;
 
     var key = Store.dayKey();
+    var today = new Date();
     var seen = recentByTag();
-    var open = Store.tasks().filter(function (t) { return !Store.isDone(t, key); });
+    // the same tasks the list and the counts above it mean by "open"
+    var open = Store.tasks().filter(function (t) {
+      return openToday(t, key, today) && (ui.view === 'all' || t.listId === ui.view);
+    });
 
     function pile(tag, mine) {
       mine = mine.slice().sort(function (a, b) {
@@ -2188,18 +2205,19 @@ window.Plan = (function () {
         if (da && db && da !== db) return da < db ? -1 : 1;
         return (a.order || 0) - (b.order || 0);
       });
-      var dated = mine.filter(function (t) { return Store.dueFor(t, key); });
       return {
         tag: tag,
         tasks: mine,
-        next: dated[0] ? Store.dueFor(dated[0], key) : null,
-        late: dated.filter(function (t) { return Store.dueFor(t, key) < key; }).length,
+        late: mine.filter(function (t) { var d = Store.dueFor(t, key); return d && d < key; }).length,
         mins: Math.round(seen[tag.id] || 0)
       };
     }
 
     var tiles = Store.tags().map(function (tag) {
       return pile(tag, open.filter(function (t) { return (t.tags || []).indexOf(tag.id) !== -1; }));
+    }).filter(function (tile) {
+      // inside one list, a tag with nothing in it is not part of that list
+      return ui.view === 'all' || tile.tasks.length;
     });
     var loose = open.filter(function (t) { return !(t.tags || []).length; });
     if (loose.length) tiles.push(pile({ id: null, name: 'no tag', color: 'blue' }, loose));
@@ -2207,52 +2225,104 @@ window.Plan = (function () {
     el.tagGrid.textContent = '';
 
     if (!tiles.length) {
-      el.tagGrid.appendChild(node('p', 'set-empty', 'no tags yet \u2014 start a task with a word like PHY'));
+      el.tagGrid.appendChild(node('p', 'set-empty', Store.tags().length
+        ? 'nothing open here'
+        : 'no tags yet — start a task with a word like PHY'));
       return;
     }
 
     tiles.forEach(function (tile) { el.tagGrid.appendChild(tagTile(tile, key)); });
-    shapeGrid(tiles.length);
-    fitTiles();
+    packTiles();
   }
 
-  /* A tall window should get bigger tiles, not the same small ones with more
-     air around them; a short one needs more columns to fit the same tags.
-     So the count follows the room rather than the number of tags. */
-  var WANT_TALL = 132;    // a tile worth reading: a heading and a few tasks
-  var WANT_WIDE = 104;    // narrower than this and the titles are all ellipsis
+  /* Not done, and asked for today: a daily drill is open every day, a weekly
+     one only on its day. What every count of open things means. */
+  function openToday(task, key, today) {
+    if (Store.isDone(task, key)) return false;
+    return !Store.repeats(task) || Store.dueOn(task, today || new Date());
+  }
 
-  var NEED_TALL = 62;     // below this a tile cannot show a task, only itself
+  /* Packed the way a wall of notes is: each tile under whichever column is
+     shortest so far, so the first row reads in your order and nothing leaves
+     a hole, as many columns as fit at a width where a task can be read. */
+  var TILE_WIDE = 10;     // rem
+  var TILE_GAP = 8;       // px, as in the stylesheet
 
-  function shapeGrid(count) {
-    var tall = el.tagGrid.clientHeight || 240;
-    var wide = el.tagGrid.clientWidth || 360;
-    var most = Math.max(1, Math.floor(wide / WANT_WIDE));
-    var rows = Math.max(1, Math.floor(tall / WANT_TALL));
-    var across = clamp(Math.ceil(count / rows), 1, Math.min(most, 4));
+  function packTiles() {
+    var grid = el.tagGrid;
+    var tiles = Array.prototype.slice.call(grid.querySelectorAll('.tag-tile'));
+    if (!tiles.length) return;
+    var rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    var lines = tiles.map(function (tile) { return tile.querySelectorAll('.tile-task'); });
 
-    /* With the columns settled, see what height that actually leaves. If it is
-       too little to show a task, spread wider; and if even the widest is too
-       thin, the tiles drop back to a name and a number -- every tag still on
-       screen, which is the part that matters, rather than a row of slivers. */
-    function heightAt(cols) {
-      var lines = Math.ceil(count / cols);
-      return (tall - (lines - 1) * 5) / lines;
-    }
-    while (across < Math.min(most, 4) && heightAt(across) < NEED_TALL) across++;
+    grid.classList.remove('is-mini', 'is-over');
+    tiles.forEach(function (tile, i) { show(i, lines[i].length); });
 
-    /* A tile showing only a name and a number can be much narrower than one
-       showing tasks, so once it comes to that, columns are cheaper than the
-       squashing that would otherwise happen. */
-    var mini = heightAt(across) < NEED_TALL;
-    if (mini) {
-      var thin = Math.max(1, Math.floor(wide / 74));
-      while (across < Math.min(thin, 6) && heightAt(across) < 40) across++;
+    var wide = grid.clientWidth || 360;
+    var room = grid.clientHeight;
+
+    function across(rems, most) {
+      return clamp(Math.floor((wide + TILE_GAP) / (rems * rem + TILE_GAP)), 1, Math.min(tiles.length, most));
     }
 
-    el.tagGrid.style.setProperty('--across', across);
-    el.tagGrid.classList.toggle('is-tight', across >= 3);
-    el.tagGrid.classList.toggle('is-mini', mini);
+    function pack(count) {
+      Array.prototype.forEach.call(grid.querySelectorAll('.tile-col'), function (col) { col.remove(); });
+      var cols = [];
+      for (var i = 0; i < count; i++) cols.push(grid.appendChild(node('div', 'tile-col')));
+      tiles.forEach(function (tile) {
+        var low = cols[0];
+        cols.forEach(function (col) { if (col.offsetHeight < low.offsetHeight) low = col; });
+        low.appendChild(tile);
+      });
+      return cols;
+    }
+
+    function over(col) { return col.offsetHeight > room + 1; }
+    function fits(cols) { return !room || !cols.some(over); }
+
+    // the first n of a tile's tasks, and how many that leaves out
+    function show(i, n) {
+      Array.prototype.forEach.call(lines[i], function (line, at) { line.hidden = at >= n; });
+      var more = tiles[i].querySelector('.tile-more');
+      var gone = lines[i].length - n;
+      more.hidden = !(n > 0 && gone > 0);
+      more.textContent = '+' + gone + ' more';
+    }
+
+    // balanced for everything showing, which is how it usually fits
+    var cols = pack(across(TILE_WIDE, 4));
+    if (fits(cols)) return;
+
+    /* Too tall: every tile starts from its name and number, and then each in
+       turn gets its next task while its column has room -- so a long tag
+       cannot crowd out the first few of a short one, and none of the room is
+       left over. */
+    tiles.forEach(function (tile, i) { show(i, 0); });
+    if (!fits(cols)) cols = pack(cols.length);
+    if (fits(cols)) {
+      var have = tiles.map(function () { return 0; });
+      var full = tiles.map(function (tile, i) { return !lines[i].length; });
+      for (var round = 0, growing = true; growing && round < 60; round++) {
+        growing = false;
+        tiles.forEach(function (tile, i) {
+          if (full[i]) return;
+          show(i, have[i] + 1);
+          if (over(tile.parentNode)) { show(i, have[i]); full[i] = true; return; }
+          have[i]++;
+          if (have[i] >= lines[i].length) full[i] = true;
+          growing = true;
+        });
+      }
+      return;
+    }
+
+    /* Not even the names fit in columns: every tag as a name and a number,
+       wrapped like the chips they are, each as wide as its name. And if not
+       even that fits, it scrolls -- better than a tag you cannot see at all. */
+    Array.prototype.forEach.call(grid.querySelectorAll('.tile-col'), function (col) { col.remove(); });
+    tiles.forEach(function (tile) { grid.appendChild(tile); });
+    grid.classList.add('is-mini');
+    if (room && grid.scrollHeight > room + 1) grid.classList.add('is-over');
   }
 
   /* The tag's own name at the front of every one of its tasks is noise inside
@@ -2266,19 +2336,26 @@ window.Plan = (function () {
   }
 
   function tagTile(tile, key) {
-    var cell = node('div', 'tag-tile tone-' + tile.tag.color + (tile.late ? ' is-late' : ''));
+    var cell = node('div', 'tag-tile tone-' + tile.tag.color + (tile.late ? ' is-late' : '') +
+      (tile.tasks.length ? '' : ' is-clear'));
 
-    var head = node('button', 'tile-head');
-    head.type = 'button';
-    head.appendChild(node('b', 'tile-name', tile.tag.name));
-    head.appendChild(node('span', 'tile-count', String(tile.tasks.length)));
-    head.title = 'Show only ' + tile.tag.name;
-    head.addEventListener('click', function () {
+    function onlyThis() {
       ui.tagsView = false;
       ui.tags = tile.tag.id ? [tile.tag.id] : [];
       ui.find = '';
-      render();
-    });
+    }
+
+    /* "+2 more" sits in the heading rather than a line of its own: a line
+       would cost the room of the very task it is apologising for. */
+    var head = node('button', 'tile-head');
+    head.type = 'button';
+    head.appendChild(node('b', 'tile-name', tile.tag.name));
+    var more = node('span', 'tile-more', '');
+    more.hidden = true;
+    head.appendChild(more);
+    head.appendChild(node('span', 'tile-count', String(tile.tasks.length)));
+    head.title = 'Show only ' + tile.tag.name;
+    head.addEventListener('click', function () { onlyThis(); render(); });
     cell.appendChild(head);
 
     var body = node('div', 'tile-tasks');
@@ -2291,17 +2368,19 @@ window.Plan = (function () {
         var tick = document.createElement('button');
         tick.type = 'button';
         tick.className = 'tile-tick';
+        tick.style.setProperty('--tick-tone', 'var(--' + (tile.tag.id ? tile.tag.color : 'green') + ')');
         tick.setAttribute('aria-label', 'Mark ' + task.title + ' done');
         tick.title = 'Done';
-        /* A thirteen-pixel target beside the name it belongs to: sooner or
-           later it gets hit by a thumb aiming at the task, and a task that
-           quietly finishes itself is how a day's work ends up counted before
-           it is done. So it says what it did, and offers it back. */
+        /* A small target beside the name it belongs to: sooner or later it
+           gets hit by a thumb aiming at the task, and a task that quietly
+           finishes itself is how a day's work ends up counted before it is
+           done. So it says what it did, and offers it back. */
         tick.addEventListener('click', function (event) {
           event.stopPropagation();
+          if (window.Motion) Motion.burst(tick, getComputedStyle(tick).getPropertyValue('--tick-tone').trim() || null);
           Store.toggleDone(task.id, key);
           if (Store.isDone(task, key)) {
-            sayUndo('\u201c' + task.title + '\u201d ticked off', function () {
+            sayUndo('“' + task.title + '” ticked off', function () {
               Store.toggleDone(task.id, key);
             });
           }
@@ -2314,15 +2393,19 @@ window.Plan = (function () {
         open.appendChild(node('span', 'tile-task-name', trimmed(task.title, tile.tag.name)));
         var deadline = Store.dueFor(task, key);
         if (deadline) {
-          open.appendChild(node('span', 'tile-task-due' + (deadline < key ? ' is-late' : ''),
-            Store.repeats(task) && deadline === key ? 'today' : dueLabel(deadline)));
+          /* Coloured the way the list colours it, so a glance means the same
+             thing in both. A daily drill is "today" every day, which is a
+             routine rather than news, so it stays quiet. */
+          var routine = Store.repeats(task) && deadline === key;
+          var soon = daysBetween(key, deadline);
+          open.appendChild(node('span', 'tile-task-due' +
+            (routine ? ' is-routine' : deadline < key ? ' is-late' : soon === 0 ? ' is-today' : soon <= 2 ? ' is-soon' : ''),
+            routine ? 'today' : dueLabel(deadline)));
         }
-        open.title = task.title + (deadline ? ' \u00b7 ' + dueLabel(deadline) : '');
+        open.title = task.title + (deadline ? ' · ' + dueLabel(deadline) : '');
         open.addEventListener('click', function () {
           // straight to it: the tag's list, with this one open
-          ui.tagsView = false;
-          ui.tags = tile.tag.id ? [tile.tag.id] : [];
-          ui.find = '';
+          onlyThis();
           ui.editing = task.id;
           ui.focusTask = task.id;
           reveal = task.id;
@@ -2334,51 +2417,16 @@ window.Plan = (function () {
     }
     cell.appendChild(body);
 
-    var more = node('span', 'tile-more', '');
-    more.hidden = true;
-    cell.appendChild(more);
-
-    var bar = node('span', 'tile-bar');
-    var fill = node('span', 'tile-fill');
-    fill.style.width = Math.min(100, Math.round(tile.mins / 180 * 100)) + '%';
-    bar.appendChild(fill);
-    bar.title = tile.mins ? spanLabel(tile.mins) + ' this week' : 'nothing logged this week';
-    cell.appendChild(bar);
+    // time given to it this week, when there has been any
+    if (tile.mins > 0) {
+      var bar = node('span', 'tile-bar');
+      var fill = node('span', 'tile-fill');
+      fill.style.width = Math.min(100, Math.round(tile.mins / 180 * 100)) + '%';
+      bar.appendChild(fill);
+      bar.title = spanLabel(tile.mins) + ' this week';
+      cell.appendChild(bar);
+    }
     return cell;
-  }
-
-  /* Nothing here scrolls, so a tile that cannot show all of its tasks hides
-     the ones that do not fit and says how many went. Measured rather than
-     guessed, because how many fit depends on the window. */
-  function fitTiles() {
-    Array.prototype.forEach.call(el.tagGrid.children, function (cell) {
-      var body = cell.querySelector('.tile-tasks');
-      var more = cell.querySelector('.tile-more');
-      if (!body || !more) return;
-
-      Array.prototype.forEach.call(body.children, function (line) { line.hidden = false; });
-      more.hidden = true;
-
-      var lines = Array.prototype.filter.call(body.children, function (n) { return n.classList.contains('tile-task'); });
-      if (!lines.length) return;
-
-      var room = body.clientHeight;
-      var hidden = 0;
-      while (lines.length - hidden > 0 && body.scrollHeight > room + 1) {
-        hidden++;
-        lines[lines.length - hidden].hidden = true;
-      }
-      if (hidden) {
-        more.textContent = '+' + hidden + ' more';
-        more.hidden = false;
-        // the line saying so needs room of its own
-        while (lines.length - hidden > 0 && body.scrollHeight > body.clientHeight + 1) {
-          hidden++;
-          lines[lines.length - hidden].hidden = true;
-          more.textContent = '+' + hidden + ' more';
-        }
-      }
-    });
   }
 
   /* ---------- what to do now ---------- */
@@ -2610,8 +2658,37 @@ window.Plan = (function () {
       return (a.task.order || 0) - (b.task.order || 0);
     });
 
+    var fromPlan = plan && plan.ai ? planned3(ranked, plan, gap, 3) : [];
     return { gap: gap, plan: plan, list: ranked,
-      pick: spread(ranked, 3, plan ? plan.mode : 'easy', plan ? plan.practiceRoom : Infinity) };
+      pick: fromPlan.length ? fromPlan
+        : spread(ranked, 3, plan ? plan.mode : 'easy', plan ? plan.practiceRoom : Infinity) };
+  }
+
+  /* With the AI's plan for tonight, up next is the top of it: the same things
+     in the same order and the same slices, so the two never disagree about
+     what comes first. Only what the queue would offer anyway is taken --
+     nothing done, nothing already on the day, nothing before what it needs.
+     Once the plan is all done, the rules have the rows back. */
+  function planned3(ranked, plan, gap, want) {
+    var byId = {}, used = {}, out = [];
+    ranked.forEach(function (pick) { byId[pick.task.id] = pick; });
+    plan.order.forEach(function (step) {
+      var pick = byId[step.task.id];
+      if (out.length >= want || !pick || used[pick.task.id]) return;
+      used[pick.task.id] = true;
+      out.push(Object.assign({}, pick, {
+        mins: step.mins,
+        whole: step.whole || pick.whole,
+        part: step.kind === 'practice' ? 0 : step.part || 0,
+        cut: !!step.cut,
+        // its reason, unless the rules know something more pressing
+        why: pick.why === 'overdue' || !step.why ? pick.why : step.why,
+        fits: gap === 0 || step.mins <= gap + 5,
+        quick: false,
+        ai: true
+      }));
+    });
+    return out;
   }
 
   /* Three of the same class is not a list of what to do next, it is one thing
@@ -2748,6 +2825,11 @@ window.Plan = (function () {
        the evening can still hold. */
     var head = node('p', 'queue-head', '');
     head.appendChild(node('b', null, 'up next'));
+    if (made.pick[0].ai) {
+      var spark = node('i', 'queue-ai', '\u2726');
+      spark.title = 'In the order the AI planned tonight';
+      head.appendChild(spark);
+    }
     var plan = made.plan;
     var says;
     if (plan && plan.mode === 'late') says = 'past bedtime';
@@ -3715,6 +3797,9 @@ window.Plan = (function () {
 
     if (plan && window.Ai && Ai.on() && Ai.usable()) {
       el.aim.appendChild(aiLine(plan));
+      var told = aiNotes();
+      if (told) el.aim.appendChild(told);
+      if (ui.aiTell) el.aim.appendChild(aiTell());
       Ai.suggestions().slice(0, 2).forEach(function (link) { el.aim.appendChild(aiLink(link)); });
     } else if (plan && window.Ai && Ai.on() && Ai.provider() === 'puter' && !ui.aiNudged) {
       el.aim.appendChild(aiInvite());
@@ -3790,6 +3875,17 @@ window.Plan = (function () {
     if (plan.ai && !thinking) {
       row.title = 'Planned with AI ' + agoLabel(plan.ai.at) + (plan.ai.judged ? ' \u2014 two answers compared' : '');
     }
+    var tellIt = node('button', 'ai-tell-btn', 'tell it');
+    tellIt.type = 'button';
+    tellIt.title = 'Tell the AI something about today or this week';
+    tellIt.setAttribute('aria-expanded', String(!!ui.aiTell));
+    tellIt.addEventListener('click', function () {
+      ui.aiTell = !ui.aiTell;
+      render();
+      var box = ui.aiTell && el.aim.querySelector('.ai-tell-input');
+      if (box) box.focus();
+    });
+    row.appendChild(tellIt);
     var again = node('button', 'ai-again', '\u21bb');
     again.type = 'button';
     again.disabled = thinking;
@@ -3798,6 +3894,85 @@ window.Plan = (function () {
     again.addEventListener('click', function () { Ai.now(); });
     row.appendChild(again);
     return row;
+  }
+
+  /* What you have told it holds just for now, each with how long it holds
+     and a way to take it back. Nothing told, nothing shown. */
+  function aiNotes() {
+    var told = Ai.notes();
+    if (!told.length) return null;
+    var box = node('div', 'ai-notes');
+    told.forEach(function (n) {
+      var chip = node('span', 'ai-note');
+      chip.appendChild(node('b', 'ai-note-when', n.scope === 'today' ? 'today' : 'this week'));
+      chip.appendChild(node('span', 'ai-note-text', n.text));
+      chip.title = n.text + (n.scope === 'week' ? ' \u2014 until ' + dueLabel(n.until) : ' \u2014 just today');
+      var drop = node('button', 'ai-note-drop', '\u00d7');
+      drop.type = 'button';
+      drop.setAttribute('aria-label', 'Forget \u201c' + n.text + '\u201d');
+      drop.addEventListener('click', function () { Ai.removeNote(n.id); });
+      chip.appendChild(drop);
+      box.appendChild(chip);
+    });
+    return box;
+  }
+
+  /* Telling it something about today or this week: "soccer till 7",
+     "sick, go easy". Opened by "tell it", right where the plan is, and the
+     plan comes back with it taken in a few seconds later. What you are
+     halfway through typing outlives the redraws that happen meanwhile. */
+  var TELL_HINTS = {
+    today: 'e.g. soccer till 7, so start after',
+    week: 'e.g. sick this week \u2014 go easy'
+  };
+
+  function aiTell() {
+    var box = node('form', 'ai-tell');
+    var scope = ui.aiScope === 'week' ? 'week' : 'today';
+
+    var when = node('div', 'ai-tell-when');
+    [['today', 'just today'], ['week', 'this week']].forEach(function (pair) {
+      var pick = node('button', 'pick', pair[1]);
+      pick.type = 'button';
+      pick.setAttribute('aria-pressed', String(scope === pair[0]));
+      pick.addEventListener('click', function () { ui.aiScope = pair[0]; render(); });
+      when.appendChild(pick);
+    });
+    box.appendChild(when);
+
+    var row = node('div', 'ai-tell-row');
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'ai-tell-input';
+    input.maxLength = 200;
+    input.dataset.focusKey = 'ai-tell';
+    input.placeholder = TELL_HINTS[scope];
+    input.setAttribute('aria-label', scope === 'today' ? 'Something about today' : 'Something about this week');
+    input.value = ui.aiDraft || '';
+    input.addEventListener('input', function () { ui.aiDraft = input.value; });
+    input.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      ui.aiTell = false;
+      render();
+    });
+    row.appendChild(input);
+    var send = node('button', 'ai-yes', 'tell');
+    send.type = 'submit';
+    row.appendChild(send);
+    box.appendChild(row);
+
+    box.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var text = input.value.trim();
+      if (!text) { input.focus(); return; }
+      Ai.addNote(text, scope);
+      ui.aiDraft = '';
+      ui.aiTell = false;
+      render();
+      if (window.Motion) Motion.toast(scope === 'today' ? 'got it \u2014 planning today round that' : 'got it \u2014 planning the week round that', null, { tone: 'happy' });
+    });
+    return box;
   }
 
   /* The AI is on but not connected: one line saying what it would do, and
@@ -4148,7 +4323,7 @@ window.Plan = (function () {
     window.addEventListener('resize', function () {
       sizeTimeline();
       renderTimeline();
-      if (ui.tagsView) { shapeGrid(el.tagGrid.children.length); fitTiles(); }
+      if (ui.tagsView) packTiles();
     });
     render();
   }

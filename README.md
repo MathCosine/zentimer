@@ -54,7 +54,7 @@ between them.
 The page fills whatever window you give it, so it works docked as a strip down the side of
 a monitor as well as full width:
 
-- **narrow** — one column: the time and four buttons (alarms, music, account, menu), the
+- **narrow** — one column: the time and two buttons (alarms, and the gear), the
   timer, tonight (bars, up next, the day), then the task list taking whatever height is
   left and scrolling on its own.
 - **900px and wider** — two columns: the timer and tonight on the left, the task list full
@@ -124,10 +124,10 @@ stand in front of what you're reading. `p` hides them and gives the strip back.
 
 ## Everything else
 
-Alarms (the clock button, which wears the next one's time) with a full-screen ring, four
-generated ambient tracks behind the headphone button, and in the ⋯ menu: settings, sound,
+Alarms (the clock button, which wears the next one's time) with a full-screen ring, and
+behind the gear: your account and whether it is synced, then settings, sound,
 notifications, pets, night mode, full screen. `space` start, `r` reset, `a` alarm,
-`m` music, `p` pets, `f` fullscreen, `t` theme, `,` settings.
+`p` pets, `f` fullscreen, `t` theme, `,` settings.
 
 ## Files
 
@@ -152,7 +152,6 @@ assets/settings.js            the settings page
 assets/account.js             the account page
 assets/welcome.js             the welcome
 assets/pet.js                 pip and pop
-assets/music.js               the ambience, generated with Web Audio
 supabase/schema.sql           the tables, row-level security, the AI allowance
 supabase/functions/ai         the AI relay (Groq + Gemini)
 supabase/functions/calendar   the calendar relay

@@ -814,6 +814,7 @@ window.Pet = (function () {
 
     // the hit area and any speech follow him about
     c.hit.style.transform = 'translate(' + x + 'px,' + top + 'px)';
+    if (Date.now() - (c.hitChecked || 0) > 300) { c.hitChecked = Date.now(); hitFree(c, x, top); }
     if (c.bubbleUntil) {
       var bubX = Math.min(window.innerWidth - c.bubble.offsetWidth - 8, Math.max(8, x - 10));
       c.bubble.style.transform = 'translate(' + bubX + 'px,' + (top - c.bubble.offsetHeight - 12) + 'px)';
@@ -861,6 +862,28 @@ window.Pet = (function () {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
     scanPerches();
+  }
+
+  /* Saying hi to him is never worth a button you cannot press. Standing over
+     anything that does something -- a button, a field, a task -- he lets the
+     tap go through to it; over plain card or background, he is the one tapped.
+     Asked a few times a second, not every frame. */
+  var PRESSABLE = 'button, a, input, select, textarea, label, summary, [role="button"], .task, .queue-row, .tag-tile, .block';
+
+  function hitFree(c, x, top) {
+    if (!document.elementsFromPoint) return;
+    var w = GW * PX, h = GH * PX, busy = false;
+    c.hit.classList.remove('is-live');                 // looked through while asking
+    [[0.5, 0.5], [0.2, 0.25], [0.8, 0.25], [0.2, 0.8], [0.8, 0.8]].some(function (at) {
+      var px = x + w * at[0], py = top + h * at[1];
+      if (px < 0 || py < 0 || px >= window.innerWidth || py >= window.innerHeight) return false;
+      var under = document.elementsFromPoint(px, py);
+      for (var i = 0; i < under.length; i++) {
+        if (under[i].closest && under[i].closest(PRESSABLE)) { busy = true; return true; }
+      }
+      return false;
+    });
+    c.hit.classList.toggle('is-live', !busy);
   }
 
   /* ---------- api ---------- */

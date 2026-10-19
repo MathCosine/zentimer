@@ -47,7 +47,7 @@ const { chromium } = require('./browser');
   console.log('\n--- the sign-in link opens the panel ---');
   await p.goto('http://127.0.0.1:8899/app/#sign-in'); await p.waitForTimeout(1400);
   check('panel open, hash tidied', await p.evaluate(() => ({
-    open: !document.getElementById('syncPop').hidden, hash: location.hash })), { open:true, hash:'' });
+    open: !document.getElementById('menuPop').hidden, hash: location.hash })), { open:true, hash:'' });
 
   console.log('\n--- the privacy page ---');
   await p.goto('http://127.0.0.1:8899/privacy.html'); await p.waitForTimeout(500);

@@ -154,6 +154,26 @@ const { chromium } = require('./browser');
   await p.locator('#taskInput').click(); await p.waitForTimeout(350);
   check('it is gone', await p.evaluate(() => !document.querySelector('.due-pick')), true);
 
+  console.log('\n--- the picker goes under its row, not beside it ---');
+  await p.evaluate(() => {
+    const old = new Date(); old.setDate(old.getDate() - 18);
+    Store.addTask({ title: 'EXTRA School Studying', repeat: 'daily', due: Store.dayKey(old), mins: 60 });
+  });
+  await p.waitForTimeout(400);
+  const row = p.locator('.task', { hasText: 'School Studying' });
+  check('a daily task with a date long gone is not "overdue" every day', await row.locator('.task-due').textContent(), 'due');
+  check('nor anywhere that asks how late it is', await p.evaluate(() => {
+    const t = Store.tasks().find(x => /School Studying/.test(x.title));
+    return Store.dueFor(t, Store.dayKey()) === Store.dayKey(); }), true);
+  await row.locator('.task-due').click(); await p.waitForTimeout(350);
+  check('the title keeps its width, and the picker sits below it', await p.evaluate(() => {
+    const el = document.querySelector('.task.is-picking');
+    const t = el.querySelector('.task-title').getBoundingClientRect(), d = el.querySelector('.task-due').getBoundingClientRect(),
+          k = el.querySelector('.due-pick').getBoundingClientRect();
+    return { oneLine: t.height < 30, clear: t.right <= d.left + 1, below: k.top >= t.bottom - 1 }; }),
+    { oneLine: true, clear: true, below: true });
+  await p.keyboard.press('Escape'); await p.locator('#taskInput').click(); await p.waitForTimeout(300);
+
   console.log(`\n${pass} passed, ${fail} failed, ${errs.length} console errors`);
   errs.slice(0,5).forEach(e => console.log('  !', e));
   await b.close();

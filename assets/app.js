@@ -15,13 +15,9 @@
     alarmList: $('alarmList'), alarmAdd: $('alarmAdd'), alarmInput: $('alarmInput'),
     soundBtn: $('soundBtn'), notifyBtn: $('notifyBtn'), petBtn: $('petBtn'),
     themeBtn: $('themeBtn'), fullBtn: $('fullBtn'), settingsBtn: $('settingsBtn'),
-    musicBtn: $('musicBtn'), musicPop: $('musicPop'), musicPlay: $('musicPlay'),
-    musicNext: $('musicNext'), musicTracks: $('musicTracks'), musicTrack: $('musicTrack'),
-    musicNote: $('musicNote'), musicVol: $('musicVol'),
     ringOverlay: $('ringOverlay'), ringTime: $('ringTime'), ringHeading: $('ringHeading'),
     ringDismiss: $('ringDismiss'),
-    syncBtn: $('syncBtn'), syncPop: $('syncPop'), syncStatus: $('syncStatus'),
-    authTitle: $('authTitle'), authForm: $('authForm'),
+    syncStatus: $('syncStatus'), authFace: $('authFace'), authForm: $('authForm'),
     authAccount: $('authAccount'), authWho: $('authWho'), authOut: $('authOut'),
     alarmBtn: $('alarmBtn'), alarmPop: $('alarmPop'), alarmNote: $('alarmNote'),
     menuBtn: $('menuBtn'), menuPop: $('menuPop'), syncDot: $('syncDot'),
@@ -42,7 +38,6 @@
     freeFrom: 15 * 60 + 30, weekendFrom: 9 * 60,   // when homework can start
     capWork: 330, capPractice: 240,     // when a day is asking too much
 
-    music: { track: 0, volume: 0.35 }
   };
   var timer = { mode: 'focus', duration: settings.focusMs, remaining: settings.focusMs, endAt: null, status: 'idle' };
   var stats = { day: dayKey(), sessions: 0, focused: 0 };
@@ -326,8 +321,6 @@
       chime(finished === 'focus' ? 'focus' : 'break');
       notify(finished === 'focus' ? 'session complete' : 'break over',
              finished === 'focus' ? humanSpan(settings.breakMs) + ' break now' : 'ready when you are');
-      Music.duck(true);
-      setTimeout(function () { if (!anyRinging()) Music.duck(false); }, 3200);
       if (finished === 'focus') {
         Pet.event('complete');
         setTimeout(function () { Pet.event('breakStart'); }, 3600);
@@ -368,7 +361,6 @@
         changed = true;
         chime('alarm');
         notify('alarm', timeOfDay(alarm.at));
-        Music.duck(true);
         Pet.alarm(true);
       } else if ((alarm.calls || 1) < RECALLS && now - (alarm.lastCall || now) >= RECALL_EVERY) {
         alarm.calls = (alarm.calls || 1) + 1;
@@ -385,7 +377,6 @@
 
   function dismissRinging() {
     alarms = alarms.filter(function (a) { return !a.ringing; });
-    Music.duck(false);
     Pet.alarm(false);
     save();
     renderAlarms(Date.now(), true);
@@ -776,7 +767,7 @@
     if (!id) return;
     var target = alarms.filter(function (a) { return a.id === id; })[0];
     removeAlarm(id);                          // tapping an alarm dismisses it
-    if (target && target.ringing && !anyRinging()) { Music.duck(false); Pet.alarm(false); }
+    if (target && target.ringing && !anyRinging()) Pet.alarm(false);
     render();
   });
 
@@ -895,7 +886,7 @@
 
       exportData: exportData,
       importData: importData,
-      openSync: function () { Panel.show(false); el.syncBtn.click(); },
+      openSync: function () { Panel.show(false); openPop('menu', true); },
       syncStatus: function () { return el.syncStatus ? el.syncStatus.textContent : 'local only'; }
     });
   }
@@ -957,43 +948,11 @@
     save();
   });
 
-  function paintMusic() {
-    var track = Music.tracks()[Music.current()];
-    paint(el.musicTrack, 'textContent', track.name);
-    paint(el.musicNote, 'textContent', track.note);
-    el.body.classList.toggle('music-on', Music.isPlaying());
-    el.musicBtn.setAttribute('aria-pressed', String(Music.isPlaying()));
-    el.musicPlay.setAttribute('aria-label', Music.isPlaying() ? 'Pause ambience' : 'Play ambience');
-    Array.prototype.forEach.call(el.musicTracks.children, function (chip, i) {
-      chip.setAttribute('aria-current', String(i === Music.current()));
-    });
-  }
-
-  function buildMusicPanel() {
-    Music.restore(settings.music);
-    el.musicVol.value = Math.round(Music.volume() * 100);
-    Music.tracks().forEach(function (track, i) {
-      var chip = document.createElement('button');
-      chip.type = 'button';
-      chip.textContent = track.name;
-      chip.addEventListener('click', function () {
-        Music.select(i);
-        if (!Music.isPlaying()) Music.play();
-        settings.music.track = i;
-        save();
-        paintMusic();
-      });
-      el.musicTracks.appendChild(chip);
-    });
-    paintMusic();
-  }
-
-  /* The four buttons in the top corner each open a small panel just under
-     themselves. One at a time; a click anywhere else, or Escape, puts it away. */
+  /* The two buttons in the top corner each open a small panel just under
+     themselves: the alarms, and everything else -- who you are, then the
+     switches. One at a time; a click anywhere else, or Escape, puts it away. */
   var POPS = {
     alarm: { btn: el.alarmBtn, pop: el.alarmPop },
-    music: { btn: el.musicBtn, pop: el.musicPop },
-    sync:  { btn: el.syncBtn,  pop: el.syncPop },
     menu:  { btn: el.menuBtn,  pop: el.menuPop }
   };
   var openedAt = 0;
@@ -1010,7 +969,7 @@
     want.btn.setAttribute('aria-expanded', String(open));
     if (open) {
       openedAt = Date.now();
-      if (name === 'sync') renderSync();
+      if (name === 'menu') renderSync();
       if (window.Motion) Motion.place(want.pop, want.btn);
     }
   }
@@ -1022,8 +981,6 @@
     });
     return any;
   }
-
-  function toggleMusicPanel(force) { openPop('music', force); }
 
   Object.keys(POPS).forEach(function (name) {
     POPS[name].btn.addEventListener('click', function (event) {
@@ -1049,23 +1006,6 @@
     });
   });
 
-  el.musicPlay.addEventListener('click', function () {
-    Music.toggle();
-    paintMusic();
-  });
-
-  el.musicNext.addEventListener('click', function () {
-    settings.music.track = Music.select(Music.current() + 1);
-    if (!Music.isPlaying()) Music.play();
-    save();
-    paintMusic();
-  });
-
-  el.musicVol.addEventListener('input', function () {
-    settings.music.volume = Music.setVolume(+el.musicVol.value / 100);
-    save();
-  });
-
   function renderSync() {
     var status = Store.remote.status();
     var baked = Store.remote.configured();
@@ -1075,14 +1015,16 @@
 
     el.authForm.hidden = inside;
     el.authAccount.hidden = !inside;
-    el.authTitle.textContent = inside ? 'your account' : 'your desk, everywhere';
-    if (inside) el.authWho.textContent = email || 'this account';
+    paint(el.authWho, 'textContent', inside ? email || 'this account' : 'your desk, everywhere');
+    // the first letter of who you are, as the account page draws it
+    paint(el.authFace, 'textContent', inside ? (email || '?').charAt(0).toUpperCase() : '');
+    el.authFace.classList.toggle('is-out', !inside);
     var text = status === 'synced'
       ? (waiting ? '✓ synced · ' + waiting + ' waiting' : '✓ synced')
       : status === 'syncing' ? 'syncing…'
-      : status === 'signed out' ? 'this browser only'
+      : status === 'signed out' ? 'only on this browser'
       : status === 'connecting' ? 'connecting…'
-      : status === 'off' ? (baked ? 'starting…' : 'this browser only')
+      : status === 'off' ? (baked ? 'starting…' : 'only on this browser')
       : status;
     // the database is a version behind this page: whoever runs it needs to know
     if (inside && window.Sync && Sync.behind && Sync.behind().length) text += ' \u00b7 the database needs supabase/schema.sql run again';
@@ -1090,10 +1032,8 @@
     var dot = !inside ? '' : status === 'synced' ? (waiting ? 'is-waiting' : 'is-synced')
       : status === 'syncing' || status === 'connecting' ? 'is-waiting' : 'is-trouble';
     el.syncDot.className = 'tool-dot ' + dot;
-    el.syncBtn.title = inside ? 'Your account \u00b7 ' + text.replace(/^\u2713 /, '') : 'Sign in to keep your desk everywhere';
+    el.menuBtn.title = 'Settings and your account' + (inside ? ' \u00b7 ' + text.replace(/^\u2713 /, '') : '');
   }
-
-  function toggleSyncPanel(force) { openPop('sync', force); }
 
   el.authOut.addEventListener('click', function () {
     Store.remote.signOut().then(function () {
@@ -1188,7 +1128,6 @@
       case 'r': case 'R': reset(); break;
       case 'a': case 'A': event.preventDefault(); beginAlarm(); break;
       case 'e': case 'E': event.preventDefault(); beginEdit(); break;
-      case 'm': case 'M': Music.toggle(); paintMusic(); break;
       case 'p': case 'P': el.petBtn.click(); break;
       case 'f': case 'F': el.fullBtn.click(); break;
       case 's': case 'S': el.soundBtn.click(); break;
@@ -1244,12 +1183,6 @@
         if (typeof stored.settings.breakMs === 'number') settings.breakMs = stored.settings.breakMs;
         if (typeof stored.settings.freeFrom === 'number') settings.freeFrom = stored.settings.freeFrom;
         if (typeof stored.settings.weekendFrom === 'number') settings.weekendFrom = stored.settings.weekendFrom;
-        if (stored.settings.music) {
-          settings.music = {
-            track: stored.settings.music.track || 0,
-            volume: typeof stored.settings.music.volume === 'number' ? stored.settings.music.volume : 0.35
-          };
-        }
         settings.focusMs = clampDuration(stored.settings.focusMs || stored.duration || settings.focusMs);
         settings.breakMs = clampDuration(stored.settings.breakMs || settings.breakMs);
       }
@@ -1306,13 +1239,12 @@
     if (timer.status === 'running') requestWakeLock();
     render();
 
-    buildMusicPanel();
     renderSync();
     // the front page links straight at the sign-in panel, whether that opens
     // the app fresh or the app is already sitting there
     function openFromHash() {
       if (location.hash !== '#sign-in') return;
-      toggleSyncPanel(true);
+      openPop('menu', true);
       history.replaceState(null, '', location.pathname + location.search);
     }
     openFromHash();

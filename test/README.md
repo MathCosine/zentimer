@@ -16,16 +16,16 @@ without a Supabase project.
     node test/offline.js      the service worker, with the network switched off
     node test/update.js       a pushed fix reaching a browser that already has it
     node test/calendar.js     a Google-format calendar read in: repeats, skips, moves, timezones
-    node test/ai.js           the AI on your own server: notes into tasks, links, tonight planned and checked, when it asks
-    node test/puter.js        the AI through Puter (the default): connecting, two models and a judge, the week
+    node test/ai.js           the AI on your own server: notes into tasks, links, tonight planned and checked, up next following it, when it asks
+    node test/puter.js        the AI through Puter (the default): connecting, two models and a judge, the week, notes for today or the week
     node test/behind.js       a database a version behind: links kept, then sent once schema.sql is run
     node test/undo.js         undo, and the bin
     node test/findweek.js     searching, and the week
     node test/sorting.js      the five orders, both directions, inside a split
     node test/narrow.js       nothing spills, 260px up, alone and in the frame
-    node test/deadlines.js    typed days including typos, and the due picker
+    node test/deadlines.js    typed days including typos, and the due picker, which goes under its row
     node test/queue.js        what to do now, and the hours being optional
-    node test/tagsview.js     every tag on screen at once, at five sizes
+    node test/tagsview.js     every tag on screen at once, at five sizes; tiles as big as what is in them; counts that agree
     node test/progress.js     how far in a task is, and what that changes
     node test/practice.js     practice tags, and the queue not repeating itself
     node test/aim.js          how much today needs to hold, and when it is too much

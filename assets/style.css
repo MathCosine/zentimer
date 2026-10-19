@@ -985,6 +985,9 @@ body[data-status="running"] .countdown { cursor: default; }
 .task:hover { background: color-mix(in srgb, var(--well) 70%, transparent); }
 .task.is-leaving { background: var(--card); z-index: 2; }
 
+/* the deadline picker goes under its row, not beside it squeezing the title */
+.task.is-picking { flex-wrap: wrap; }
+
 .task.is-editing {
   flex-wrap: wrap;
   background: var(--well);
@@ -1355,8 +1358,6 @@ body[data-status="running"] .countdown { cursor: default; }
   stroke-linejoin: round;
 }
 
-#musicBtn[aria-pressed="true"]:not([aria-expanded="true"]) { color: var(--accent); border-color: var(--accent); }
-
 /* the next alarm, worn on the button */
 .tool-note {
   position: absolute;
@@ -1378,7 +1379,8 @@ body[data-status="running"] .countdown { cursor: default; }
 .tool.is-ringing { animation: wiggle 640ms var(--ease) infinite; color: var(--coral); }
 .tool.is-ringing .tool-note { background: var(--coral); }
 
-/* whether the account is keeping up */
+/* whether the account is keeping up -- worn on the gear only when it is not:
+   a dot that is always green is a dot nobody reads */
 .tool-dot {
   position: absolute;
   top: 1px;
@@ -1390,6 +1392,7 @@ body[data-status="running"] .countdown { cursor: default; }
   background: transparent;
   transition: background 300ms var(--ease);
 }
+.tool .tool-dot:not(.is-waiting):not(.is-trouble) { display: none; }
 .tool-dot.is-synced { background: var(--green); }
 .tool-dot.is-waiting { background: var(--yellow); }
 .tool-dot.is-trouble { background: var(--coral); }
@@ -1421,7 +1424,7 @@ body[data-status="running"] .countdown { cursor: default; }
 .pop h3 { margin: 0; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 
 /* the menu: every switch with its name beside it */
-.menu-pop { width: 236px; gap: 2px; padding: 7px; }
+.menu-pop { width: 252px; gap: 2px; padding: 7px; }
 
 .menu-row {
   display: flex;
@@ -1480,9 +1483,7 @@ body[data-status="running"] .countdown { cursor: default; }
 
 .alarm-pop { width: 232px; }
 
-.sync-pop { width: 252px; }
-.sync-pop h3 { margin: 0; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-.sync-status { margin: 0; font-size: 0.7rem; color: var(--ink); }
+.sync-status { margin: 0; font-size: 0.7rem; color: var(--muted); }
 .sync-field { display: grid; gap: 2px; font-size: 0.62rem; color: var(--muted); }
 
 .sync-field input {
@@ -1499,62 +1500,6 @@ body[data-status="running"] .countdown { cursor: default; }
 .sync-field input:focus { border-color: var(--accent); }
 .sync-row { display: flex; gap: 5px; align-items: center; }
 
-.music-row { display: flex; align-items: center; gap: 8px; }
-
-.music-play {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  background: var(--accent);
-  color: var(--accent-ink);
-  border: 0;
-  border-radius: 50%;
-  cursor: pointer;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent);
-  transition: transform 260ms var(--spring);
-}
-.music-play svg { width: 15px; height: 15px; fill: currentColor; stroke: none; }
-.music-play .pause-icon { display: none; }
-body.music-on .music-play .pause-icon { display: block; }
-body.music-on .music-play .play-icon { display: none; }
-
-.music-now { flex: 1; min-width: 0; display: grid; line-height: 1.15; }
-.music-now strong { font-size: 0.8rem; font-weight: 600; }
-.music-now span { font-size: 0.64rem; color: var(--muted); }
-
-.music-skip {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  font: inherit;
-  font-size: 1rem;
-  line-height: 1;
-  color: var(--ink);
-  background: var(--well);
-  border: 0;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.music-skip:hover { border-color: var(--accent); }
-.music-tracks { display: flex; flex-wrap: wrap; gap: 4px; }
-
-.music-tracks button {
-  font: inherit;
-  font-size: 0.7rem;
-  color: var(--ink);
-  background: var(--well);
-  border: 0;
-  border-radius: 999px;
-  padding: 4px 10px;
-  cursor: pointer;
-  transition: background 160ms var(--ease), transform 260ms var(--spring);
-}
-
-.music-tracks button[aria-current="true"] { background: var(--accent); color: var(--accent-ink); }
-.music-vol input { width: 100%; accent-color: var(--accent); cursor: pointer; }
 
 /* ---------- the alarm you cannot miss ---------- */
 
@@ -1638,7 +1583,9 @@ body.music-on .music-play .play-icon { display: none; }
   height: 0;
   cursor: pointer;
   border-radius: 10px;
+  pointer-events: none;          /* until pet.js has looked at what is under him */
 }
+.pet-hit.is-live { pointer-events: auto; }
 
 body.is-ringing .pet-hit { pointer-events: none; }
 
@@ -1745,7 +1692,7 @@ body.is-ringing .pet-hit { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   .app, .app > *, .pip, .alarm, .alarm.is-ringing, .alarm.is-ringing .alarm-when, .now-dot,
   .ring-overlay, .ring-card, .ring-clock, .menu, .pop, .dial, .tool.is-ringing,
-  .task.is-editing, .toast { animation: none !important; }
+  .task.is-editing, .toast, .tag-tile { animation: none !important; }
   * { transition-duration: 1ms !important; }
 }
 
@@ -2538,6 +2485,7 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 .queue-head b { font-weight: 700; color: var(--ink); letter-spacing: 0.05em; }
 .queue-head span { margin-left: auto; letter-spacing: 0; text-transform: none; font-size: 0.72rem; color: var(--accent); font-weight: 500; }
+.queue-head .queue-ai { font-style: normal; letter-spacing: 0; color: var(--accent); margin-left: -3px; }
 
 .queue-row {
   font: inherit;
@@ -2599,151 +2547,195 @@ body.dragging-task .task-list { pointer-events: none; }
 
 /* ---------- every tag at once ---------- */
 
-/* It never scrolls. The tiles share whatever the card has left between them,
-   so six classes or twelve, they are all on screen together. */
+/* It never scrolls. The tiles are packed into columns by plan.js, each as tall
+   as what is in it, and the ones that will not all fit show their first few. */
 .tag-grid {
   flex: 1 1 auto;
   min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(var(--across, 2), minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
-  gap: 5px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 2px;
   overflow: hidden;
 }
+.tag-grid.is-over { overflow-y: auto; scrollbar-width: thin; }
+.tag-grid > .set-empty { margin: 8px 4px; }
 
+.tile-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* the same soft wells the rest of the desk is made of */
 .tag-tile {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
-  min-height: 0;
-  padding: 6px 8px 7px;
-  border-radius: 11px;
-  border: 1.5px solid var(--hair);
-  background: color-mix(in srgb, var(--tone, var(--blue)) 14%, var(--card));
-  overflow: hidden;
+  padding: 9px 8px 8px 10px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--tone, var(--blue)) 13%, var(--card));
 }
-.tag-tile.is-late { border-color: var(--coral); }
+/* in as they open, one after another; not on every redraw after that */
+.tag-grid.is-opening .tag-tile { animation: pop-in 300ms var(--bounce) both; }
+.tag-tile.is-late { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--coral) 55%, transparent); }
+.tag-tile.is-clear { background: color-mix(in srgb, var(--tone, var(--blue)) 7%, var(--card)); }
 
 .tile-head {
   font: inherit;
-  flex: 0 0 auto;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
-  padding: 0 0 3px;
+  min-width: 0;
+  margin-bottom: 3px;
+  padding: 0;
   border: 0;
-  border-bottom: 1.5px solid color-mix(in srgb, var(--tone, var(--blue)) 34%, transparent);
   background: none;
   color: var(--ink);
   cursor: pointer;
   text-align: left;
-  min-width: 0;
 }
-.tile-head:hover .tile-name { color: var(--accent); }
 
+/* the tag looks the way it does on a task in the list */
 .tile-name {
   font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone, var(--blue)) 34%, var(--card));
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: background 160ms var(--ease);
+}
+.tile-head:hover .tile-name { background: color-mix(in srgb, var(--tone, var(--blue)) 55%, var(--card)); }
+.tag-tile.is-late .tile-name::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 5px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: var(--coral);
 }
 .tile-count {
   margin-left: auto;
-  font-size: 0.82rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  font-size: 0.64rem;
+  font-weight: 600;
   color: var(--muted);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 0 6px;
+  min-width: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* the tasks themselves, which is the point of the tile */
-.tile-tasks {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  overflow: hidden;
-}
+.tile-tasks { display: flex; flex-direction: column; min-width: 0; }
 .tile-task {
   display: flex;
   align-items: center;
-  gap: 5px;
-  width: 100%;
+  gap: 7px;
   min-width: 0;
-  flex: 0 0 auto;
-  border-radius: 6px;
+  padding: 0 4px 0 1px;
+  border-radius: 10px;
+  transition: background 140ms var(--ease);
 }
-.tile-task:hover { background: color-mix(in srgb, var(--tone, var(--blue)) 30%, transparent); }
+.tile-task:hover { background: color-mix(in srgb, var(--card) 70%, transparent); }
 
-/* ticking one off without leaving the tiles */
+/* ticking one off without leaving the tiles: the list's round tick, smaller */
 .tile-tick {
   flex: 0 0 auto;
-  width: 13px;
-  height: 13px;
+  width: 16px;
+  height: 16px;
   padding: 0;
-  border-radius: 4px;
-  border: 1.5px solid color-mix(in srgb, var(--ink) 34%, transparent);
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--tick-tone, var(--green)) 70%, var(--outline));
   background: var(--card);
   cursor: pointer;
+  transition: background 160ms var(--ease), transform 260ms var(--spring);
 }
-.tile-tick:hover { border-color: var(--green); background: var(--green); }
+.tile-tick:hover { background: color-mix(in srgb, var(--tick-tone, var(--green)) 30%, var(--card)); }
+.tile-tick:active { transform: scale(0.85); transition-duration: 90ms; }
 
 .tile-open {
   font: inherit;
   flex: 1 1 auto;
   display: flex;
-  align-items: baseline;
-  gap: 5px;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  padding: 3px 4px 3px 0;
+  padding: 5px 0;
   border: 0;
   background: none;
   color: var(--ink);
   cursor: pointer;
   text-align: left;
 }
+.tile-open:hover .tile-task-name { color: var(--accent); }
 .tile-task-name {
-  font-size: 0.62rem;
+  font-size: 0.76rem;
   line-height: 1.25;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* how soon, coloured as the list colours it */
 .tile-task-due {
   margin-left: auto;
   flex: 0 0 auto;
   font-size: 0.6rem;
-  color: var(--soft);
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 75%, transparent);
+  color: var(--muted);
   white-space: nowrap;
 }
-.tile-task-due.is-late { color: var(--coral); font-weight: 700; }
+.tile-task-due.is-soon { background: color-mix(in srgb, var(--yellow) 30%, var(--card)); color: color-mix(in srgb, var(--yellow) 30%, var(--ink)); }
+.tile-task-due.is-today { background: color-mix(in srgb, var(--coral) 24%, var(--card)); color: color-mix(in srgb, var(--coral) 45%, var(--ink)); font-weight: 600; }
+.tile-task-due.is-late { background: var(--coral); color: #3d1408; font-weight: 600; }
+.tile-task-due.is-routine { background: none; padding: 1px 2px; }
 
-.tile-clear { margin: 2px 4px; font-size: 0.64rem; color: var(--soft); }
-.tile-more { flex: 0 0 auto; margin: 0 4px; font-size: 0.6rem; color: var(--soft); }
-
-.tile-bar {
+.tile-clear { margin: 0 2px 1px; font-size: 0.68rem; color: var(--muted); }
+.tile-more {
+  margin-left: auto;
   flex: 0 0 auto;
+  font-size: 0.62rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tile-more:not([hidden]) + .tile-count { margin-left: 0; }
+.tile-head:hover .tile-more { color: var(--accent); }
+
+/* time given to it this week, only once there has been some */
+.tile-bar {
   height: 3px;
-  margin-top: 3px;
+  margin: 5px 2px 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
   overflow: hidden;
 }
-.tile-fill { display: block; height: 100%; background: var(--tone, var(--blue)); }
+.tile-fill { display: block; height: 100%; border-radius: inherit; background: var(--tone, var(--blue)); }
 
-/* packed tighter once there are a lot of them */
-.tag-grid.is-tight .tag-tile { padding: 5px 6px 6px; }
-.tag-grid.is-tight .tile-name { font-size: 0.64rem; }
-.tag-grid.is-tight .tile-count { font-size: 0.72rem; }
-.tag-grid.is-tight .tile-task-name { font-size: 0.62rem; }
-.tag-grid.is-tight .tile-task-due { font-size: 0.58rem; }
-.tag-grid.is-tight .tile-open { padding: 1px 3px 1px 0; }
-.tag-grid.is-tight .tile-tick { width: 11px; height: 11px; }
+/* No room for tasks: every tag still on screen, as a name and a number,
+   wrapped like chips and each as wide as its name */
+.tag-grid.is-mini { flex-wrap: wrap; align-content: flex-start; gap: 6px; }
+.tag-grid.is-mini .tile-tasks,
+.tag-grid.is-mini .tile-more,
+.tag-grid.is-mini .tile-bar { display: none !important; }
+.tag-grid.is-mini .tag-tile { flex: 1 1 auto; padding: 5px 6px 5px 6px; border-radius: 999px; }
+.tag-grid.is-mini .tile-head { margin: 0; gap: 8px; }
 
 /* how far into a task you are */
 .task-bar {
@@ -2758,14 +2750,6 @@ body.dragging-task .task-list { pointer-events: none; }
 }
 .task-fill { display: block; height: 100%; background: var(--green); }
 
-/* No room for tasks: every tag still on screen, as a name and a number */
-.tag-grid.is-mini .tile-tasks,
-.tag-grid.is-mini .tile-more,
-.tag-grid.is-mini .tile-clear { display: none; }
-.tag-grid.is-mini .tag-tile { justify-content: center; padding: 4px 7px; }
-.tag-grid.is-mini .tile-head { border-bottom: 0; padding-bottom: 0; }
-.tag-grid.is-mini .tile-name { font-size: 0.6rem; }
-.tag-grid.is-mini .tile-count { font-size: 0.8rem; color: var(--ink); }
 
 /* ---------- what the add box understands ---------- */
 
@@ -3061,8 +3045,7 @@ button:not(:disabled) { -webkit-tap-highlight-color: transparent; }
 
 .go:active, .nudge:active, .tool:active, .icon-btn:active, .pin:active, .presets button:active,
 .task-add button:active, .task-tick:active, .chip:active, .tag:active, .pick:active, .ghost:active,
-.views button:active, .task-tools button:active, .music-play:active, .music-skip:active,
-.music-tracks button:active, .toast-go:active, .day-step:active, .day-label:active,
+.views button:active, .task-tools button:active, .toast-go:active, .day-step:active, .day-label:active,
 .now-shift:active, .task-plan:active, .task-due:active, .settings-close:active, .alarm-add:active,
 .edit-done:active, .block-tool:active, .countdown:active, .set-add:active, .set-toggle:active {
   transform: scale(0.92);
@@ -3300,6 +3283,80 @@ button:not(:disabled) { -webkit-tap-highlight-color: transparent; }
 .ai-again:active { transform: rotate(-90deg) scale(0.9); }
 .ai-again:disabled { opacity: 0.4; cursor: default; }
 
+/* telling it something about today or this week */
+.ai-tell-btn {
+  flex: none;
+  font: inherit;
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--card);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 260ms var(--spring), background 160ms var(--ease);
+}
+.ai-tell-btn:hover, .ai-tell-btn[aria-expanded="true"] { background: var(--accent-soft); }
+.ai-tell-btn:active { transform: scale(0.92); transition-duration: 90ms; }
+
+.ai-tell {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--card);
+}
+.ai-tell-when { display: flex; gap: 4px; }
+.ai-tell-when .pick[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.ai-tell-row { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.ai-tell-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.76rem;
+  color: var(--ink);
+  background: var(--well);
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  padding: 6px 11px;
+  outline: none;
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.ai-tell-input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.ai-tell-input::placeholder { color: var(--muted); opacity: 0.85; }
+
+/* what it has been told, and how long each holds */
+.ai-notes { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.ai-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 3px 2px 9px;
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 0.66rem;
+}
+.ai-note-when { flex: none; font-weight: 600; color: var(--accent); }
+.ai-note-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.ai-note-drop {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  background: var(--well);
+  cursor: pointer;
+}
+.ai-note-drop:hover { color: var(--coral); }
+
 /* a link it noticed, for you to agree with */
 .ai-link {
   display: flex;
@@ -3378,10 +3435,38 @@ button:not(:disabled) { -webkit-tap-highlight-color: transparent; }
 .ai-about:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 .ai-said { display: block; }
 
-/* the account panel on the desk: where you are, and the way to your account */
-.sync-lede { margin: 0 0 2px; font-size: 0.78rem; line-height: 1.45; color: var(--muted); }
-.sync-pop a.go, .sync-pop a.ghost { display: inline-block; text-decoration: none; }
-.sync-who { margin: 0; font-size: 0.86rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the top of the menu: who you are, whether it is keeping up, and the way
+   to your account */
+.menu-acct {
+  display: grid;
+  gap: 9px;
+  margin: 0 0 4px;
+  padding: 10px 10px 11px;
+  border-radius: 15px;
+  background: var(--well);
+}
+.acct-card { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.acct-face {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--pink) 70%, var(--accent)));
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+/* nobody yet: a quiet outline of someone */
+.acct-face.is-out {
+  background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a93bd' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='12' cy='9' r='3.4'/%3E%3Cpath d='M5.5 19c1.1-3 3.6-4.6 6.5-4.6s5.4 1.6 6.5 4.6'/%3E%3C/svg%3E") center / 20px no-repeat;
+  border: 1px solid var(--card-edge);
+}
+.acct-text { min-width: 0; display: grid; line-height: 1.25; }
+.sync-who { margin: 0; font-size: 0.8rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-acct .sync-row { gap: 6px; }
+.menu-acct a.go, .menu-acct a.ghost { display: inline-block; text-decoration: none; }
 
 /* a brand new desk says where the welcome is */
 .task-empty a { color: var(--accent); font-weight: 600; }

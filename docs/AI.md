@@ -93,6 +93,11 @@ It doesn't ask the AI on every change.
 - It also asks if the evening has slid so far that what's left of the plan
   no longer fits before bed.
 - **↻** next to the plan's note asks right away.
+- **tell it** next to the plan's note is for something true only for now --
+  "soccer till 7", "sick this week, go easy". Pick **just today** or **this
+  week** (the next seven days), and it plans again a few seconds later with
+  that taken in. Each one shows as a chip under the note until it runs out;
+  × forgets it sooner.
 
 ## What it is sent
 
@@ -101,7 +106,8 @@ Only once someone has connected it and has it switched on (settings → AI):
 - the names, deadlines and sizes of their open tasks
 - this week's calendar events, and how much free time each day has
 - their bedtime
-- whatever they wrote under "about you, right now"
+- whatever they wrote under "about you, right now", and anything they told it
+  for today or this week
 
 It is never sent their email or password. With Puter, this goes to Puter,
 which passes it to the models (Google's Gemini and OpenAI's GPT). With your
