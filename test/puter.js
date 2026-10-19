@@ -147,6 +147,31 @@ const day = n => { const d = new Date(AT); d.setDate(d.getDate() + n);
   check('and the last good plan stays', await p.evaluate(() => document.querySelector('.ai-line').classList.contains('is-ai')), true);
   await post('/__puter', {});
 
+  console.log('\n--- what you said, done ---');
+  await p.evaluate(() => Ai.setAbout('homework before extracurriculars. i tutor mondays 5 to 6.'));
+  const said = { steps: [{ id: ids['Problem set'], mins: 90, why: 'due tomorrow; you said homework before extracurriculars' },
+                         { id: ids['USACO silver'], mins: 30, why: 'keeps practice going' }],
+    start: '16:30', busy: [{ from: '17:00', to: '18:00', what: 'tutoring' }],
+    later: [], week: [], weekNote: '', links: [], note: 'homework first, like you said.' };
+  await post('/__puter', { plan: { A: said, B: said } });
+  await p.click('.ai-again'); await p.clock.runFor(1500);
+  const sent = (await asked()).filter(a => a.kind === 'plan')[0];
+  check('your words go first, in plain words', sent.user.split('\n').slice(0, 2),
+    ['The student’s own words (follow them):', '- About me: homework before extracurriculars. i tutor mondays 5 to 6.']);
+  check('a daily drill is sent as practice, not "due today"', sent.input.tasks.filter(t => t.practice).map(t => t.due), [null]);
+  check('and it is told when tonight starts (17:00, set earlier)', sent.input.start, '17:00');
+  await p.evaluate(() => { if (!document.querySelector('.aim-plan')) document.querySelector('.aim-why').click(); });
+  await p.clock.runFor(300);
+  const lines = await p.evaluate(() => [...document.querySelectorAll('.aim-plan .plan-line')].map(r =>
+    [r.querySelector('.plan-at').textContent, r.querySelector('.plan-name').textContent, r.querySelector('.plan-why').textContent]));
+  check('the plan starts when it said', lines[0][0], '16:30');
+  check('and goes round the tutoring you mentioned', lines.some(l => l[1] === 'tutoring' && l[2] === 'you said' && l[0] === '17:00'), true);
+  check('its reason, short and in whole words', lines.find(l => /Problem set/.test(l[1]))[2], 'you said homework before\u2026');
+  if (await p.evaluate(() => !document.getElementById('weekAhead').hidden)) { await p.click('#weekBtn'); await p.clock.runFor(300); }
+  check('up next counts from then', await p.evaluate(() => document.querySelector('.queue-head span').textContent).then(t => /from 16:30$/.test(t)), true);
+  await p.evaluate(() => Ai.setAbout(''));
+  await post('/__puter', {});
+
   console.log('\n--- telling it something for today, or this week ---');
   const plansSoFar = async () => (await asked()).filter(a => a.kind === 'plan');
   const chips = () => p.evaluate(() => [...document.querySelectorAll('.ai-note')].map(c =>

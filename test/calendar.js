@@ -95,6 +95,7 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
     [document.getElementById('nowTitle').textContent, document.getElementById('nowWhen').textContent]),
     ['free until 16:00', 'next: Tutoring at 16:00']);
   await p.evaluate(() => {
+    Plan.setFreeFrom(15 * 60, null);          // out of school at three, so the evening is from now
     const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + 1);
     Store.addTask({ title: 'PHY Lab writeup', due: Store.dayKey(d), mins: 90 });
   });

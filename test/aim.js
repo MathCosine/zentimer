@@ -282,7 +282,7 @@ const { chromium } = require('./browser');
   const heavy = await aim(p);
   check('the row is marked', heavy.lines[0].over, true);
   check('and it says what to do about it', heavy.warn,
-    'more than a day holds — push something back or accept a late one');
+    'it fits before bed, but it’s more than a comfortable day — something could wait');
 
   console.log('--- the ceiling is yours to set ---');
   await p.click('#menuBtn'); await p.click('#settingsBtn'); await p.waitForTimeout(700);

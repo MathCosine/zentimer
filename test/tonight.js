@@ -221,6 +221,28 @@ const seed = () => {
   check('and what is due tomorrow is all it offers', after.rows,
     ['PHY Workbook Week 5', 'PHY Mastering Week 5']);
 
+  console.log('\n--- a school morning is not tonight ---');
+  {
+    const ctx = await b.newContext({ viewport: { width: 646, height: 1000 } });
+    const p = await ctx.newPage();
+    p.on('pageerror', e => errs.push('morning ' + e.message));
+    await p.clock.install({ time: new Date(2026, 9, 19, 10, 23) });       // a Monday, in a free period
+    await p.goto('http://127.0.0.1:8899/app/'); await p.clock.runFor(1500);
+    await p.evaluate(() => {
+      const d = new Date(Store.dayKey() + 'T12:00'); d.setDate(d.getDate() + 1);
+      Store.addTask({ title: 'TAA Homework 9', due: Store.dayKey(d), mins: 90 });
+    });
+    await p.clock.runFor(1000);
+    await p.locator('.aim-why', { hasText: /^tonight/ }).click(); await p.clock.runFor(400);
+    check('the plan starts when school is out, not at 10:23', await p.evaluate(() =>
+      document.querySelector('.aim-plan .plan-at').textContent), '15:30');
+    check('and the room it counts is from then', await p.evaluate(() =>
+      document.querySelector('.queue-head span').textContent), '8h 30m from 15:30');
+    check('but up next still offers it now, for a free period', await p.evaluate(() =>
+      document.querySelector('.queue-row .queue-title').textContent), 'TAA Homework 9');
+    await ctx.close();
+  }
+
   console.log(`\n${pass} passed, ${fail} failed, ${errs.length} console errors`);
   errs.slice(0, 5).forEach(e => console.log('  !', e));
   await b.close();

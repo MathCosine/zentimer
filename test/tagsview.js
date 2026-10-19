@@ -53,7 +53,8 @@ const { chromium } = require('./browser');
     await p.click('#tagsBtn'); await p.waitForTimeout(600);
     const r = await p.evaluate(() => {
       const tiles = [...document.querySelectorAll('.tag-tile')];
-      const h = n => tiles.find(t => t.querySelector('.tile-name').textContent === n).getBoundingClientRect().height;
+      // what is in it, rather than the tile: the last in a column stretches to an even bottom
+      const h = n => tiles.find(t => t.querySelector('.tile-name').textContent === n).querySelector('.tile-tasks').getBoundingClientRect().height;
       return { phy: h('PHY'), msb: h('MSB'), well: h('WELL'),
         cols: document.querySelectorAll('#tagGrid .tile-col').length,
         sum: tiles.reduce((n, t) => n + +t.querySelector('.tile-count').textContent, 0),

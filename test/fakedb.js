@@ -108,8 +108,10 @@ function start(port) {
           // which question, from the schema's name or the words of it
           const kind = q.name || (/turn a student/.test(q.system) ? 'parse' : /plan a student/.test(q.system) ? 'plan' : 'judge');
           const family = /^gemini/.test(q.model || '') ? 'A' : 'B';
-          let input = null; try { input = JSON.parse(q.user); } catch (e) {}
-          (db.puterAsked = db.puterAsked || []).push({ model: q.model, kind, strict: q.strict, input });
+          // a plan's message is the student's words, then the data
+          const user = String(q.user || ''), mark = user.indexOf('data:\n');
+          let input = null; try { input = JSON.parse(mark === -1 ? user : user.slice(mark + 6)); } catch (e) {}
+          (db.puterAsked = db.puterAsked || []).push({ model: q.model, kind, strict: q.strict, input, user: user.slice(0, 600) });
           const cfg = db.puter || {};
           const want = (cfg[kind] || {});
           if (cfg.broke) out = { error: cfg.broke };

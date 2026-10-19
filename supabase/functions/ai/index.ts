@@ -66,11 +66,20 @@ const ITEM = {
   properties: { id: { type: 'string' }, mins: { type: 'integer' } },
 };
 
+const BUSY = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['from', 'to', 'what'],
+  properties: { from: { type: 'string' }, to: { type: 'string' }, what: { type: 'string' } },
+};
+
 const PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['steps', 'later', 'week', 'weekNote', 'links', 'note'],
+  required: ['steps', 'start', 'busy', 'later', 'week', 'weekNote', 'links', 'note'],
   properties: {
+    start: { type: 'string' },
+    busy: { type: 'array', items: BUSY },
     steps: {
       type: 'array',
       items: {
@@ -131,26 +140,47 @@ Rules:
 Answer with JSON only.`;
 
 const PLAN_SYSTEM = `You plan a student's evening and their week: what to work on, in what order, and for how long.
-You get: the time now, minutes free before bed tonight (calendar events already taken out), the next seven days ("days", today first) each with its free minutes, calendar events and minutes of daily practice, the open tasks with ids, deadlines, minutes left, which are daily practice, any "needs first" links, the student's own notes about their life right now, notes that hold only for now ("forNow": each for today only, or until a date), and pip's own rule-based plan for tonight and the week as a starting point.
+The message starts with the student's own words -- about them, and anything that holds just for today or until a date -- and then the data: the time now; "start", when pip thinks tonight's work can begin (after school on a school day); "free", the minutes from then to bed with calendar events taken out; the next seven days ("days", today first) with each day's free minutes, calendar events and minutes of daily practice; the open tasks with ids, deadlines, minutes left, which are daily practice, and "needs first" links; and pip's own rule-based plan as a starting point.
 Rules, in order of importance:
 1. Anything due tomorrow (or overdue) is done tonight, unless it truly cannot fit.
 2. Never put a task before something it needs first -- not earlier tonight, not on an earlier day. Readings before the quiz on them, research before the essay.
-3. Practice matters to this student: keep at least a short practice block (often 30 minutes) each day unless it is late and deadlines are crowding in -- then deadlines win.
-4. Spread big work (essays, projects) over several days so it is finished a day or two before it is due and no single night is crushed.
-5. Look at the whole week: if one day is too full, move work to lighter days before it, and say so.
-6. Use the student's notes: an application deadline, a test coming up, how they like to work. A "forNow" note holds only on the days it says, and on those days it outranks habits and pip's plan: "soccer till 7 tonight" takes that time out of tonight, "sick this week, go easy" means lighter days, "finish the essay first today" puts it first. Never at the cost of rules 1 and 2. Mention a note you followed in "note" or "weekNote".
-7. Each day's minutes of work must fit that day's free minutes after practice. Tonight's total must not exceed tonight's free minutes. No task gets more minutes in total than it has left.
-8. Mix in a quick task after a long one when it helps, but never at the cost of rule 1.
-"steps": tonight's plan in order, using task ids exactly as given. "why": a few friendly words, lower case, like "due tomorrow", "read before friday's quiz", "keeps practice going".
-"later": tasks you deliberately left out of tonight, with a short reason.
+3. Do what the student says. Their words outrank every rule below and pip's plan: when they are busy or free, what comes first, how much they can take, how they like to work. Words for today, or until a date, hold only on those days. Busy times they mention for tonight go in "busy"; if their words mean tonight's work starts at another time, put it in "start".
+4. Practice (the daily drills, which have no deadline) matters: keep at least a short block, often 30 minutes, each day unless deadlines are crowding in or the student says otherwise. Practice is never "due today": homework with a deadline comes first unless the student says otherwise.
+5. Spread big work (essays, projects) over several days so it is finished a day or two before it is due and no single night is crushed.
+6. Look at the whole week: if a day is too full, or the student said it is busy, move work to lighter days before it.
+7. Each day's minutes must fit its free minutes after practice and after anything the student said takes time. Tonight's total must fit between "start" and bed, outside "busy". No task gets more minutes in total than it has left.
+8. A quick task after a long one helps, when nothing above says otherwise.
+"steps": tonight's plan in order, using task ids exactly as given. "why": 2 to 6 plain words, lower case, one thought, no semicolons, and not the deadline (pip shows that) -- like "reading before friday's quiz", "quick win", "keeps practice going", "you said essay first".
+"start": when tonight's work begins, "HH:MM" in 24 hours. The "start" you were given unless the student's words say otherwise.
+"busy": times tonight the student said they are busy that are not in the calendar already, each with "from" and "to" ("HH:MM") and "what" (a word or two). Empty if none.
+"later": tasks you deliberately left out of tonight, with a "why" in the same short style.
 "week": one entry per day in "days", in order, each with "day" (YYYY-MM-DD), "items" (task ids and minutes for that day; the first day's items are tonight's steps) and "note" (a few words about that day, or "").
 "weekNote": one short, kind sentence about the week (which day is heavy and what you moved, or that it all fits), no more than 18 words.
 "links": "needs first" relationships you noticed that are not already listed (first = id that must be done before then = id). Only clear ones.
-"note": one short, kind sentence about tonight (no more than 14 words).
+"note": one short, kind sentence about tonight, no more than 14 words. If you followed something the student said, say so.
 Answer with JSON only.`;
 
 const JUDGE_SYSTEM = `Two assistants answered the same request from a student's study planner. Decide which answer is better for the student.
-Prefer, in order: no rule broken (deadlines tomorrow first, dependencies respected, fits the time, nothing scheduled after it is due); a week that spreads big work sensibly; sensible estimates; keeps practice when there is room; uses the student's notes. Answer with JSON: {"pick": "A" or "B", "why": "a short reason"}.`;
+Prefer, in order: no rule broken (deadlines tomorrow first, dependencies respected, fits the time, nothing scheduled after it is due); does what the student says ("studentSays") -- their words come before anything below; a week that spreads big work sensibly; sensible estimates; keeps practice when there is room. Answer with JSON: {"pick": "A" or "B", "why": "a short reason"}.`;
+
+// The student's own words, one to a line, first in the message and in plain
+// words -- as one more field deep in the data they got overlooked. The same
+// as studentSays() in assets/ai-brain.js.
+function studentSays(input: Json): string[] {
+  const out: string[] = [];
+  if (input && input.about) out.push('About me: ' + String(input.about).trim());
+  for (const n of (Array.isArray(input?.forNow) ? input.forNow : []) as Json[]) {
+    if (!n || !n.note) continue;
+    out.push((n.for === 'today only' ? 'Just today: ' : String(n.for).replace(/^until /, 'Until ') + ': ') + String(n.note));
+  }
+  return out;
+}
+
+function planMessage(input: Json): string {
+  const words = studentSays(input);
+  return "The student's own words (follow them):\n" + (words.length ? words.map((w) => '- ' + w).join('\n') : '- (none)') +
+    "\n\nThe planner's data:\n" + JSON.stringify(input);
+}
 
 // ---------- the two of them ----------
 
@@ -337,7 +367,7 @@ Deno.serve(async (req) => {
   const input = (body.input || {}) as Json;
   const system = kind === 'parse' ? PARSE_SYSTEM : PLAN_SYSTEM;
   const schema = kind === 'parse' ? PARSE_SCHEMA : PLAN_SCHEMA;
-  const user = JSON.stringify(input);
+  const user = kind === 'parse' ? JSON.stringify(input) : planMessage(input);
   const score = (a: Json) => kind === 'parse' ? scoreParse(a) : scorePlan(a, input as unknown as PlanInput);
 
   const asked = await Promise.allSettled([
@@ -364,7 +394,8 @@ Deno.serve(async (req) => {
   if (heard.length === 2 && !sameOrder(heard[0].answer, heard[1].answer) && heard[0].score - heard[1].score < 25) {
     const flip = Math.random() < 0.5;
     const [a, b] = flip ? [heard[1], heard[0]] : [heard[0], heard[1]];
-    const ask = JSON.stringify({ request: input, A: a.answer, B: b.answer });
+    const ask = JSON.stringify(kind === 'parse' ? { request: input, A: a.answer, B: b.answer }
+      : { studentSays: studentSays(input), request: input, A: a.answer, B: b.answer });
     try {
       const ruling = GROQ_KEY ? await askGroq(JUDGE_SYSTEM, ask, JUDGE_SCHEMA, 'judge') : await askGemini(JUDGE_SYSTEM, ask, JUDGE_SCHEMA);
       chosen = ruling.pick === 'B' ? b : a;

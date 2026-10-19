@@ -2568,6 +2568,8 @@ body.dragging-task .task-list { pointer-events: none; }
   flex-direction: column;
   gap: 8px;
 }
+/* the last in a shorter column takes up the difference: one straight bottom */
+.tile-col > .tag-tile:last-child { flex-grow: 1; }
 
 /* the same soft wells the rest of the desk is made of */
 .tag-tile {

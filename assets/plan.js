@@ -2277,6 +2277,50 @@ window.Plan = (function () {
       return cols;
     }
 
+    /* Even: tiles move between columns (or swap) while that brings the
+       columns' heights closer -- the first row stays where it is, and each
+       column still reads in your order. Then the shorter columns' last tiles
+       stretch to the tallest, so the bottom is one straight line. */
+    function balance(cols) {
+      var k = cols.length;
+      if (k < 2) return;
+      var h = tiles.map(function (tile) { return tile.offsetHeight + TILE_GAP; });
+      var where = tiles.map(function (tile) { return cols.indexOf(tile.parentNode); });
+      function sums() {
+        var out = cols.map(function () { return 0; });
+        where.forEach(function (c, i) { out[c] += h[i]; });
+        return out;
+      }
+      function spread(sm) { return Math.max.apply(null, sm) - Math.min.apply(null, sm); }
+      for (var round = 0; round < 40; round++) {
+        var sm = sums(), best = spread(sm), move = null;
+        for (var i = k; i < tiles.length; i++) {
+          for (var c = 0; c < k; c++) {
+            if (c === where[i]) continue;
+            var moved = sm.slice();
+            moved[where[i]] -= h[i]; moved[c] += h[i];
+            if (spread(moved) < best - 1) { best = spread(moved); move = [i, c, -1]; }
+            for (var j = k; j < tiles.length; j++) {
+              if (where[j] !== c) continue;
+              var swapped = sm.slice();
+              swapped[where[i]] += h[j] - h[i]; swapped[c] += h[i] - h[j];
+              if (spread(swapped) < best - 1) { best = spread(swapped); move = [i, c, j]; }
+            }
+          }
+        }
+        if (!move) break;
+        if (move[2] !== -1) where[move[2]] = where[move[0]];
+        where[move[0]] = move[1];
+      }
+      tiles.forEach(function (tile, i) { cols[where[i]].appendChild(tile); });
+    }
+
+    function even(cols) {
+      if (cols.length < 2) return;
+      var tallest = Math.max.apply(null, cols.map(function (col) { return col.offsetHeight; }));
+      cols.forEach(function (col) { col.style.minHeight = tallest + 'px'; });
+    }
+
     function over(col) { return col.offsetHeight > room + 1; }
     function fits(cols) { return !room || !cols.some(over); }
 
@@ -2291,14 +2335,15 @@ window.Plan = (function () {
 
     // balanced for everything showing, which is how it usually fits
     var cols = pack(across(TILE_WIDE, 4));
-    if (fits(cols)) return;
+    balance(cols);
+    if (fits(cols)) { even(cols); return; }
 
     /* Too tall: every tile starts from its name and number, and then each in
        turn gets its next task while its column has room -- so a long tag
        cannot crowd out the first few of a short one, and none of the room is
        left over. */
     tiles.forEach(function (tile, i) { show(i, 0); });
-    if (!fits(cols)) cols = pack(cols.length);
+    if (!fits(cols)) { cols = pack(cols.length); balance(cols); }
     if (fits(cols)) {
       var have = tiles.map(function () { return 0; });
       var full = tiles.map(function (tile, i) { return !lines[i].length; });
@@ -2313,6 +2358,7 @@ window.Plan = (function () {
           growing = true;
         });
       }
+      even(cols);
       return;
     }
 
@@ -2447,6 +2493,10 @@ window.Plan = (function () {
     var at = Store.minutesNow();
     var next = Store.nextBlock(at);
     var until = next ? next.start - at : DAY_END - at;
+    saidBusy(Store.dayKey()).forEach(function (b) {
+      if (b.start <= at && b.end > at) until = 0;
+      else if (b.start > at) until = Math.min(until, b.start - at);
+    });
     /* Until the next thing on the plan, or until bed. It used to stop at three
        hours, from before there was a bedtime to plan to -- which meant a big
        slice of a big project could never "fit", however long the evening. */
@@ -2839,9 +2889,9 @@ window.Plan = (function () {
        practice from here -- in the line that is already there, since a phone
        with eight tags on it has no room for another. */
     else if (plan && plan.mode === 'easy' && plan.workNeed === 0 && plan.practice > 0) {
-      says = 'homework done \u00b7 ' + spanLabel(plan.free) + ' till bed';
+      says = 'homework done \u00b7 ' + roomLabel(plan);
     }
-    else if (plan) says = spanLabel(plan.free) + ' till bed';
+    else if (plan) says = roomLabel(plan);
     else says = made.gap >= 180 ? 'the rest of the day' : spanLabel(made.gap) + ' free';
     head.appendChild(node('span', null, says));
 
@@ -2954,19 +3004,49 @@ window.Plan = (function () {
      tick things off, whether or not a timer was running. */
   /* ---------- tonight ---------- */
 
-  /* How long until bed. Bedtime is the end of the day in the settings. Time
-     already promised to something that is not work -- dinner, a club -- comes
-     off it; a block that is one of your tasks does not, because it is the same
-     time being spent on the same thing. */
-  function timeLeft(key) {
-    var from = Math.max(Store.minutesNow(), DAY_START);
+  /* When tonight starts. A school day's evening starts when school is out
+     (yours to set in settings), not at whatever hour the app was opened in a
+     free period -- and if you told the AI something that moves it ("no
+     school today", "soccer till 7"), when it said. Never before now. */
+  function eveningFrom(key, rulesOnly) {
+    var now = Math.max(Store.minutesNow(), DAY_START);
+    var from = Math.max(now, startOf(key));
+    var ai = !rulesOnly && window.Ai ? Ai.planFor(key) : null;
+    if (ai && typeof ai.start === 'number' && ai.start < DAY_END) from = Math.max(now, ai.start);
+    return from;
+  }
+
+  /* Busy times you told the AI about that are not on your calendar -- "tutoring
+     4 to 5" -- as fixed things on today, for the plan to go round. Only
+     today's, and only while its plan is the one in use. */
+  function saidBusy(key, rulesOnly) {
+    var ai = !rulesOnly && window.Ai ? Ai.planFor(key) : null;
+    if (!ai || !Array.isArray(ai.busy)) return [];
+    return ai.busy.map(function (b, i) {
+      return { id: 'said-' + i, start: b.from, end: b.to, title: b.what, said: true };
+    });
+  }
+
+  /* How long until bed, from when tonight starts. Bedtime is the end of the
+     day in the settings. Time already promised to something that is not work
+     -- dinner, a club -- comes off it; a block that is one of your tasks does
+     not, because it is the same time being spent on the same thing. */
+  function timeLeft(key, rulesOnly) {
+    var from = eveningFrom(key, rulesOnly);
     var free = Math.max(0, DAY_END - from);
-    Store.blocks(key).forEach(function (b) {
-      if (b.done || b.taskId) return;
+    fixedFrom(key, from, rulesOnly).forEach(function (b) {
       var a = Math.max(b.start, from), z = Math.min(b.end, DAY_END);
       if (z > a) free -= z - a;
     });
     return Math.max(0, free);
+  }
+
+  /* "8h till bed" -- or, before the evening has started, "8h from 3:30pm",
+     which is the room there really is. */
+  function roomLabel(plan) {
+    return plan.from > Store.minutesNow() + 1
+      ? spanLabel(plan.free) + ' from ' + label(plan.from % (24 * 60))
+      : spanLabel(plan.free) + ' till bed';
   }
 
   /* Days to spare once the work itself is taken out, counting a day as a full
@@ -3030,9 +3110,13 @@ window.Plan = (function () {
 
   /* Anything already on the day that is not one of your tasks: a calendar
      event, a block for something else. */
-  function fixedFrom(key, at) {
-    return Store.blocks(key).filter(function (b) { return !b.done && !b.taskId && b.end > at; })
-      .sort(function (a, b) { return a.start - b.start; });
+  function fixedFrom(key, at, rulesOnly) {
+    var mine = Store.blocks(key).filter(function (b) { return !b.done && !b.taskId && b.end > at; });
+    var said = saidBusy(key, rulesOnly).filter(function (b) {
+      // what you said, unless the calendar already has something there
+      return b.end > at && !mine.some(function (m) { return m.start < b.end && m.end > b.start; });
+    });
+    return mine.concat(said).sort(function (a, b) { return a.start - b.start; });
   }
 
   /* ---------- the week ahead ---------- */
@@ -3158,7 +3242,7 @@ window.Plan = (function () {
       day.today = i === 0;
       day.work = day.items.reduce(function (sum, it) { return sum + it.mins; }, 0);
       day.practice = i === 0 ? plan.practiceRoom || 0 : practiceOn(day.key);
-      day.free = freeOn(day.key);
+      day.free = i === 0 ? plan.free : freeOn(day.key);   // today: tonight's own room
       day.over = day.work + day.practice > day.free + 15;
       if (i === 0 && ai && Array.isArray(ai.week) && ai.week[0] && ai.week[0].day === today) day.note = String(ai.week[0].note || '').slice(0, 60);
     });
@@ -3179,7 +3263,7 @@ window.Plan = (function () {
      Anything that does not fit waits for tomorrow, and the queue says so. */
   function tonight(rulesOnly) {
     var key = Store.dayKey();
-    var free = timeLeft(key);
+    var free = timeLeft(key, rulesOnly);
     var jobs = [];
 
     Store.tasks().forEach(function (task) {
@@ -3280,6 +3364,7 @@ window.Plan = (function () {
       : 'easy';
 
     var made = {
+      from: eveningFrom(key, rulesOnly),
       free: free, need: need, hardNeed: hardNeed, workNeed: workNeed,
       spare: Math.max(0, free - need), fits: fits, waits: waits, pressed: pressed,
       practice: practice, practiceRoom: mode === 'crunch' || mode === 'late' ? 0 : booked + more,
@@ -3300,8 +3385,7 @@ window.Plan = (function () {
       }
     }
 
-    var at = Math.max(Store.minutesNow(), DAY_START);
-    made.order = fitAround(byNeeds(order, key), at, fixedFrom(key, at));
+    made.order = fitAround(byNeeds(order, key), made.from, fixedFrom(key, made.from, rulesOnly));
     return made;
   }
 
@@ -3324,7 +3408,7 @@ window.Plan = (function () {
         days: deadline ? daysBetween(key, deadline) : 99, deadline: deadline,
         part: !practising && mins < whole ? Math.round(mins / whole * 100) : 0,
         cut: practising && mins < whole,
-        why: typeof step.why === 'string' ? step.why.slice(0, 40).toLowerCase() : '', ai: true });
+        why: shortWhy(step.why), said: typeof step.why === 'string' ? step.why.slice(0, 160) : '', ai: true });
     });
     var missed = jobs.filter(function (job) { return job.hard && !fits[job.task.id]; });
     missed.reverse().forEach(function (job) {
@@ -3335,10 +3419,28 @@ window.Plan = (function () {
         part: job.mins < leftOf(job.task) ? Math.round(job.mins / leftOf(job.task) * 100) : 0 });
     });
     var later = {};
-    (ai.later || []).forEach(function (l) { if (l && l.id) later[l.id] = String(l.why || '').slice(0, 40); });
+    (ai.later || []).forEach(function (l) { if (l && l.id) later[l.id] = shortWhy(l.why); });
     var waits = jobs.filter(function (job) { return !fits[job.task.id]; })
       .map(function (job) { return Object.assign({}, job, { why: later[job.task.id] || '' }); });
     return { order: order, fits: fits, waits: waits, total: total };
+  }
+
+  /* A reason the length of a glance. Asked for a few words, a model still
+     sometimes writes two thoughts and the deadline; the first thought that is
+     not only the deadline (the row says that already) is kept, in whole
+     words. */
+  var DUE_ONLY = /^(?:(?:over)?due\b.*|today|tomorrow|tonight)$/;
+  function shortWhy(text) {
+    var parts = String(text || '').toLowerCase().replace(/\([^)]*\)/g, ' ')
+      .split(/\s*(?:;|\u2014|\u2013|\s-\s|\.\s)\s*/)
+      .map(function (part) { return part.replace(/\s+/g, ' ').trim().replace(/[.,:!?]+$/, ''); })
+      .filter(Boolean);
+    var pick = parts.filter(function (part) { return !(DUE_ONLY.test(part) && part.split(' ').length <= 4); })[0] || parts[0] || '';
+    if (pick.length > 34) {
+      var cut = pick.slice(0, 34);
+      pick = cut.slice(0, Math.max(cut.lastIndexOf(' '), 18)).replace(/[\s,;]+$/, '') + '\u2026';
+    }
+    return pick;
   }
 
   /* Nothing before what it needs: the reading goes ahead of the quiz it is
@@ -3368,14 +3470,16 @@ window.Plan = (function () {
   function aiInput(about) {
     var key = Store.dayKey();
     var base = tonight(true);
-    var at = Math.max(Store.minutesNow(), DAY_START);
+    var at = base.from;
     var tasks = [], seen = {};
     function add(task, practice) {
       if (seen[task.id] || tasks.length >= 40) return;
       seen[task.id] = true;
       var tag = Store.tagsOf(task)[0];
+      // a daily drill is practice, not something "due today" -- told that, it
+      // went ahead of homework due tomorrow
       tasks.push({ id: task.id, title: task.title, tag: tag ? tag.name : null,
-        due: Store.dueFor(task, key) || null, left: leftOf(task), practice: !!practice,
+        due: practice && !task.due ? null : Store.dueFor(task, key) || null, left: leftOf(task), practice: !!practice,
         needs: Store.needsOf(task, key).map(function (t) { return t.id; }),
         rank: typeof task.rank === 'number' ? task.rank : null });
     }
@@ -3393,13 +3497,13 @@ window.Plan = (function () {
     var days = [];
     for (var n = 0; n < 7; n++) {
       var day = addDays(key, n);
-      var from = n ? startOf(day) : at;
+      var from = n ? startOf(day) : at;   // today: from when tonight starts
       days.push({
         day: day,
         weekday: new Date(day + 'T12:00').toLocaleDateString('en', { weekday: 'long' }).toLowerCase(),
         free: n ? freeOn(day) : base.free,
         practice: n ? practiceOn(day) : base.practice,
-        busy: fixedFrom(day, from).filter(function (b) { return b.start < DAY_END; }).map(function (b) {
+        busy: fixedFrom(day, from, true).filter(function (b) { return b.start < DAY_END; }).map(function (b) {
           return { title: b.title || 'busy', start: hhmm(b.start % (24 * 60)), mins: b.end - b.start };
         })
       });
@@ -3412,10 +3516,11 @@ window.Plan = (function () {
       tomorrow: Store.dayKey(next),
       days: days,
       weekday: new Date(key + 'T12:00').toLocaleDateString('en', { weekday: 'long' }).toLowerCase(),
-      now: hhmm(at % (24 * 60)),
+      now: hhmm(Math.max(Store.minutesNow(), DAY_START) % (24 * 60)),
+      start: hhmm(at % (24 * 60)),
       bed: hhmm(DAY_END % (24 * 60)),
       free: base.free,
-      events: fixedFrom(key, at).filter(function (b) { return b.start < DAY_END; }).map(function (b) {
+      events: fixedFrom(key, at, true).filter(function (b) { return b.start < DAY_END; }).map(function (b) {
         return { title: b.title || 'busy', start: hhmm(b.start % (24 * 60)), mins: b.end - b.start };
       }),
       tasks: tasks,
@@ -3431,7 +3536,7 @@ window.Plan = (function () {
   function planList(plan) {
     var box = node('div', 'aim-plan');
     var key = Store.dayKey();
-    var at = Math.max(Store.minutesNow(), DAY_START);
+    var at = plan.from;
     var busy = fixedFrom(key, at);
 
     function open(task) {
@@ -3459,6 +3564,7 @@ window.Plan = (function () {
       else if (step.days === 1) why = 'due tomorrow';
       else why = 'due ' + dueLabel(step.deadline);
       row.appendChild(node('span', 'plan-why', why));
+      row.title = step.said && step.said.toLowerCase() !== why ? step.task.title + ' \u2014 ' + step.said : 'Open it';
       row.appendChild(node('span', 'plan-mins',
         step.kind === 'practice' && step.cut ? spanLabel(step.mins) + ' of ' + spanLabel(step.whole)
         : step.part ? spanLabel(step.mins) + ' \u00b7 ' + step.part + '%'
@@ -3477,7 +3583,7 @@ window.Plan = (function () {
       var row = node('div', 'plan-line is-fixed');
       row.appendChild(node('span', 'plan-at', label(b.start % (24 * 60))));
       row.appendChild(node('span', 'plan-name', b.title || 'busy'));
-      row.appendChild(node('span', 'plan-why', b.calendar ? 'calendar' : 'planned'));
+      row.appendChild(node('span', 'plan-why', b.said ? 'you said' : b.calendar ? 'calendar' : 'planned'));
       row.appendChild(node('span', 'plan-mins', spanLabel(b.end - b.start)));
       box.appendChild(row);
     }
@@ -3516,10 +3622,10 @@ window.Plan = (function () {
 
     if (plan.waits.length) {
       box.appendChild(node('p', 'plan-sub', 'can wait till tomorrow'));
+      // how much there is of each, not a slice of an evening it is not having
       plan.waits.forEach(function (job) {
-        box.appendChild(line({ task: job.task, mins: job.mins, kind: 'work', days: job.days, why: job.why,
-          deadline: Store.dueFor(job.task, key), whole: leftOf(job.task),
-          part: job.mins < leftOf(job.task) ? Math.round(job.mins / leftOf(job.task) * 100) : 0 }, null));
+        box.appendChild(line({ task: job.task, mins: leftOf(job.task), kind: 'work', days: job.days, why: job.why,
+          deadline: Store.dueFor(job.task, key), whole: leftOf(job.task), part: 0 }, null));
       });
     }
     return box;
@@ -3745,9 +3851,26 @@ window.Plan = (function () {
       return line;
     }
 
-    if (aim.work) {
-      el.aim.appendChild(bar('homework', aim.work, aim.did.work, aim.overWork,
-        aim.workLeft + (aim.workLeft === 1 ? ' thing' : ' things')));
+    /* With the AI's plan in use, the homework bar is that plan: what it moved
+       to another day is not today's to do, and a bar still counting it said
+       six hours over a plan of three and a half -- and never filled. */
+    var plan = isToday() ? tonight() : null;
+    var workWant = aim.work, workThings = aim.workLeft, heavy = aim.overWork;
+    if (plan && plan.ai) {
+      var planned = 0, things = {};
+      plan.order.forEach(function (step) {
+        if (step.kind !== 'work') return;
+        planned += step.mins;
+        things[step.task.id] = true;
+      });
+      workWant = Math.round((aim.did.work + planned) / 5) * 5;
+      workThings = Object.keys(things).length;
+      heavy = planned > caps.work;
+    }
+
+    if (workWant) {
+      el.aim.appendChild(bar('homework', workWant, aim.did.work, heavy,
+        workThings + (workThings === 1 ? ' thing' : ' things')));
     }
     if (aim.practice) {
       el.aim.appendChild(bar('practice', aim.practice, aim.did.practice, aim.overPractice,
@@ -3757,7 +3880,6 @@ window.Plan = (function () {
     /* Tonight, in one line: how long until bed, and whether what is left
        fits in it. It is the difference between "four hours fifty to do" and
        "four hours fifty to do and two hours to do it in". */
-    var plan = isToday() ? tonight() : null;
     var left = aim.stillWork + aim.stillPractice;
     /* Only when it is news. With time for everything, "8h till bed" in the
        queue's head says all there is to say, and a phone has no room to spend
@@ -3767,7 +3889,7 @@ window.Plan = (function () {
       if (plan.mode === 'late') {
         line.textContent = 'past bedtime \u2014 whatever is left is tomorrow\u2019s';
       } else if (plan.mode === 'crunch') {
-        line.textContent = spanLabel(plan.free) + ' till bed and ' + spanLabel(plan.hardNeed) +
+        line.textContent = roomLabel(plan) + ' and ' + spanLabel(plan.hardNeed) +
           ' due by tomorrow \u2014 nearest deadline first, the rest waits';
       } else if (plan.mode === 'tight') {
         var names = plan.waits.slice(0, 2).map(function (job) { return job.task.title; });
@@ -3777,21 +3899,24 @@ window.Plan = (function () {
         var drills = plan.practiceRoom >= QUICK
           ? ', then ' + spanLabel(plan.practiceRoom) + ' of practice'
           : plan.pressed && plan.practice > 0 ? ', practice waits' : '';
-        line.textContent = spanLabel(plan.free) + ' till bed \u2014 deadlines first' + drills +
+        line.textContent = roomLabel(plan) + ' \u2014 deadlines first' + drills +
           (names.length ? '; ' + list + ' can wait till tomorrow' : '');
       } else {
-        line.textContent = spanLabel(plan.free) + ' till bed \u2014 it all fits' +
+        line.textContent = roomLabel(plan) + ' \u2014 it all fits' +
           (plan.spare >= 15 ? ', with ' + spanLabel(plan.spare) + ' to spare' : '');
       }
       el.aim.appendChild(line);
     }
 
-    if ((aim.overWork || aim.overPractice) && (!plan || plan.mode === 'easy')) {
-      el.aim.appendChild(node('p', 'aim-warn',
-        'more than a day holds \u2014 push something back or accept a late one'));
-    } else if (aim.did.work >= aim.work && aim.did.practice >= aim.practice) {
+    /* It all fits before bed, and it is still a lot: said as both, not as
+       "accept a late one" over a plan with hours to spare. */
+    if ((heavy || aim.overPractice) && (!plan || plan.mode === 'easy')) {
+      el.aim.appendChild(node('p', 'aim-warn', plan
+        ? 'it fits before bed, but it\u2019s more than a comfortable day \u2014 something could wait'
+        : 'more than a comfortable day \u2014 something could wait'));
+    } else if (aim.did.work >= workWant && aim.did.practice >= aim.practice) {
       el.aim.appendChild(node('p', 'aim-clear', plan && plan.free >= PRACTICE_FLOOR
-        ? 'everything today asked for is done \u2014 ' + spanLabel(plan.free) + ' till bed for extra practice'
+        ? 'everything today asked for is done \u2014 ' + roomLabel(plan) + ' for extra practice'
         : 'deadlines are covered \u2014 the rest is yours'));
     }
 

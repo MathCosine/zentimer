@@ -203,7 +203,7 @@ window.Ai = (function () {
   function askPuter(kind, input) {
     if (!window.puter || !puterReady()) return Promise.reject(new Error('connect Puter to use the AI'));
     var brain = AiBrain[kind];
-    var user = JSON.stringify(input);
+    var user = brain.message ? brain.message(input) : JSON.stringify(input);
     return Promise.all([
       settle(chatJson(PUTER_A, brain.system, user, brain.schema, kind)),
       settle(chatJson(PUTER_B, brain.system, user, brain.schema, kind))
@@ -230,7 +230,9 @@ window.Ai = (function () {
       }
       var flip = Math.random() < 0.5;
       var a = flip ? heard[1] : heard[0], b = flip ? heard[0] : heard[1];
-      return chatJson(PUTER_JUDGE, AiBrain.judge.system, JSON.stringify({ request: input, A: a.answer, B: b.answer }),
+      var asking = kind === 'plan' ? { studentSays: AiBrain.studentSays(input), request: input, A: a.answer, B: b.answer }
+        : { request: input, A: a.answer, B: b.answer };
+      return chatJson(PUTER_JUDGE, AiBrain.judge.system, JSON.stringify(asking),
         AiBrain.judge.schema, 'judge').then(function (ruling) {
         meta.judged = true;
         meta.verdict = String(ruling.answer.why || '').slice(0, 160);
@@ -425,6 +427,21 @@ window.Ai = (function () {
     return input;
   }
 
+  /* When it said tonight starts, and when it said you are busy -- read from
+     what you told it, and only ever as times on today's clock. */
+  var HHMM = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+  function clockMins(text) {
+    var m = HHMM.exec(String(text || '').trim());
+    return m ? +m[1] * 60 + +m[2] : null;
+  }
+  function cleanBusy(list) {
+    return (Array.isArray(list) ? list : []).map(function (b) {
+      var from = clockMins(b && b.from), to = clockMins(b && b.to);
+      if (from === null || to === null || to <= from) return null;
+      return { from: from, to: to, what: String((b && b.what) || 'busy').slice(0, 30) };
+    }).filter(Boolean).slice(0, 6);
+  }
+
   function replan(why) {
     if (!usable() || !window.Plan || !Plan.aiInput) return Promise.resolve(null);
     var input = planInput();
@@ -436,6 +453,8 @@ window.Ai = (function () {
       state.plan = {
         day: input.today, at: Date.now(), sig: sig,
         steps: Array.isArray(result.steps) ? result.steps.slice(0, 30) : [],
+        start: clockMins(result.start),
+        busy: cleanBusy(result.busy),
         later: Array.isArray(result.later) ? result.later.slice(0, 30) : [],
         links: Array.isArray(result.links) ? result.links.slice(0, 10) : [],
         week: Array.isArray(result.week) ? result.week.slice(0, 7) : [],
