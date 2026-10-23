@@ -80,19 +80,20 @@ list is tried, and you can change the lists without touching the code.
 
 ## When it plans
 
-It doesn't ask the AI on every change.
+Each plan spends some of the free AI allowance, so it plans **on its own once
+a day**, and otherwise only when asked.
 
-- It waits until nothing has changed for **90 seconds**, so pasting in a
-  week's homework is one request, not twenty.
-- On its own it asks **at most every 30 minutes**. The exception is the first
-  plan of the day.
-- It only asks when something that **matters to tonight or the week**
-  changed: a new task, a deadline or size changing, a "do this first" link, a
-  calendar event this week, your bedtime, or your note about yourself. Ticking something off
-  never triggers a request, because the rest of the plan still holds.
-- It also asks if the evening has slid so far that what's left of the plan
-  no longer fits before bed.
-- **↻** next to the plan's note asks right away.
+- **The morning plan:** the first time pip is open from **5am**, once nothing
+  has changed for **90 seconds** (so another device's tasks, or a morning's
+  worth of adding, go into one request). If that one fails, it doesn't try
+  again by itself that day.
+- The plan then holds all day. Anything added after it is fitted in by pip's
+  own rules, and a due-tomorrow task the plan doesn't mention still goes
+  first.
+- When something that matters has changed since (a new task, a deadline or
+  size, a link, a calendar event, bedtime, your note), the **↻** next to the
+  plan's note turns into **update ↻**. It never re-plans by itself.
+- **↻** asks right away.
 - **tell it** next to the plan's note is for something true only for now --
   "soccer till 7", "sick this week, go easy". Pick **just today** or **this
   week** (the next seven days), and it plans again a few seconds later with

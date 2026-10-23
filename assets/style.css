@@ -3284,6 +3284,17 @@ button:not(:disabled) { -webkit-tap-highlight-color: transparent; }
 .ai-again:hover { transform: rotate(-90deg); }
 .ai-again:active { transform: rotate(-90deg) scale(0.9); }
 .ai-again:disabled { opacity: 0.4; cursor: default; }
+/* something changed since the plan: worth pressing, and saying so in words */
+.ai-again.is-stale {
+  width: auto;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+.ai-again.is-stale:hover, .ai-again.is-stale:active { transform: scale(0.96); }
 
 /* telling it something about today or this week */
 .ai-tell-btn {

@@ -15,9 +15,8 @@ window.Ai = (function () {
   'use strict';
 
   var KEY = 'pip.ai.v1';
-  var SETTLE = 90 * 1000;            // quiet this long after the last change before asking
-  var GAP = 30 * 60 * 1000;          // and on its own, never more often than this
-  var STALE_PLAN = 8 * 3600 * 1000;  // a plan from this morning is not tonight's
+  var SETTLE = 90 * 1000;            // quiet this long before the morning's plan is asked for
+  var MORNING = 5 * 60;              // on its own, once a day, from five in the morning
 
   /* Puter: two families, so their mistakes are not the same mistakes, and a
      small quick model to judge between them. Each a list -- when one is
@@ -33,7 +32,8 @@ window.Ai = (function () {
     provider: saved.provider === 'relay' ? 'relay' : 'puter',
     linked: !!saved.linked,          // Puter was connected on this device, so load it at start
     plan: saved.plan || null,        // { day, at, sig, steps, later, links, note, used, judged }
-    asked: saved.asked || 0,         // when it last asked on its own
+    asked: saved.asked || 0,         // when it last asked
+    autoDay: saved.autoDay || '',    // the day it last asked on its own: once a day, no more
     declined: saved.declined || {}   // links you said no to: 'first>then'
   };
   var about = '';                    // what you told it about your life right now (synced)
@@ -46,7 +46,7 @@ window.Ai = (function () {
   function keep() {
     try {
       localStorage.setItem(KEY, JSON.stringify({ on: state.on, provider: state.provider, linked: state.linked,
-        plan: state.plan, asked: state.asked, declined: state.declined }));
+        plan: state.plan, asked: state.asked, autoDay: state.autoDay, declined: state.declined }));
     } catch (e) { /* private mode */ }
   }
   function tell() { listeners.forEach(function (fn) { try { fn(); } catch (e) {} }); }
@@ -408,12 +408,23 @@ window.Ai = (function () {
     return b[2].some(function (t) { return !before[t]; });
   }
 
-  /* The plan for today, if there is one worth using. */
+  /* Today's plan: the morning's, or the last one you asked for. It holds
+     all day -- what changes after it is the rules' to fit in, until you ask
+     again. */
   function planFor(key) {
     var plan = state.plan;
     if (!state.on || !plan || plan.day !== key) return null;
-    if (Date.now() - plan.at > STALE_PLAN) return null;
     return plan;
+  }
+
+  /* Has anything that matters changed since today's plan was made? Said, so
+     ↻ can say it is worth pressing -- never acted on by itself. */
+  function stale() {
+    if (!usable() || !window.Plan || !Plan.aiInput) return false;
+    var plan = planFor(Store.dayKey());
+    if (!plan) return false;
+    var input = planInput();
+    return !!input && changedSince(plan.sig, signature(input));
   }
 
   /* What the planner hands over, with what you said about today and this week
@@ -473,50 +484,37 @@ window.Ai = (function () {
     });
   }
 
-  /* Called whenever anything changes, and once a minute. It only arms a
-     timer; the asking happens once things have been quiet for a while. */
+  /* On its own it plans once a day: the first time pip is open from five in
+     the morning, once things have been quiet for a minute and a half (another
+     device's tasks arriving, a morning's worth of adding). Every other plan
+     is one you asked for -- ↻, or telling it something -- because each one
+     spends your free allowance. Called whenever anything changes, and once a
+     minute; it only ever arms that one timer. */
   function consider() {
     if (!usable() || !window.Plan || !Plan.aiInput) return;
+    var key = Store.dayKey();
+    if (planFor(key) || state.autoDay === key || Store.minutesNow() < MORNING) {
+      clearTimeout(settleTimer); settleTimer = 0; pendingSig = null;
+      return;
+    }
     var input = planInput();
-    if (!input) return;
-    var plan = planFor(input.today);
+    if (!input) return;                                    // nothing to plan yet
     var sig = signature(input);
-    var now = Date.now();
-    var due;
-    if (!plan) due = true;                                   // nothing for tonight yet
-    else due = changedSince(plan.sig, sig);
-    // the evening slid: what it planned no longer fits the time that is left
-    if (!due && plan && input.free + 20 < plannedMins(plan) && now - plan.at > GAP) due = true;
-    if (!due) { clearTimeout(settleTimer); settleTimer = 0; pendingSig = null; return; }
     // already waiting on exactly this: the clock moving on is not a change
     if (settleTimer && sig === pendingSig) return;
-
     pendingSig = sig;
     clearTimeout(settleTimer);
-    var wait = SETTLE;
-    // on its own, at most every half hour -- except the first plan of the day
-    if (plan && now - state.asked < GAP) wait = Math.max(wait, GAP - (now - state.asked));
     settleTimer = setTimeout(function () {
       settleTimer = 0;
       pendingSig = null;
-      if (status.busy) return;
+      var today = Store.dayKey();
+      if (status.busy || planFor(today) || state.autoDay === today) return;
+      // once, whether or not it works: a failure is not a reason to spend more
+      state.autoDay = today;
       state.asked = Date.now();
       keep();
-      replan('changed');
-    }, wait);
-  }
-
-  /* What is still ahead in the plan, counted the way the planner will use
-     it: each task once, never for more than is left of it. */
-  function plannedMins(plan) {
-    var seen = {};
-    return plan.steps.reduce(function (sum, s) {
-      var task = Store.taskById(s && s.id);
-      if (!task || seen[task.id] || Store.isDone(task)) return sum;
-      seen[task.id] = true;
-      var left = Math.max(5, Math.round((task.mins || 30) * (100 - (task.progress || 0)) / 100));
-      return sum + Math.min(Number(s.mins) || 0, left);
-    }, 0);
+      replan('morning');
+    }, SETTLE);
   }
 
   /* "Plan it again" -- you asked, so it goes now, quiet or not. */
@@ -704,6 +702,7 @@ window.Ai = (function () {
     accept: accept,
     decline: decline,
     // for tests: the timing rules, without waiting for them
-    _rules: { SETTLE: SETTLE, GAP: GAP, changedSince: changedSince, signature: signature }
+    stale: stale,
+    _rules: { SETTLE: SETTLE, MORNING: MORNING, changedSince: changedSince, signature: signature }
   };
 })();

@@ -3995,7 +3995,7 @@ window.Plan = (function () {
     var words = thinking ? 'thinking about tonight\u2026'
       : plan.ai ? (plan.ai.note || 'tonight, planned with AI')
       : said.error ? said.error + ' \u2014 using pip\u2019s own plan'
-      : 'pip\u2019s own plan for now';
+      : 'pip\u2019s own plan \u2014 \u21bb asks the AI';
     row.appendChild(node('span', 'ai-words', words));
     if (plan.ai && !thinking) {
       row.title = 'Planned with AI ' + agoLabel(plan.ai.at) + (plan.ai.judged ? ' \u2014 two answers compared' : '');
@@ -4011,11 +4011,14 @@ window.Plan = (function () {
       if (box) box.focus();
     });
     row.appendChild(tellIt);
-    var again = node('button', 'ai-again', '\u21bb');
+    /* It plans on its own once, in the morning; after that it is yours to
+       ask. When something has changed since, the button says so. */
+    var stale = !thinking && plan.ai && Ai.stale();
+    var again = node('button', 'ai-again' + (stale ? ' is-stale' : ''), stale ? 'update \u21bb' : '\u21bb');
     again.type = 'button';
     again.disabled = thinking;
-    again.title = 'Plan tonight again with AI';
-    again.setAttribute('aria-label', 'Plan tonight again with AI');
+    again.title = stale ? 'Things changed since this plan \u2014 plan again with AI' : 'Plan tonight again with AI';
+    again.setAttribute('aria-label', again.title);
     again.addEventListener('click', function () { Ai.now(); });
     row.appendChild(again);
     return row;

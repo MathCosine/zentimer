@@ -286,7 +286,7 @@ window.Panel = (function () {
     box.appendChild(node('small', 'set-note ai-said', said.busy ? 'thinking\u2026'
       : said.error ? said.error
       : plan ? 'tonight and the week were planned with AI' + (plan.judged ? ', two answers compared' : '')
-      : 'it plans once things have been quiet for a minute or two'));
+      : 'on its own once a day, from 5am \u2014 otherwise when you press \u21bb or tell it something'));
 
     box.appendChild(node('p', 'set-note', Ai.provider() === 'puter'
       ? 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events, the note above and anything you told it for today or this week \u2014 to Puter, which passes it to the AI models (Google\u2019s Gemini and OpenAI\u2019s GPT). Not your email, not anything else.'

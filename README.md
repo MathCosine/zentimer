@@ -40,9 +40,9 @@ between them.
 - **Tonight's plan** is written by the AI from your tasks, deadlines, calendar, bedtime and
   "about you, right now" in settings. Every step is checked: made-up tasks are dropped,
   nothing comes before what it needs, and anything due tomorrow goes in even if it was left
-  out. It asks only after a change that matters, once things have been quiet for 90
-  seconds, and at most every half hour on its own. Whenever it can't answer, the rule-based
-  planner takes over, as before.
+  out. On its own it plans once a day, the first time pip is open from 5am; after that only
+  when you press ↻ (which says **update** once something has changed) or tell it something.
+  Whenever it can't answer, the rule-based planner takes over, as before.
 - **The week.** **week** in the day row shows the next seven days: how much homework
   each holds against the time it has after school and around your calendar, big work
   spread out, a day that is too full marked, and the AI's note on what it moved.

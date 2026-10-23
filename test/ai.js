@@ -164,8 +164,9 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
   await p.click('.ai-no'); await p.clock.runFor(300);
   check('saying no puts it away for good', await p.evaluate(() => document.querySelectorAll('.ai-link').length), 0);
 
-  console.log('\n--- when it asks again ---');
+  console.log('\n--- on its own once, in the morning; otherwise when you ask ---');
   const planCount = async () => (await asked()).filter(a => a.kind === 'plan').length;
+  const again = () => p.evaluate(() => { const b = document.querySelector('.ai-again'); return [b.textContent, b.classList.contains('is-stale')]; });
   await p.evaluate(() => { const t = Store.tasks().find(t => /Problem/.test(t.title)); Store.toggleDone(t.id); });
   await p.clock.runFor(120 * 1000);
   check('ticking something off is not a reason to ask', await planCount(), 1);
@@ -173,19 +174,26 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
     await p.evaluate(n => Store.addTask({ title: 'LATIN Sentences ' + n, due: Store.dayKey(new Date(Date.now() + 3 * 864e5)), mins: 20 }), i);
     await p.clock.runFor(20 * 1000);
   }
-  check('adding five things in a row does not ask five times', await planCount(), 1);
   await p.clock.runFor(3 * 60 * 1000);
-  check('nor once they settle, inside half an hour of the last time', await planCount(), 1);
   // long stretches jump the clock rather than living through every tick of it
-  await p.clock.fastForward(30 * 60 * 1000); await p.clock.runFor(2000);
-  check('after half an hour, once', await planCount(), 2);
+  for (let i = 0; i < 4; i++) { await p.clock.fastForward(30 * 60 * 1000); await p.clock.runFor(1000); }
+  check('new tasks, and two hours on: it does not ask by itself', await planCount(), 1);
+  check('↻ says the plan is out of date instead', await again(), ['update \u21bb', true]);
+  await p.click('.ai-again'); await p.clock.runFor(800);
+  check('pressing it asks right away', await planCount(), 2);
   check('and it was told about the new ones', (await asked()).filter(a => a.kind === 'plan').slice(-1)[0].input.tasks
     .filter(t => /LATIN/.test(t.title)).length, 5);
-  for (let i = 0; i < 4; i++) { await p.clock.fastForward(10 * 60 * 1000); await p.clock.runFor(1000); }
-  check('nothing new: it does not ask again', await planCount(), 2);
+  check('then ↻ is just ↻ again', await again(), ['\u21bb', false]);
 
-  await p.click('.ai-again'); await p.clock.runFor(800);
-  check('"plan it again" asks right away', await planCount(), 3);
+  const until = h => p.evaluate(h => { const d = new Date(); d.setDate(d.getDate() + (d.getHours() >= h ? 1 : 0)); d.setHours(h, 0, 0, 0); return d - Date.now(); }, h);
+  await p.clock.fastForward(await until(4)); await p.clock.runFor(3 * 60 * 1000);
+  check('the next day, not before five in the morning', await planCount(), 2);
+  await p.clock.fastForward(await until(5)); await p.clock.runFor(95 * 1000);
+  check('from five, once', await planCount(), 3);
+  for (let i = 0; i < 6; i++) { await p.clock.fastForward(30 * 60 * 1000); await p.clock.runFor(1000); }
+  await p.evaluate(() => Store.addTask({ title: 'BIO Lab notes', due: Store.dayKey(new Date(Date.now() + 2 * 864e5)), mins: 30 }));
+  await p.clock.runFor(3 * 60 * 1000);
+  check('and only once, whatever happens later that day', await planCount(), 3);
 
   console.log('\n--- when it cannot ---');
   await post('/__ai', { parse: { status: 429, error: 'that is all the AI for today -- it comes back tomorrow' },
