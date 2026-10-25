@@ -1932,7 +1932,8 @@ window.Plan = (function () {
         Motion.toast(stuck.text, stuck.fix === 'connect' ? { label: 'connect', run: function () {
           // a click, so Puter's sign-in window is allowed; then on with what you asked
           Ai.connect().then(function () { askAi(text, then); }, function (err) { Motion.toast(err.message); });
-        } } : stuck.fix === 'signin' ? { label: 'sign in', run: function () { location.href = '../account/#signin'; } } : null,
+        } } : stuck.fix === 'signin' ? { label: 'sign in', run: function () { location.href = '../account/#signin'; } }
+          : stuck.fix === 'settings' ? { label: 'settings', run: openAiSettings } : null,
         { ms: 9000 });
       }
       return;
@@ -3926,7 +3927,7 @@ window.Plan = (function () {
       if (told) el.aim.appendChild(told);
       if (ui.aiTell) el.aim.appendChild(aiTell());
       Ai.suggestions().slice(0, 2).forEach(function (link) { el.aim.appendChild(aiLink(link)); });
-    } else if (plan && window.Ai && Ai.on() && Ai.provider() === 'puter' && !ui.aiNudged) {
+    } else if (plan && window.Ai && Ai.on() && Ai.provider() !== 'relay' && !ui.aiNudged) {
       el.aim.appendChild(aiInvite());
     }
 
@@ -4111,6 +4112,22 @@ window.Plan = (function () {
     row.appendChild(node('span', 'ai-words', 'let the AI plan tonight and your week'));
     var go = node('button', 'ai-yes', 'connect');
     go.type = 'button';
+    if (Ai.provider() === 'groq') {
+      go.textContent = 'add key';
+      go.title = 'Paste a free Groq key in settings';
+      go.addEventListener('click', openAiSettings);
+    } else wirePuter(go);
+    var no = node('button', 'ai-no', '\u00d7');
+    no.type = 'button';
+    no.setAttribute('aria-label', 'Not now');
+    no.addEventListener('click', function () { ui.aiNudged = true; render(); });
+    row.appendChild(go);
+    row.appendChild(no);
+    return row;
+  }
+
+  function wirePuter(go) {
+    go.type = 'button';
     go.title = 'A free Puter account, in a small window';
     // Puter's script is fetched only once you reach for this, so the click
     // that follows can open its sign-in window
@@ -4120,13 +4137,16 @@ window.Plan = (function () {
     go.addEventListener('click', function () {
       Ai.connect().then(function () { render(); }, function (err) { if (window.Motion) Motion.toast(err.message); });
     });
-    var no = node('button', 'ai-no', '\u00d7');
-    no.type = 'button';
-    no.setAttribute('aria-label', 'Not now');
-    no.addEventListener('click', function () { ui.aiNudged = true; render(); });
-    row.appendChild(go);
-    row.appendChild(no);
-    return row;
+  }
+
+  // settings, scrolled to the AI
+  function openAiSettings() {
+    var open = document.getElementById('settingsBtn');
+    if (open) open.click();
+    setTimeout(function () {
+      var key = document.querySelector('.ai-groq-key');
+      if (key) { key.scrollIntoView({ block: 'center' }); key.focus(); }
+    }, 350);
   }
 
   function agoLabel(at) {

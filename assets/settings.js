@@ -230,9 +230,10 @@ window.Panel = (function () {
     if (!Ai.on()) return;
 
     row(box, 'runs on', choice(
-      [{ label: 'Puter (free)', value: 'puter' }, { label: 'my server', value: 'relay' }],
+      [{ label: 'Puter (free)', value: 'puter' }, { label: 'Groq (my key)', value: 'groq' }, { label: 'my server', value: 'relay' }],
       Ai.provider(), function (v) { Ai.setProvider(v); draw(); }),
       Ai.provider() === 'puter' ? 'your own free Puter account \u2014 no keys, nothing to set up'
+        : Ai.provider() === 'groq' ? 'a free key from Groq, kept on this device only'
         : 'Groq + Gemini through your Supabase project (docs/AI.md)');
 
     if (Ai.provider() === 'puter') {
@@ -258,11 +259,13 @@ window.Panel = (function () {
       line.appendChild(go);
       box.appendChild(line);
       if (Ai.connected()) Ai.puterName().then(function (name) { if (name) who.textContent = 'connected as ' + name; });
+    } else if (Ai.provider() === 'groq') {
+      drawGroq(box);
     } else {
       var signedIn = window.Sync && Sync.signedIn && Sync.signedIn();
       if (!signedIn) {
         box.appendChild(node('p', 'set-note',
-          'sign in first (the person button, top right) \u2014 your server\u2019s AI is for signed-in people'));
+          'sign in first (the gear, top right) \u2014 your server\u2019s AI is for signed-in people'));
       }
     }
 
@@ -290,7 +293,65 @@ window.Panel = (function () {
 
     box.appendChild(node('p', 'set-note', Ai.provider() === 'puter'
       ? 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events, the note above and anything you told it for today or this week \u2014 to Puter, which passes it to the AI models (Google\u2019s Gemini and OpenAI\u2019s GPT). Not your email, not anything else.'
+      : Ai.provider() === 'groq'
+      ? 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events, the note above and anything you told it for today or this week \u2014 straight to Groq, with your key. Not your email, not anything else. The key itself stays in this browser.'
       : 'What it is sent: your task names, deadlines and sizes, the week\u2019s calendar events, the note above and anything you told it for today or this week \u2014 to Groq and Google\u2019s Gemini, through your own server. Not your email, not anything else.'));
+  }
+
+  /* Your own Groq key: pasted once, checked with Groq before it is kept, and
+     after that shown only by its last four characters. */
+  function drawGroq(box) {
+    if (Ai.groqHint()) {
+      var line = node('div', 'set-row ai-groq');
+      var says = node('div', 'set-label');
+      says.appendChild(node('span', null, 'key ' + Ai.groqHint() + ' saved'));
+      says.appendChild(node('small', null, 'on this device only \u2014 another device needs it pasted there too'));
+      line.appendChild(says);
+      var drop = node('button', 'ghost', 'remove');
+      drop.type = 'button';
+      drop.addEventListener('click', function () { Ai.clearGroqKey(); draw(); });
+      line.appendChild(drop);
+      box.appendChild(line);
+      return;
+    }
+    var add = node('div', 'cal-add ai-groq-add');
+    var input = node('input', 'set-text cal-link ai-groq-key');
+    input.type = 'password';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.placeholder = 'paste your Groq key (gsk_\u2026)';
+    input.dataset.focusKey = 'groq-key';
+    input.setAttribute('aria-label', 'Groq API key');
+    var go = node('button', 'set-add wide', 'save');
+    go.type = 'button';
+    var said = node('p', 'set-note cal-said', '');
+    function save() {
+      if (!input.value.trim()) { input.focus(); return; }
+      go.textContent = 'checking\u2026';
+      said.textContent = '';
+      Ai.setGroqKey(input.value).then(function () {
+        if (window.Motion) Motion.toast('Groq key works \u2014 the AI runs on it now', null, { tone: 'happy' });
+        draw();
+      }, function (err) {
+        go.textContent = 'save';
+        said.textContent = err.message;
+      });
+    }
+    go.addEventListener('click', save);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); });
+    add.appendChild(input);
+    add.appendChild(go);
+    box.appendChild(add);
+    box.appendChild(said);
+    var how = node('p', 'set-note');
+    how.appendChild(document.createTextNode('Free: sign in at '));
+    var link = node('a', null, 'console.groq.com/keys');
+    link.href = 'https://console.groq.com/keys';
+    link.target = '_blank';
+    link.rel = 'noopener';
+    how.appendChild(link);
+    how.appendChild(document.createTextNode(', press \u201cCreate API Key\u201d, and paste it here.'));
+    box.appendChild(how);
   }
 
   function drawLoad() {

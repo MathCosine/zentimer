@@ -40,6 +40,24 @@ a free monthly AI allowance, and pays nothing. Neither do you.
 - If someone's free allowance runs out for the month, pip says so and plans
   with its own rules until it comes back.
 
+## Or: your own Groq key (when Puter's allowance runs out)
+
+Settings → AI → runs on **Groq (my key)**. Make a free key at
+[console.groq.com/keys](https://console.groq.com/keys) ("Create API Key") and
+paste it in. pip checks it with Groq before keeping it.
+
+- The key is kept **in that browser only**. It is never synced to pip's
+  database or to another device, so each device needs it pasted once. Settings
+  shows only its last four characters; **remove** deletes it.
+- Requests go **straight from the page to Groq** (Groq allows that), with
+  nothing in between.
+- It works the same way as Puter: two models answer (OpenAI's gpt-oss-120b and
+  Meta's Llama 3.3 70B, or whichever of a short list the key can see), and a
+  small one judges when they disagree. A model that won't take the strict
+  answer format is asked again without it.
+- Groq's free tier has per-minute and per-day limits. When the daily one is
+  used up, pip says so and plans with its own rules until it resets.
+
 ## Or: your own server (Groq + Gemini)
 
 Settings → AI → **runs on: my server**. The keys live as secrets in a

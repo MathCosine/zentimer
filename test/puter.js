@@ -143,7 +143,7 @@ const day = n => { const d = new Date(AT); d.setDate(d.getDate() + n);
   await post('/__puter', { broke: 'Insufficient funds: upgrade to keep using AI' });
   await p.click('.ai-again'); await p.clock.runFor(1500);
   check('it says the month’s allowance is used up', await p.evaluate(() => {
-    const s = Ai.status(); return s.error; }), 'your free Puter AI allowance is used up for this month');
+    const s = Ai.status(); return s.error; }), 'your free Puter AI allowance is used up for this month \u2014 a free Groq key in settings \u2192 AI works instead');
   check('and the last good plan stays', await p.evaluate(() => document.querySelector('.ai-line').classList.contains('is-ai')), true);
   await post('/__puter', {});
 

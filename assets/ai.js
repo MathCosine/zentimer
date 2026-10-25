@@ -29,7 +29,7 @@ window.Ai = (function () {
   var saved = read() || {};
   var state = {
     on: saved.on !== false,
-    provider: saved.provider === 'relay' ? 'relay' : 'puter',
+    provider: saved.provider === 'relay' || saved.provider === 'groq' ? saved.provider : 'puter',
     linked: !!saved.linked,          // Puter was connected on this device, so load it at start
     plan: saved.plan || null,        // { day, at, sig, steps, later, links, note, used, judged }
     asked: saved.asked || 0,         // when it last asked
@@ -127,6 +127,7 @@ window.Ai = (function () {
      relay, signed in to pip (the relay is for signed-in people). */
   function usable() {
     if (!state.on || navigator.onLine === false) return false;
+    if (state.provider === 'groq') return !!groqKey();
     return state.provider === 'puter' ? puterReady() : signedIn() && !!client();
   }
 
@@ -134,6 +135,7 @@ window.Ai = (function () {
   function blocker() {
     if (!state.on) return { text: 'the AI is switched off in settings' };
     if (navigator.onLine === false) return { text: 'the AI needs the internet' };
+    if (state.provider === 'groq') return { text: 'add your free Groq key in settings \u2192 AI', fix: 'settings' };
     if (state.provider === 'puter') {
       loadPuter().catch(function () {});
       return { text: 'the AI runs on a free Puter account \u2014 connect it once', fix: 'connect' };
@@ -144,13 +146,15 @@ window.Ai = (function () {
   /* ---------- asking ---------- */
 
   function ask(kind, input) {
-    return state.provider === 'puter' ? askPuter(kind, input) : askRelay(kind, input);
+    return state.provider === 'puter' ? askPuter(kind, input)
+      : state.provider === 'groq' ? askGroq(kind, input)
+      : askRelay(kind, input);
   }
 
   function puterTrouble(err) {
     var why = String((err && (err.message || (err.error && (err.error.message || err.error)) || err.code)) || err || '');
     if (/insufficient|funds|credit|allowance|quota|402|payment|upgrade/i.test(why)) {
-      return new Error('your free Puter AI allowance is used up for this month');
+      return new Error('your free Puter AI allowance is used up for this month \u2014 a free Groq key in settings \u2192 AI works instead');
     }
     if (/401|unauthori|not signed|sign in|auth/i.test(why)) return new Error('connect Puter again to use the AI');
     if (/network|fetch|failed to|timeout/i.test(why)) return new Error('Puter could not be reached just now');
@@ -200,17 +204,21 @@ window.Ai = (function () {
     return promise.then(function (v) { return { ok: true, value: v }; }, function (e) { return { ok: false, error: e }; });
   }
 
-  function askPuter(kind, input) {
-    if (!window.puter || !puterReady()) return Promise.reject(new Error('connect Puter to use the AI'));
+  /* Two models answer at once; each answer is checked against what pip
+     actually has, and when both are usable, really different and neither
+     clearly worse, a third reads both -- labelled A and B in a random order --
+     and picks. The same for Puter and for your Groq key; only who is asked
+     differs. */
+  function askTwo(kind, input, askA, askB, askJudge, names, explain) {
     var brain = AiBrain[kind];
     var user = brain.message ? brain.message(input) : JSON.stringify(input);
     return Promise.all([
-      settle(chatJson(PUTER_A, brain.system, user, brain.schema, kind)),
-      settle(chatJson(PUTER_B, brain.system, user, brain.schema, kind))
+      settle(askA(brain.system, user, brain.schema, kind)),
+      settle(askB(brain.system, user, brain.schema, kind))
     ]).then(function (asked) {
       var heard = [], trouble = {};
       asked.forEach(function (got, i) {
-        var who = i ? 'gpt' : 'gemini';
+        var who = names[i];
         if (!got.ok) { trouble[who] = String((got.error && got.error.message) || got.error).slice(0, 160); return; }
         var score = brain.score(got.value.answer, input);
         if (score === null || score === undefined) { trouble[who] = 'answer did not check out'; return; }
@@ -218,27 +226,177 @@ window.Ai = (function () {
       });
       if (!heard.length) {
         var first = asked.filter(function (a) { return !a.ok; })[0];
-        throw first ? puterTrouble(first.error) : new Error('neither AI gave a usable answer');
+        throw first ? explain(first.error) : new Error('neither AI gave a usable answer');
       }
       heard.sort(function (a, b) { return b.score - a.score; });
       var meta = { used: heard[0].who, judged: false, verdict: '', heard: heard.map(function (h) { return h.who; }), trouble: trouble };
       var done = function (pick) { meta.used = pick.who; return { result: pick.answer, meta: meta }; };
-      /* Both usable, really different, and neither clearly worse: a third
-         reads both, labelled A and B in a random order. */
       if (heard.length < 2 || AiBrain.sameOrder(heard[0].answer, heard[1].answer) || heard[0].score - heard[1].score >= 25) {
         return done(heard[0]);
       }
       var flip = Math.random() < 0.5;
       var a = flip ? heard[1] : heard[0], b = flip ? heard[0] : heard[1];
-      var asking = kind === 'plan' ? { studentSays: AiBrain.studentSays(input), request: input, A: a.answer, B: b.answer }
-        : { request: input, A: a.answer, B: b.answer };
-      return chatJson(PUTER_JUDGE, AiBrain.judge.system, JSON.stringify(asking),
-        AiBrain.judge.schema, 'judge').then(function (ruling) {
+      // pip's own plan is left out of what the judge reads: it only has to compare
+      var request = kind === 'plan' ? Object.assign({}, input, { baseline: undefined }) : input;
+      var asking = kind === 'plan' ? { studentSays: AiBrain.studentSays(input), request: request, A: a.answer, B: b.answer }
+        : { request: request, A: a.answer, B: b.answer };
+      return askJudge(AiBrain.judge.system, JSON.stringify(asking), AiBrain.judge.schema, 'judge').then(function (ruling) {
         meta.judged = true;
         meta.verdict = String(ruling.answer.why || '').slice(0, 160);
         return done(ruling.answer.pick === 'B' ? b : a);
       }, function () { return done(heard[0]); });
     });
+  }
+
+  function askPuter(kind, input) {
+    if (!window.puter || !puterReady()) return Promise.reject(new Error('connect Puter to use the AI'));
+    function family(models) { return function (system, user, schema, name) { return chatJson(models, system, user, schema, name); }; }
+    return askTwo(kind, input, family(PUTER_A), family(PUTER_B), family(PUTER_JUDGE), ['gemini', 'gpt'], puterTrouble);
+  }
+
+  /* ---------- Groq, with your own key ---------- */
+
+  /* A free key from console.groq.com, kept on this device only and sent only
+     to Groq -- never to pip's database, never to another device. Groq takes
+     requests straight from a browser, so nothing sits in between. */
+  var GROQ = 'https://api.groq.com/openai/v1/';
+  var GROQ_STORE = KEY + '.groq';
+  /* Two families again, so their mistakes are not the same mistakes, and a
+     small quick one to judge. Groq retires models now and then: of each
+     list, the ones your key can see are used, in this order, and the next is
+     tried when one fails. */
+  var GROQ_A = ['openai/gpt-oss-120b', 'moonshotai/kimi-k2-instruct-0905', 'moonshotai/kimi-k2-instruct', 'openai/gpt-oss-20b'];
+  var GROQ_B = ['llama-3.3-70b-versatile', 'meta-llama/llama-4-maverick-17b-128e-instruct',
+    'meta-llama/llama-4-scout-17b-16e-instruct', 'qwen/qwen3-32b'];
+  var GROQ_JUDGE = ['openai/gpt-oss-20b', 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile'];
+
+  function groqKey() { try { return localStorage.getItem(GROQ_STORE) || ''; } catch (e) { return ''; } }
+
+  function groqFetch(path, body, key) {
+    var control = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (control) control.abort(); }, 45000);
+    var headers = { authorization: 'Bearer ' + (key || groqKey()) };
+    if (body) headers['content-type'] = 'application/json';
+    return fetch(GROQ + path, {
+      method: body ? 'POST' : 'GET', headers: headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: control ? control.signal : undefined
+    }).then(function (res) {
+      clearTimeout(timer);
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (res.ok) return data;
+        var err = new Error((data && data.error && data.error.message) || 'groq ' + res.status);
+        err.status = res.status;
+        throw err;
+      });
+    }, function () {
+      clearTimeout(timer);
+      var err = new Error('Groq could not be reached');
+      err.status = 0;
+      throw err;
+    });
+  }
+
+  // which models this key can use, asked once a day
+  var groqSeen = null;
+  function groqModels() {
+    if (groqSeen && groqSeen.day === Store.dayKey()) return Promise.resolve(groqSeen.ids);
+    return groqFetch('models').then(function (data) {
+      var ids = (data.data || []).map(function (m) { return m.id; });
+      groqSeen = { day: Store.dayKey(), ids: ids };
+      return ids;
+    }, function (err) {
+      if (err.status === 401) throw err;
+      return null;                                         // not known: try the lists as they are
+    });
+  }
+
+  function groqJson(models, system, user, schema, name) {
+    var tries = [];
+    models.forEach(function (model) { tries.push([model, true], [model, false]); });
+    var at = 0, last = null;
+    function next() {
+      if (at >= tries.length) return Promise.reject(last || new Error('no model answered'));
+      var model = tries[at][0], strict = tries[at][1];
+      at++;
+      var body = {
+        model: model, temperature: 0.3, max_completion_tokens: 3000,
+        messages: [
+          { role: 'system', content: system + '\nThe JSON must match this schema:\n' + JSON.stringify(schema) },
+          { role: 'user', content: user }
+        ],
+        response_format: strict ? { type: 'json_schema', json_schema: { name: name, strict: true, schema: schema } } : { type: 'json_object' }
+      };
+      if (/gpt-oss/.test(model)) body.reasoning_effort = 'low';
+      return groqFetch('chat/completions', body).then(function (data) {
+        var message = data.choices && data.choices[0] && data.choices[0].message;
+        return { model: model, answer: AiBrain.readJson(message ? message.content : '') };
+      }).catch(function (err) {
+        last = err;
+        if (err.status === 401) throw err;                 // the key, not the model
+        // a schema it will not take: the same model again with the schema in
+        // words; anything else: straight on to the next model
+        if (strict && err.status !== 400) at++;
+        return next();
+      });
+    }
+    return next();
+  }
+
+  function groqTrouble(err) {
+    var status = err && err.status, why = String((err && err.message) || '');
+    if (status === 401) return new Error('that Groq key was not accepted \u2014 check it in settings \u2192 AI');
+    if (status === 429) {
+      return new Error(/per day|\(RPD\)|\(TPD\)|daily/i.test(why)
+        ? 'Groq\u2019s free limit for today is used up \u2014 it resets tomorrow'
+        : 'Groq is busy for a minute \u2014 try \u21bb again shortly');
+    }
+    if (status === 0) return new Error('Groq could not be reached just now');
+    return new Error('the AI could not answer just now');
+  }
+
+  function askGroq(kind, input) {
+    if (!groqKey()) return Promise.reject(new Error('add your free Groq key in settings \u2192 AI'));
+    return groqModels().then(function (ids) {
+      var known = function (list) { return ids ? list.filter(function (m) { return ids.indexOf(m) !== -1; }) : list; };
+      var a = known(GROQ_A), b = known(GROQ_B), judge = known(GROQ_JUDGE);
+      // a family Groq no longer has borrows from the other, rather than not answering
+      if (!a.length) a = b.slice(1);
+      if (!b.length) b = a.slice(1);
+      if (!a.length && !b.length) { a = GROQ_A; b = GROQ_B; }
+      if (!judge.length) judge = a.slice(-1);
+      function family(models) { return function (system, user, schema, name) { return groqJson(models, system, user, schema, name); }; }
+      return askTwo(kind, input, family(a), family(b.length ? b : a.slice(1)), family(judge),
+        ['groq ' + (a[0] || '').split('/').pop(), 'groq ' + (b[0] || '').split('/').pop()], groqTrouble);
+    }, function (err) { throw groqTrouble(err); });
+  }
+
+  /* Saved only once Groq has said yes to it, so a typo is caught here and
+     not at the first plan. */
+  function setGroqKey(key) {
+    key = String(key || '').trim();
+    if (!key) return Promise.reject(new Error('paste the key first'));
+    return groqFetch('models', null, key).then(function (data) {
+      try { localStorage.setItem(GROQ_STORE, key); } catch (e) { throw new Error('this browser will not keep it (private mode?)'); }
+      groqSeen = { day: Store.dayKey(), ids: (data.data || []).map(function (m) { return m.id; }) };
+      setProvider('groq');
+      return groqSeen.ids.length;
+    }, function (err) {
+      throw err.status === 401 ? new Error('Groq did not accept that key \u2014 copy it again from console.groq.com/keys')
+        : groqTrouble(err);
+    });
+  }
+
+  function clearGroqKey() {
+    try { localStorage.removeItem(GROQ_STORE); } catch (e) {}
+    groqSeen = null;
+    tell();
+  }
+
+  // the end of it, so settings can show which key without showing the key
+  function groqHint() {
+    var key = groqKey();
+    return key ? '\u2026' + key.slice(-4) : '';
   }
 
   function trouble(error) {
@@ -619,7 +777,7 @@ window.Ai = (function () {
   }
 
   function setProvider(which) {
-    state.provider = which === 'relay' ? 'relay' : 'puter';
+    state.provider = which === 'relay' || which === 'groq' ? which : 'puter';
     keep();
     if (state.provider === 'puter') loadPuter().catch(function () {});
     tell();
@@ -686,6 +844,9 @@ window.Ai = (function () {
     disconnect: disconnect,
     connected: puterReady,
     puterName: puterName,
+    setGroqKey: setGroqKey,
+    clearGroqKey: clearGroqKey,
+    groqHint: groqHint,
     about: function () { return about; },
     setAbout: setAbout,
     notes: function () { return activeNotes().slice(); },
