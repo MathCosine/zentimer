@@ -143,6 +143,10 @@ const post = (path, body) => fetch(DB + path, { method: 'POST', body: JSON.strin
   check('it is kept in the account', ((await post('/__dump')).prefs.find(r => r.user_id === USER) || { data: {} }).data.calendars, [LINK]);
   const two = await device();
   await two.p.clock.runFor(3000);
+  // the calendar is read over a real request, which takes real time, not the page's clock
+  for (let i = 0; i < 20 && !(await calendarBlocks(two.p)).length; i++) {
+    await two.p.clock.runFor(500); await new Promise(r => setTimeout(r, 150));
+  }
   check('a second browser shows the calendar without being told', await calendarBlocks(two.p),
     ['Tutoring 960-1020', 'Robotics club 1140-1200']);
   await two.ctx.close();

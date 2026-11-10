@@ -8,12 +8,12 @@
     clock: $('clock'), clockTime: $('clockTime'), clockSecs: $('clockSecs'), meridiem: $('meridiem'),
     dateLabel: $('dateLabel'), zoneLabel: $('zoneLabel'),
     timerDoing: $('timerDoing'),
-    ring: $('ringProgress'), countdown: $('countdown'), input: $('durationInput'), phase: $('phase'),
+    pot: $('potNow'), sill: $('sill'), countdown: $('countdown'), input: $('durationInput'), phase: $('phase'),
     presets: $('presets'), startPause: $('startPause'), reset: $('reset'),
     minus: $('minus'), plus: $('plus'),
-    pips: $('pips'), stats: $('stats'),
+    stats: $('stats'),
     alarmList: $('alarmList'), alarmAdd: $('alarmAdd'), alarmInput: $('alarmInput'),
-    soundBtn: $('soundBtn'), notifyBtn: $('notifyBtn'), petBtn: $('petBtn'),
+    soundBtn: $('soundBtn'), notifyBtn: $('notifyBtn'), gardenBtn: $('gardenBtn'),
     themeBtn: $('themeBtn'), fullBtn: $('fullBtn'), settingsBtn: $('settingsBtn'),
     ringOverlay: $('ringOverlay'), ringTime: $('ringTime'), ringHeading: $('ringHeading'),
     ringDismiss: $('ringDismiss'),
@@ -30,7 +30,7 @@
   var OLD_KEYS = { state: 'zen.state.v1', stats: 'zen.stats.v1', alarms: 'zen.alarms.v1' };
 
   var settings = {
-    hour12: false, sound: true, notify: false, theme: 'auto', pet: true,
+    hour12: false, sound: true, notify: false, theme: 'auto',
     textSize: 'large',                  // a step up from the browser's own size: small labels were too small
     focusMs: 30 * MIN, breakMs: 10 * MIN,
     presets: [15, 30, 45, 60, 90, 120],
@@ -39,7 +39,10 @@
     capWork: 330, capPractice: 240,     // when a day is asking too much
 
   };
-  var timer = { mode: 'focus', duration: settings.focusMs, remaining: settings.focusMs, endAt: null, status: 'idle' };
+  /* seed: what this session is growing (it decides the plant), and grown: how
+     long it has been focused on, which decides how far it gets */
+  var timer = { mode: 'focus', duration: settings.focusMs, remaining: settings.focusMs, endAt: null, status: 'idle',
+    seed: null, grown: 0 };
   var stats = { day: dayKey(), sessions: 0, focused: 0 };
   var alarms = [];
 
@@ -70,7 +73,8 @@
     write(KEY_STATE, {
       settings: settings, mode: timer.mode,
       duration: timer.duration, remaining: timer.remaining,
-      endAt: timer.endAt, status: timer.status, lastAccrual: lastAccrual
+      endAt: timer.endAt, status: timer.status, lastAccrual: lastAccrual,
+      seed: timer.seed, grown: timer.grown
     });
     write(KEY_STATS, stats);
     write(KEY_ALARMS, alarms);
@@ -192,7 +196,7 @@
     // only time spent focusing counts; breaks are not study
     if (timer.status !== 'running' || timer.mode !== 'focus' || !timer.endAt) { lastAccrual = now; return; }
     var upTo = Math.min(now, timer.endAt);
-    if (upTo > lastAccrual) { rollDay(); stats.focused += upTo - lastAccrual; }
+    if (upTo > lastAccrual) { rollDay(); stats.focused += upTo - lastAccrual; timer.grown += upTo - lastAccrual; }
     lastAccrual = now;
   }
 
@@ -259,10 +263,11 @@
     if (timer.mode === 'focus') {
       working = assignment();
       if (working) working.since = now;
+      // a new seed for a new session; a paused one carries on growing the same plant
+      if (!timer.seed) { timer.seed = 'p' + now.toString(36) + Math.random().toString(36).slice(2, 7); timer.grown = 0; }
     }
     unlockAudio();
     requestWakeLock();
-    if (timer.mode === 'focus') Pet.event('start');
     save(); render();
   }
 
@@ -281,9 +286,13 @@
     if (timer.status === 'running') pause(); else start();
   }
 
-  /* back to a fresh session; during a break this ends the break early */
-  function reset() {
+  /* back to a fresh session; during a break this ends the break early. A
+     session stopped short still grows what it grew, if it was long enough
+     to grow anything. */
+  function reset(quiet) {
     accrue(Date.now());
+    var task = working ? working.title : '';
+    if (timer.mode === 'focus') harvest(task, quiet === true);
     timer.mode = 'focus';
     timer.duration = settings.focusMs;
     timer.remaining = settings.focusMs;
@@ -298,8 +307,11 @@
   function complete(quiet) {
     var finished = timer.mode;
     said = {};
+    if (finished === 'focus') accrue(Date.now());
+    var task = working ? working.title : '';
     bankTime();
     if (finished === 'focus') {
+      harvest(task, quiet);
       rollDay();
       stats.sessions += 1;
       // straight into the break, so the rest is taken rather than skipped
@@ -321,14 +333,29 @@
       chime(finished === 'focus' ? 'focus' : 'break');
       notify(finished === 'focus' ? 'session complete' : 'break over',
              finished === 'focus' ? humanSpan(settings.breakMs) + ' break now' : 'ready when you are');
-      if (finished === 'focus') {
-        Pet.event('complete');
-        setTimeout(function () { Pet.event('breakStart'); }, 3600);
-      } else {
-        Pet.event('breakEnd');
-      }
     }
     save(); render();
+  }
+
+  /* The session's plant goes into the garden, grown as far as the session
+     went -- and if it is the week's fifth, five plants become a tree. */
+  function harvest(task, quiet) {
+    var seed = timer.seed, mins = timer.grown / MIN;
+    timer.seed = null;
+    timer.grown = 0;
+    if (!seed || !window.Garden || !window.Plants) return null;
+    var got = Garden.add({ seed: seed, mins: mins, task: task });
+    if (!got || quiet || !window.Motion) return got;
+    var name = Plants.name(got.plant.kind);
+    if (got.tree) {
+      Motion.confetti();
+      Motion.toast('five plants grew into ' + (/^[aeiou]/.test(Plants.name(got.tree.kind)) ? 'an ' : 'a ') + Plants.name(got.tree.kind),
+        { label: 'see it', run: function () { Garden.open(); } }, { tone: 'happy', ms: 7000 });
+    } else {
+      Motion.toast((/^[aeiou]/.test(name) ? 'an ' : 'a ') + name + ', ' + humanSpan(got.plant.mins * MIN) + ' tall — into your garden',
+        { label: 'garden', run: function () { Garden.open(); } }, { tone: 'happy', ms: 6000 });
+    }
+    return got;
   }
 
   /* ---------- alarms ---------- */
@@ -361,7 +388,6 @@
         changed = true;
         chime('alarm');
         notify('alarm', timeOfDay(alarm.at));
-        Pet.alarm(true);
       } else if ((alarm.calls || 1) < RECALLS && now - (alarm.lastCall || now) >= RECALL_EVERY) {
         alarm.calls = (alarm.calls || 1) + 1;
         alarm.lastCall = now;
@@ -377,7 +403,6 @@
 
   function dismissRinging() {
     alarms = alarms.filter(function (a) { return !a.ringing; });
-    Pet.alarm(false);
     save();
     renderAlarms(Date.now(), true);
     render();
@@ -509,34 +534,31 @@
     paint(el.zoneLabel, 'textContent', label);
   }
 
-  var measuredRing = 0;
-  function ringLength() {
-    if (!measuredRing) {
-      try { measuredRing = el.ring.getTotalLength(); } catch (e) {}
-      if (!measuredRing) measuredRing = 2 * Math.PI * 88;
-    }
-    return measuredRing;
-  }
-
-  /* the arc, painted every frame while running so it tracks the remaining time exactly */
+  /* The plant in the pot: this session's, grown as far as the time focused
+     so far; between sessions, a seed waiting; in a break, the one just grown.
+     Redrawn only when it has actually grown a little, not every frame. */
+  var potKey = '';
   function paintRing(now) {
-    var remaining = timer.status === 'running' ? timer.endAt - now : timer.remaining;
-    var fraction = timer.status === 'done' ? 0
-      : Math.max(0, Math.min(1, remaining / Math.max(1, timer.duration)));
-
-    if (fraction <= 0) {
-      el.ring.style.visibility = 'hidden';       // a round cap would leave a dot at twelve
-      return;
+    if (!el.pot || !window.Plants) return;
+    var kind, seed, g, label;
+    if (timer.mode === 'break') {
+      var last = window.Garden && Garden.last();
+      seed = last ? last.id : 'rest';
+      kind = last ? last.kind : Plants.pick(seed);
+      g = last ? Plants.growthFor(last.mins) : 0;
+      label = last ? 'your ' + Plants.name(kind) + ', grown' : 'an empty pot';
+    } else {
+      seed = timer.seed || 'next';
+      kind = Plants.pick(seed);
+      var focused = timer.grown + (timer.status === 'running' ? Math.max(0, Math.min(now, timer.endAt || now) - lastAccrual) : 0);
+      g = timer.seed ? Plants.growthFor(focused / MIN) : 0;
+      label = timer.seed ? Plants.name(kind) + ', growing' : 'a seed, ready to grow';
     }
-    el.ring.style.visibility = '';
-
-    if (fraction > 0.9995) {
-      el.ring.style.strokeDasharray = 'none';    // whole circle, no seam
-      return;
-    }
-    var length = ringLength();
-    el.ring.style.strokeDasharray = length;
-    el.ring.style.strokeDashoffset = length * (1 - fraction);
+    var key = seed + ':' + kind + ':' + Math.round(g * 250);
+    if (key === potKey) return;
+    potKey = key;
+    el.pot.innerHTML = Plants.svg({ kind: kind, seed: seed, g: g, label: label });
+    el.pot.dataset.kind = kind;
   }
 
   var frame = 0;
@@ -571,7 +593,14 @@
     paint(el.phase, 'textContent', PHASES[timer.mode][timer.status]);
 
     var doing = timer.mode === 'focus' ? (working || assignment()) : null;
-    paint(el.timerDoing, 'textContent', doing ? doing.title : '');
+    var growing = '';
+    if (window.Plants) {
+      var last = window.Garden && Garden.last();
+      growing = timer.mode === 'break' ? (last ? 'your ' + Plants.name(last.kind) + ' is in the garden' : '')
+        : timer.seed ? 'growing ' + (/^[aeiou]/.test(Plants.name(Plants.pick(timer.seed))) ? 'an ' : 'a ') + Plants.name(Plants.pick(timer.seed))
+        : 'a seed, ready to grow';
+    }
+    paint(el.timerDoing, 'textContent', doing ? doing.title : growing);
 
     var labels = { idle: 'start', running: 'pause', paused: 'resume', done: 'again' };
     paint(el.startPause, 'textContent', labels[timer.status]);
@@ -590,16 +619,8 @@
 
     drawPresets();
 
-    Pet.setMode(timer.status === 'running' ? timer.mode : 'idle');
-
-    // pip pipes up at the halfway mark and near the end
-    if (timer.status === 'running' && timer.mode === 'focus' && timer.duration > 4 * MIN) {
-      if (!said.half && remaining <= timer.duration / 2) { said.half = true; Pet.event('halfway'); }
-      if (!said.nearly && remaining <= MIN) { said.nearly = true; Pet.event('nearly'); }
-    }
   }
 
-  var pipKey = '';
 
   function renderStats() {
     rollDay();
@@ -610,17 +631,7 @@
     else text = sessions + ' · ' + humanSpan(stats.focused) + ' focused';
     paint(el.stats, 'textContent', text);
 
-    var running = timer.status === 'running' && timer.mode === 'focus' ? 1 : 0;
-    var total = Math.min(14, stats.sessions) + running;
-    var key = total + ':' + running;    // finishing a session keeps the count but fills the last pip
-    if (key === pipKey) return;
-    pipKey = key;
-    el.pips.textContent = '';
-    for (var i = 0; i < total; i++) {
-      var pip = document.createElement('span');
-      pip.className = 'pip' + (running && i === total - 1 ? ' is-half' : '');
-      el.pips.appendChild(pip);
-    }
+    if (window.Garden) Garden.paintSill(el.sill);
   }
 
   var alarmSignature = '';
@@ -767,7 +778,6 @@
     if (!id) return;
     var target = alarms.filter(function (a) { return a.id === id; })[0];
     removeAlarm(id);                          // tapping an alarm dismisses it
-    if (target && target.ringing && !anyRinging()) Pet.alarm(false);
     render();
   });
 
@@ -826,15 +836,6 @@
       setNotify: function (on) {
         if (!on) { settings.notify = false; el.notifyBtn.setAttribute('aria-pressed', 'false'); save(); return; }
         askToNotify();
-      },
-
-      pet: function () { return settings.pet; },
-      setPet: function (on) {
-        settings.pet = !!on;
-        el.petBtn.setAttribute('aria-pressed', String(settings.pet));
-        document.body.classList.toggle('pets-off', !settings.pet);
-        Pet.setEnabled(settings.pet);
-        save();
       },
 
       theme: function () { return settings.theme; },
@@ -940,12 +941,13 @@
     askToNotify();
   });
 
-  el.petBtn.addEventListener('click', function () {
-    settings.pet = !settings.pet;
-    el.petBtn.setAttribute('aria-pressed', String(settings.pet));
-    Pet.setEnabled(settings.pet);
-    document.body.classList.toggle('pets-off', !settings.pet);
-    save();
+  // the garden: from the menu, the plant, or the row of this week's plants
+  [el.gardenBtn, el.pot, el.sill].forEach(function (button) {
+    if (!button) return;
+    button.addEventListener('click', function () {
+      openPop('menu', false);
+      if (window.Garden) Garden.open();
+    });
   });
 
   /* The two buttons in the top corner each open a small panel just under
@@ -1128,7 +1130,7 @@
       case 'r': case 'R': reset(); break;
       case 'a': case 'A': event.preventDefault(); beginAlarm(); break;
       case 'e': case 'E': event.preventDefault(); beginEdit(); break;
-      case 'p': case 'P': el.petBtn.click(); break;
+      case 'g': case 'G': if (window.Garden) Garden.open(); break;
       case 'f': case 'F': el.fullBtn.click(); break;
       case 's': case 'S': el.soundBtn.click(); break;
       case 't': case 'T': el.themeBtn.click(); break;
@@ -1168,7 +1170,6 @@
         settings.hour12 = !!stored.settings.hour12;
         settings.sound = stored.settings.sound !== false;
         settings.notify = !!stored.settings.notify;
-        settings.pet = stored.settings.pet !== false;
         settings.theme = stored.settings.theme || 'auto';
         if (TEXT_SIZES[stored.settings.textSize]) settings.textSize = stored.settings.textSize;
         if (Array.isArray(stored.settings.presets) && stored.settings.presets.length) {
@@ -1191,6 +1192,8 @@
       timer.remaining = typeof stored.remaining === 'number' ? stored.remaining : timer.duration;
       timer.endAt = stored.endAt || null;
       timer.status = stored.status || 'idle';
+      timer.seed = typeof stored.seed === 'string' ? stored.seed : null;
+      timer.grown = typeof stored.grown === 'number' ? stored.grown : 0;
       lastAccrual = stored.lastAccrual || Date.now();
 
       var now = Date.now();
@@ -1198,13 +1201,13 @@
         if (now >= timer.endAt) {
           accrue(now);
           // it ran out while the page was closed
-          if (now - timer.endAt > HOUR) reset();
+          if (now - timer.endAt > HOUR) reset(true);
           else complete(true);
         }
       } else if (timer.status === 'running') {
         timer.status = 'paused';
       }
-      if (timer.status === 'done' && timer.endAt && now - timer.endAt > HOUR) reset();
+      if (timer.status === 'done' && timer.endAt && now - timer.endAt > HOUR) reset(true);
     }
 
     if (settings.notify && (!('Notification' in window) || Notification.permission !== 'granted')) {
@@ -1235,7 +1238,6 @@
     wirePanel();
     el.soundBtn.setAttribute('aria-pressed', String(settings.sound));
     el.notifyBtn.setAttribute('aria-pressed', String(settings.notify));
-    el.petBtn.setAttribute('aria-pressed', String(settings.pet));
     if (timer.status === 'running') requestWakeLock();
     render();
 
@@ -1252,9 +1254,9 @@
     // the sync status changes on its own -- when rows arrive, when a push
     // fails, when a session expires -- so the panel follows it
     Store.subscribe(function () { renderSync(); });
-    Pet.init();
-    Pet.setEnabled(settings.pet);
-    document.body.classList.toggle('pets-off', !settings.pet);
-    if (anyRinging()) Pet.alarm(true);
+    if (window.Garden) {
+      Garden.init();
+      Garden.onChange(function () { potKey = ''; renderStats(); paintRing(Date.now()); });
+    }
   })();
 })();

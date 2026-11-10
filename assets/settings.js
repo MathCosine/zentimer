@@ -733,7 +733,6 @@ window.Panel = (function () {
 
   function drawRest() {
     var box = section('desk');
-    row(box, 'pets', toggle(api.pet(), api.setPet), 'pip and pop along the bottom');
     row(box, 'text size', choice(
       [{ label: 'normal', value: 'normal' }, { label: 'large', value: 'large' }, { label: 'larger', value: 'larger' }],
       api.textSize(), function (v) { api.setTextSize(v); draw(); }), 'everything grows with it');

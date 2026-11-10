@@ -333,7 +333,6 @@
     bits.forEach(function (b) { list.appendChild(node('span', 'welcome-chip is-had', b)); });
     box.appendChild(list);
     if (window.Motion) setTimeout(Motion.confetti, 200);
-    if (window.Pet) Pet.event('allDone');
   }
 
   /* ---------- moving through ---------- */
@@ -390,7 +389,6 @@
   Store.init();
   gather();
   draw();
-  if (window.Pet) Pet.init();
 
   /* Back from signing in with Google: someone who has a desk already goes to
      it; someone new carries on here. */

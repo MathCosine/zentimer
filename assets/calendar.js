@@ -273,6 +273,8 @@ window.Calendar = (function () {
       if (!document.hidden && state.links.length && Date.now() - state.at > EVERY) refresh();
     });
     setTimeout(function () { adopt(); if (state.links.length) refresh(); }, 1500);
+    // and the moment signing in has finished, rather than up to twenty seconds later
+    if (window.Store && Store.subscribe) Store.subscribe(adopt);
   }
 
   return {

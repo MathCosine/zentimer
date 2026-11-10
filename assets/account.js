@@ -130,7 +130,6 @@
       }
       if (inside === false && !Store.remote.signedIn()) { say('formSaid', trouble(Store.remote.status())); return; }
       try { if (mode === 'up') localStorage.removeItem('pip.welcomed'); } catch (e) {}
-      if (window.Pet) Pet.event('complete');
       onward();
     }, function (err) {
       working(button, false);
@@ -307,6 +306,5 @@
   try {
     var settings = (JSON.parse(localStorage.getItem('pip.state.v1') || '{}').settings) || {};
     if (settings.theme && settings.theme !== 'auto') document.documentElement.setAttribute('data-theme', settings.theme);
-    if (window.Pet && settings.pet !== false) Pet.init();
-  } catch (e) { if (window.Pet) Pet.init(); }
+  } catch (e) { /* a theme is a nicety */ }
 })();

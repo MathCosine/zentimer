@@ -19,6 +19,7 @@ without a Supabase project.
     node test/ai.js           the AI on your own server: notes into tasks, links, tonight planned and checked, up next following it, when it asks
     node test/puter.js        the AI through Puter (the default): connecting, two models and a judge, the week, notes for today or the week
     node test/groq.js         the AI on your own Groq key: checked before it is kept, kept in the browser only, two models and a judge
+    node test/garden.js       a session grows a plant, five in a week a tree; kept, synced, a new week
     node test/behind.js       a database a version behind: links kept, then sent once schema.sql is run
     node test/undo.js         undo, and the bin
     node test/findweek.js     searching, and the week

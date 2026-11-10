@@ -62,7 +62,7 @@ const { chromium } = require('./browser');
     await p.click('#reset'); await p.click('#countdown'); await p.waitForTimeout(150);
     await p.locator('#presets button').nth(2).click(); await p.click('#plus'); await p.click('#minus'); });
   await step('tools', async () => { await p.click('#menuBtn'); await p.waitForTimeout(200);
-    for (const id of ['soundBtn','notifyBtn','petBtn','themeBtn']) {
+    for (const id of ['soundBtn','notifyBtn','themeBtn']) {
     const n = p.locator('#' + id); if (await n.count()) { await n.click(); await p.waitForTimeout(150); await n.click(); } }
     await p.keyboard.press('Escape'); });
   await step('account, in the menu', async () => { await p.click('#menuBtn'); await p.waitForTimeout(400);

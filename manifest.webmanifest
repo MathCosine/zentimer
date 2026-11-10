@@ -1,13 +1,13 @@
 {
   "name": "pip \u2014 study desk",
   "short_name": "pip",
-  "description": "A study timer, an hour-by-hour plan and your task list, with two small pixel creatures.",
+  "description": "A study timer that grows a plant every session, an hour-by-hour plan and your task list.",
   "start_url": "/app/",
   "scope": "/app/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#eaf4fb",
-  "theme_color": "#eaf4fb",
+  "background_color": "#fbfcfa",
+  "theme_color": "#fbfcfa",
   "icons": [
     {
       "src": "assets/icon-192.png",

@@ -2,7 +2,7 @@
 
 A study desk that plans your evening: your tasks, a timer, and tonight laid out before
 bedtime. It works around your calendar, notices what has to come first, and still makes
-room for practice. Two small pixel creatures potter about at the bottom.
+room for practice. Every study session grows a plant, and five in a week grow into a tree.
 
 Static files on GitHub Pages, no build step. Everything lives in the browser first; with an
 account it syncs through Supabase, one row at a time, and the AI and the calendar work
@@ -115,19 +115,27 @@ Same pomodoro as before — 15 / 30 / 45 / 60 / 90 / 120, then a 10-minute break
 now knows what you're on. Whatever block is running shows under the ring, and the time you
 spend is logged against that task.
 
-## The creatures
+## The garden
 
-Pip (terracotta) and pop (mint, with a sprig) potter along the floor at the bottom of the
-window — and the margins either side when the window is wide enough — doing sixteen different
-things, and both come running when an alarm goes off. They keep off the cards so they never
-stand in front of what you're reading. `p` hides them and gives the strip back.
+Starting a session plants a seed in the pot beside the timer, and it grows while you focus:
+a sprout, then leaves, then buds, then flowers — the longer the session, the further it gets
+(about two hours grows one all the way). When the session ends, the plant goes into your
+garden; a session stopped early keeps what it grew, and anything under five minutes grows
+nothing. There are ten kinds (fern, monstera, tulip, sunflower, lavender, succulent, cactus,
+snake plant, daisy, pothos), each drawn from the session's own seed, so no two are quite
+alike. Five plants in a week grow into a tree (oak, pine, cherry, birch or maple), as big as
+those five sessions were long, and every tree stays in your grove.
+
+This week's plants sit in a row under the timer; the pot, that row, or `g` opens the whole
+garden. It is kept in the browser and, signed in, with your account, so every device grows
+the same one. The plants are drawn in `assets/plants.js`; the garden is `assets/garden.js`.
 
 ## Everything else
 
 Alarms (the clock button, which wears the next one's time) with a full-screen ring, and
 behind the gear: your account and whether it is synced, then settings, sound,
-notifications, pets, night mode, full screen. `space` start, `r` reset, `a` alarm,
-`p` pets, `f` fullscreen, `t` theme, `,` settings.
+notifications, night mode, full screen. `space` start, `r` reset, `a` alarm,
+`g` garden, `f` fullscreen, `t` theme, `,` settings.
 
 ## Files
 
@@ -151,7 +159,8 @@ assets/app.js                 clock, timer, breaks, alarms, the top buttons
 assets/settings.js            the settings page
 assets/account.js             the account page
 assets/welcome.js             the welcome
-assets/pet.js                 pip and pop
+assets/plants.js              the plants and trees, drawn
+assets/garden.js              the garden: plants kept, weeks grown into trees
 supabase/schema.sql           the tables, row-level security, the AI allowance
 supabase/functions/ai         the AI relay (Groq + Gemini)
 supabase/functions/calendar   the calendar relay

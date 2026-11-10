@@ -47,14 +47,14 @@ html:has(body.page), body.page { height: auto; }
   flex: 1;
   display: grid;
   place-items: start center;
-  padding: 18px 16px calc(var(--pet-band) + 24px);
+  padding: 18px 16px 24px;
 }
 
 .page-foot {
   display: flex;
   justify-content: center;
   gap: 8px;
-  padding: 0 16px calc(var(--pet-band) + 10px);
+  padding: 0 16px 10px;
   font-size: 0.74rem;
   color: var(--muted);
 }
@@ -115,7 +115,7 @@ html:has(body.page), body.page { height: auto; }
   width: calc(50% - 4px);
   border-radius: 999px;
   background: var(--card);
-  box-shadow: 0 1px 4px rgba(70, 50, 140, 0.14);
+  box-shadow: 0 1px 4px rgba(30, 60, 40, 0.12);
   transition: transform 420ms var(--spring);
 }
 .auth-card.is-up .auth-switch-blob { transform: translateX(100%); }
@@ -136,7 +136,7 @@ html:has(body.page), body.page { height: auto; }
   cursor: pointer;
   transition: border-color 160ms var(--ease), transform 260ms var(--spring), box-shadow 160ms var(--ease);
 }
-.auth-google:hover { border-color: var(--accent); box-shadow: 0 4px 14px rgba(70, 50, 140, 0.1); }
+.auth-google:hover { border-color: var(--accent); box-shadow: 0 4px 14px rgba(30, 60, 40, 0.08); }
 .auth-google:active { transform: scale(0.97); transition-duration: 90ms; }
 .auth-google svg { width: 18px; height: 18px; }
 

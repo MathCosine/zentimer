@@ -1,129 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="pip">
-<rect width="64" height="64" rx="14" fill="#ffefd9"/>
-<rect x="23" y="21" width="3" height="3" fill="#e08a63"/>
-<rect x="26" y="21" width="3" height="3" fill="#e08a63"/>
-<rect x="29" y="21" width="3" height="3" fill="#e08a63"/>
-<rect x="32" y="21" width="3" height="3" fill="#e08a63"/>
-<rect x="35" y="21" width="3" height="3" fill="#e08a63"/>
-<rect x="38" y="21" width="3" height="3" fill="#e08a63"/>
-<rect x="41" y="21" width="3" height="3" fill="#e08a63"/>
-<rect x="44" y="21" width="3" height="3" fill="#e08a63"/>
-<rect x="17" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="20" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="23" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="26" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="29" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="32" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="35" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="38" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="41" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="44" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="47" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="50" y="24" width="3" height="3" fill="#e08a63"/>
-<rect x="14" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="17" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="20" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="23" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="26" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="29" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="32" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="35" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="38" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="41" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="44" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="47" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="50" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="53" y="27" width="3" height="3" fill="#c9714c"/>
-<rect x="11" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="14" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="17" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="20" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="23" y="30" width="3" height="3" fill="#2f2622"/>
-<rect x="26" y="30" width="3" height="3" fill="#2f2622"/>
-<rect x="29" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="32" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="35" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="38" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="41" y="30" width="3" height="3" fill="#2f2622"/>
-<rect x="44" y="30" width="3" height="3" fill="#2f2622"/>
-<rect x="47" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="50" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="53" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="56" y="30" width="3" height="3" fill="#c9714c"/>
-<rect x="5" y="33" width="3" height="3" fill="#a4552f"/>
-<rect x="11" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="14" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="17" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="20" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="23" y="33" width="3" height="3" fill="#2f2622"/>
-<rect x="26" y="33" width="3" height="3" fill="#2f2622"/>
-<rect x="29" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="32" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="35" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="38" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="41" y="33" width="3" height="3" fill="#2f2622"/>
-<rect x="44" y="33" width="3" height="3" fill="#2f2622"/>
-<rect x="47" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="50" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="53" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="56" y="33" width="3" height="3" fill="#c9714c"/>
-<rect x="8" y="36" width="3" height="3" fill="#a4552f"/>
-<rect x="11" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="14" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="17" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="20" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="23" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="26" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="29" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="32" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="35" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="38" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="41" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="44" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="47" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="50" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="53" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="56" y="36" width="3" height="3" fill="#c9714c"/>
-<rect x="11" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="14" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="17" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="20" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="23" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="26" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="29" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="32" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="35" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="38" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="41" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="44" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="47" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="50" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="53" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="56" y="39" width="3" height="3" fill="#c9714c"/>
-<rect x="14" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="17" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="20" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="23" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="26" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="29" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="32" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="35" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="38" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="41" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="44" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="47" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="50" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="53" y="42" width="3" height="3" fill="#a4552f"/>
-<rect x="17" y="45" width="3" height="3" fill="#a4552f"/>
-<rect x="20" y="45" width="3" height="3" fill="#a4552f"/>
-<rect x="32" y="45" width="3" height="3" fill="#a4552f"/>
-<rect x="35" y="45" width="3" height="3" fill="#a4552f"/>
-<rect x="47" y="45" width="3" height="3" fill="#a4552f"/>
-<rect x="50" y="45" width="3" height="3" fill="#a4552f"/>
-<rect x="17" y="48" width="3" height="3" fill="#2f2622"/>
-<rect x="20" y="48" width="3" height="3" fill="#2f2622"/>
-<rect x="32" y="48" width="3" height="3" fill="#2f2622"/>
-<rect x="35" y="48" width="3" height="3" fill="#2f2622"/>
-<rect x="47" y="48" width="3" height="3" fill="#2f2622"/>
-<rect x="50" y="48" width="3" height="3" fill="#2f2622"/>
+<defs>
+<linearGradient id="l" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#3f8a57"/><stop offset="1" stop-color="#79bf86"/></linearGradient>
+<linearGradient id="k" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#2f6e45"/><stop offset="1" stop-color="#5ea56f"/></linearGradient>
+<linearGradient id="p" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e3a17b"/><stop offset="1" stop-color="#c9774f"/></linearGradient>
+</defs>
+<rect width="64" height="64" rx="14" fill="#f1f7f1"/>
+<path d="M32 40Q31 31 32 23" fill="none" stroke="#4f8c55" stroke-width="2" stroke-linecap="round"/>
+<path d="M32 30C27 30 19 27 17 18C25 17 31 21 32 30Z" fill="url(#k)"/>
+<path d="M32 26C33 18 39 13 48 13C47 21 41 26 32 26Z" fill="url(#l)"/>
+<path d="M32 29.5L22 21M32 25.5L42 17" stroke="#a9d6ae" stroke-width="0.9" stroke-linecap="round"/>
+<path d="M20 41L22.6 53.5Q23 55 24.6 55L39.4 55Q41 55 41.4 53.5L44 41Z" fill="url(#p)"/>
+<rect x="18" y="37.5" width="28" height="5" rx="1.8" fill="#d98a62"/>
+<rect x="19.5" y="38.2" width="10" height="1.2" rx="0.6" fill="#fff" opacity="0.45"/>
 </svg>

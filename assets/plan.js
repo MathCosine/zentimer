@@ -876,9 +876,8 @@ window.Plan = (function () {
                        after.practiceDone >= after.practiceWant;
     if (homeworkDone || practiceDone) {
       if (window.Motion) Motion.confetti();
-      if (window.Pet) Pet.event('allDone');
       if (window.Motion) Motion.toast(homeworkDone ? 'that\u2019s today\u2019s homework done \u2726' : 'practice done for today \u2726', null, { tone: 'happy' });
-    } else if (window.Pet) Pet.event('tick');
+    }
   }
 
   /* Today, tomorrow, the next of each weekday, and a date for anything else.
