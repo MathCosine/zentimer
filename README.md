@@ -130,12 +130,22 @@ This week's plants sit in a row under the timer; the pot, that row, or `g` opens
 garden. It is kept in the browser and, signed in, with your account, so every device grows
 the same one. The plants are drawn in `assets/plants.js`; the garden is `assets/garden.js`.
 
+## Focus mode, and counting up
+
+The corner button on the timer (or ⚙ → **focus mode**, or `f`) makes the timer the whole
+screen: the plant, big, with the time, what it is for, and start. The rest of the desk steps
+away, and it goes full screen where the browser allows. `Esc` or the × brings it all back.
+
+**count up**, beside the session lengths, runs a session from 0:00 with no end — the plant
+grows all the way through it — until you press **finish**: the plant goes into the garden and
+the break begins. Picking a length between sessions goes back to counting down.
+
 ## Everything else
 
 Alarms (the clock button, which wears the next one's time) with a full-screen ring, and
 behind the gear: your account and whether it is synced, then settings, sound,
 notifications, night mode, full screen. `space` start, `r` reset, `a` alarm,
-`g` garden, `f` fullscreen, `t` theme, `,` settings.
+`g` garden, `f` focus mode, `t` theme, `,` settings.
 
 ## Files
 

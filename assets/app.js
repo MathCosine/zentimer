@@ -15,6 +15,7 @@
     alarmList: $('alarmList'), alarmAdd: $('alarmAdd'), alarmInput: $('alarmInput'),
     soundBtn: $('soundBtn'), notifyBtn: $('notifyBtn'), gardenBtn: $('gardenBtn'),
     themeBtn: $('themeBtn'), fullBtn: $('fullBtn'), settingsBtn: $('settingsBtn'),
+    countUp: $('countUp'), zenBtn: $('zenBtn'), zenExit: $('zenExit'),
     ringOverlay: $('ringOverlay'), ringTime: $('ringTime'), ringHeading: $('ringHeading'),
     ringDismiss: $('ringDismiss'),
     syncStatus: $('syncStatus'), authFace: $('authFace'), authForm: $('authForm'),
@@ -31,6 +32,7 @@
 
   var settings = {
     hour12: false, sound: true, notify: false, theme: 'auto',
+    countUp: false,                     // a session that counts up from zero, with no end
     textSize: 'large',                  // a step up from the browser's own size: small labels were too small
     focusMs: 30 * MIN, breakMs: 10 * MIN,
     presets: [15, 30, 45, 60, 90, 120],
@@ -181,6 +183,14 @@
     return d.getTime();
   }
 
+  /* Counting up is a session with no end you have to pick: it runs from zero
+     until you say it is finished (or for twelve hours, whichever is first),
+     and the plant grows all the way through it. Underneath it is a twelve
+     hour session shown the other way round, so pausing, the break after it,
+     and the garden all work as they do for any other. */
+  function counting() { return settings.countUp && timer.mode === 'focus'; }
+  function focusLength() { return settings.countUp ? MAX_DURATION : settings.focusMs; }
+
   function clampDuration(ms) {
     return Math.min(MAX_DURATION, Math.max(MIN_DURATION, Math.round(ms)));
   }
@@ -223,6 +233,7 @@
   }
 
   function adjust(deltaMs) {
+    if (counting()) return;                   // no end to move
     var now = Date.now();
     var value = clampDuration(timer.duration + deltaMs);
     rememberLength(value);
@@ -294,8 +305,8 @@
     var task = working ? working.title : '';
     if (timer.mode === 'focus') harvest(task, quiet === true);
     timer.mode = 'focus';
-    timer.duration = settings.focusMs;
-    timer.remaining = settings.focusMs;
+    timer.duration = focusLength();
+    timer.remaining = timer.duration;
     timer.endAt = null;
     timer.status = 'idle';
     said = {};
@@ -323,8 +334,8 @@
       lastAccrual = Date.now();
     } else {
       timer.mode = 'focus';
-      timer.duration = settings.focusMs;
-      timer.remaining = settings.focusMs;
+      timer.duration = focusLength();
+      timer.remaining = timer.duration;
       timer.endAt = null;
       timer.status = 'idle';
       releaseWakeLock();
@@ -580,10 +591,13 @@
   function renderTimer(now) {
     var remaining = timer.status === 'running' ? timer.endAt - now : timer.remaining;
     var overtime = timer.status === 'done' && timer.endAt ? Math.max(0, now - timer.endAt) : 0;
+    var up = counting();
+    var shown = up ? Math.max(0, timer.duration - Math.max(0, remaining)) : Math.max(0, remaining);
 
-    paint(el.countdown, 'textContent', timer.status === 'done'
+    paint(el.countdown, 'textContent', timer.status === 'done' && !up
       ? (overtime >= 1000 ? '+' + clockFace(overtime) : '0:00')
-      : clockFace(Math.max(0, remaining)));
+      : clockFace(shown));
+    el.countdown.title = up ? 'Counting up \u2014 finish when you are done' : 'Click to set the length';
 
     paintRing(now);
 
@@ -605,7 +619,8 @@
     var labels = { idle: 'start', running: 'pause', paused: 'resume', done: 'again' };
     paint(el.startPause, 'textContent', labels[timer.status]);
 
-    paint(el.reset, 'textContent', timer.mode === 'break' ? 'end break' : 'reset');
+    paint(el.reset, 'textContent', timer.mode === 'break' ? 'end break'
+      : up && timer.status !== 'idle' ? 'finish' : 'reset');
     var resettable = timer.status !== 'idle' || timer.mode === 'break';
     el.reset.classList.toggle('is-gone', !resettable);
     el.reset.setAttribute('aria-hidden', resettable ? 'false' : 'true');
@@ -613,7 +628,7 @@
 
     var title = anyRinging() ? 'alarm · pip'
       : timer.status === 'running'
-      ? clockFace(Math.max(0, remaining)) + (timer.mode === 'break' ? ' break · pip' : ' · pip')
+      ? clockFace(shown) + (timer.mode === 'break' ? ' break · pip' : ' · pip')
       : timer.status === 'paused' ? 'paused · pip' : 'pip';
     if (document.title !== title) document.title = title;
 
@@ -627,6 +642,7 @@
     var sessions = stats.sessions + (stats.sessions === 1 ? ' session' : ' sessions');
     var text;
     if (stats.sessions === 0 && stats.focused < MIN) text = 'no sessions yet — soon!';
+    else if (stats.sessions === 0) text = humanSpan(stats.focused) + ' focused';    // the first, still going
     else if (stats.focused < MIN) text = sessions + ' done';
     else text = sessions + ' · ' + humanSpan(stats.focused) + ' focused';
     paint(el.stats, 'textContent', text);
@@ -715,6 +731,13 @@
 
   function beginEdit() {
     if (timer.status === 'running') return;
+    if (counting()) {
+      // no length to type: show the lengths instead, which is how you go back to one
+      clearTimeout(settingDone);
+      el.bar.classList.add('is-setting');
+      settingDone = setTimeout(function () { el.bar.classList.remove('is-setting'); }, 4000);
+      return;
+    }
     el.input.value = clockFace(timer.duration);
     el.countdown.hidden = true;
     el.input.hidden = false;
@@ -789,7 +812,18 @@
   /* ---------- controls ---------- */
 
   el.startPause.addEventListener('click', toggle);
-  el.reset.addEventListener('click', reset);
+  /* Counting up, the button beside start finishes the session: its plant goes
+     into the garden and the break begins. Too short to grow anything, it is
+     just a reset. */
+  function resetOrFinish() {
+    if (counting() && timer.status !== 'idle') {
+      accrue(Date.now());
+      if (timer.grown >= (window.Garden ? Garden.LEAST : 5) * MIN) { complete(false); return; }
+    }
+    reset();
+  }
+
+  el.reset.addEventListener('click', resetOrFinish);
   el.minus.addEventListener('click', function () { adjust(-5 * MIN); });
   el.plus.addEventListener('click', function () { adjust(5 * MIN); });
 
@@ -808,10 +842,25 @@
       });
     }
     Array.prototype.forEach.call(el.presets.children, function (button) {
-      var active = Math.round(settings.focusMs / MIN) === +button.dataset.min;
+      var active = !settings.countUp && Math.round(settings.focusMs / MIN) === +button.dataset.min;
       button.setAttribute('aria-current', active ? 'true' : 'false');
     });
+    el.countUp.setAttribute('aria-pressed', String(!!settings.countUp));
+    document.body.classList.toggle('counting-up', !!settings.countUp);
   }
+
+  el.countUp.addEventListener('click', function () {
+    if (timer.mode === 'focus' && timer.status !== 'idle') {
+      if (window.Motion) Motion.toast('finish or reset this session first');
+      return;
+    }
+    settings.countUp = !settings.countUp;
+    if (timer.mode === 'focus') {
+      timer.duration = focusLength();
+      timer.remaining = timer.duration;
+    }
+    save(); render();
+  });
 
   /* Everything the settings page is allowed to change, and nothing else. */
   function wirePanel() {
@@ -896,6 +945,13 @@
     var button = event.target.closest('button[data-min]');
     if (!button) return;
     var length = +button.dataset.min * MIN;
+    if (settings.countUp) {
+      if (timer.mode === 'focus' && timer.status !== 'idle') {
+        if (window.Motion) Motion.toast('finish this session first \u2014 then pick a length');
+        return;
+      }
+      settings.countUp = false;
+    }
     if (timer.mode === 'break') {
       // choose the next session length without cutting the break short
       settings.focusMs = clampDuration(length);
@@ -945,6 +1001,7 @@
   [el.gardenBtn, el.pot, el.sill].forEach(function (button) {
     if (!button) return;
     button.addEventListener('click', function () {
+      if (button === el.pot && zen()) return;
       openPop('menu', false);
       if (window.Garden) Garden.open();
     });
@@ -1104,10 +1161,44 @@
     save();
   });
 
-  el.fullBtn.addEventListener('click', function () {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+  /* Focus mode: the timer alone, filling the screen -- the plant, the time,
+     what it is for, start. Full screen as well where the browser allows it,
+     and leaving full screen (Esc does that before the page ever hears it)
+     leaves focus mode with it. */
+  var zenFull = false;
+  function zen() { return document.body.classList.contains('zen'); }
+
+  function setZen(on) {
+    on = !!on;
+    if (zen() === on) return;
+    closePops();
+    document.body.classList.toggle('zen', on);
+    if (on) {
+      if (window.Garden) Garden.close();
+      var root = document.documentElement;
+      if (root.requestFullscreen && !document.fullscreenElement) {
+        zenFull = true;
+        Promise.resolve(root.requestFullscreen()).catch(function () { zenFull = false; });
+      }
+      el.zenExit.focus({ preventScroll: true });
+    } else {
+      var wasFull = zenFull;
+      zenFull = false;
+      if (wasFull && document.fullscreenElement && document.exitFullscreen) {
+        Promise.resolve(document.exitFullscreen()).catch(function () {});
+      }
+      el.zenBtn.focus({ preventScroll: true });
+    }
+    render();
+  }
+
+  document.addEventListener('fullscreenchange', function () {
+    if (!document.fullscreenElement && zenFull) { zenFull = false; setZen(false); }
   });
+
+  el.fullBtn.addEventListener('click', function () { setZen(!zen()); });
+  el.zenBtn.addEventListener('click', function () { setZen(true); });
+  el.zenExit.addEventListener('click', function () { setZen(false); });
 
   document.addEventListener('keydown', function (event) {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -1120,6 +1211,7 @@
       return;
     }
     if (event.key === 'Escape' && closePops()) return;
+    if (event.key === 'Escape' && zen()) { setZen(false); return; }
 
     switch (event.key) {
       case ' ': case 'Spacebar':
@@ -1127,7 +1219,7 @@
       case 'Enter':
         if (document.activeElement === document.body) { event.preventDefault(); toggle(); }
         break;
-      case 'r': case 'R': reset(); break;
+      case 'r': case 'R': resetOrFinish(); break;
       case 'a': case 'A': event.preventDefault(); beginAlarm(); break;
       case 'e': case 'E': event.preventDefault(); beginEdit(); break;
       case 'g': case 'G': if (window.Garden) Garden.open(); break;
@@ -1171,6 +1263,7 @@
         settings.sound = stored.settings.sound !== false;
         settings.notify = !!stored.settings.notify;
         settings.theme = stored.settings.theme || 'auto';
+        settings.countUp = !!stored.settings.countUp;
         if (TEXT_SIZES[stored.settings.textSize]) settings.textSize = stored.settings.textSize;
         if (Array.isArray(stored.settings.presets) && stored.settings.presets.length) {
           settings.presets = stored.settings.presets

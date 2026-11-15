@@ -374,6 +374,109 @@ body[data-status="running"] .countdown { cursor: default; }
 .presets button:hover { color: var(--ink); background: var(--accent-soft); }
 .presets button[aria-current="true"] { background: var(--accent); color: var(--accent-ink); }
 
+/* a session with no end: counts up from zero until you finish it */
+.count-up {
+  flex: none;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: 1px dashed var(--outline);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 180ms var(--ease), color 180ms var(--ease), border-color 180ms var(--ease), transform 260ms var(--spring);
+}
+.count-up:hover { color: var(--ink); border-color: var(--accent); }
+.count-up[aria-pressed="true"] { border-style: solid; border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.count-up:active { transform: scale(0.92); }
+/* nothing to add or take away from a session with no end */
+body.counting-up .nudge { visibility: hidden; }
+
+/* ---------- focus mode ---------- */
+
+.zen-btn, .zen-exit {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 180ms var(--ease), background 180ms var(--ease), transform 260ms var(--spring);
+}
+.zen-btn:hover, .zen-btn:focus-visible { opacity: 1; background: var(--well); color: var(--ink); }
+.zen-btn:active, .zen-exit:active { transform: scale(0.9); }
+.zen-btn svg, .zen-exit svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.zen-exit { display: none; }
+
+/* Everything else steps away; the timer card is the whole screen, the plant
+   in the middle of it, with the time, what it is for, and start. */
+body.zen .top,
+body.zen .plan-card,
+body.zen .tasks-card,
+body.zen .settings-card,
+body.zen .garden-card { display: none !important; }
+
+body.zen .bar,
+body.zen[data-status="running"] .bar {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  margin: 0;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background:
+    radial-gradient(70% 50% at 50% 115%, var(--bg-3), transparent 70%),
+    radial-gradient(60% 40% at 50% -10%, var(--bg-2), transparent 70%),
+    var(--bg);
+  animation: zen-in 500ms var(--ease) both;
+}
+@keyframes zen-in { from { opacity: 0; } to { opacity: 1; } }
+
+body.zen .bar-timer { flex-direction: column; gap: 10px; text-align: center; }
+body.zen .pot {
+  width: min(40vh, 64vw);
+  height: calc(min(40vh, 64vw) * 4 / 3);
+  cursor: default;
+}
+body.zen .pot:hover { transform: none; }
+body.zen .timer-side { justify-items: center; text-align: center; gap: 4px; }
+body.zen .dial-face { justify-items: center; }
+body.zen .countdown, body.zen .countdown-input { font-size: clamp(3.2rem, 11vh, 6.5rem); font-weight: 500; letter-spacing: -0.01em; margin: 0; text-align: center; }
+body.zen .countdown-input { width: 6ch; }
+body.zen .phase { font-size: 0.72rem; }
+body.zen .timer-doing { font-size: 1rem; max-width: 80vw; }
+body.zen .controls { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
+body.zen .go { padding: 12px 34px; font-size: 1rem; }
+body.zen .today-line,
+body.zen .sill,
+body.zen .zen-btn { display: none; }
+body.zen .timer-lengths { display: none; }
+body.zen .bar.is-setting .timer-lengths { display: flex; }
+body.zen .zen-exit { display: grid; position: fixed; top: max(16px, env(safe-area-inset-top)); right: 16px; width: 40px; height: 40px; opacity: 0.6; }
+body.zen .zen-exit:hover, body.zen .zen-exit:focus-visible { opacity: 1; background: var(--well); color: var(--ink); }
+body.zen .zen-exit svg { width: 18px; height: 18px; }
+@media (max-height: 520px) {
+  body.zen .bar-timer { flex-direction: row; gap: 24px; text-align: left; }
+  body.zen .pot { width: 34vh; height: 45vh; }
+}
+
 .go {
   font: inherit;
   font-size: 0.86rem;
@@ -1720,7 +1823,7 @@ body.garden-open .settings-card { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .app, .app > *, .alarm, .alarm.is-ringing, .alarm.is-ringing .alarm-when, .now-dot,
   .ring-overlay, .ring-card, .ring-clock, .menu, .pop, .plant-sway, .tool.is-ringing,
-  .task.is-editing, .toast, .tag-tile { animation: none !important; }
+  .task.is-editing, .toast, .tag-tile, body.zen .bar { animation: none !important; }
   * { transition-duration: 1ms !important; }
 }
 

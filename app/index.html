@@ -82,9 +82,16 @@
     <div class="timer-lengths">
       <button class="nudge" id="minus" type="button" aria-label="Five minutes less">−5</button>
       <div class="presets" id="presets" role="group" aria-label="Session lengths in minutes"></div>
+      <button class="count-up" id="countUp" type="button" aria-pressed="false" title="Count up from zero, with no end: finish when you are done">count up</button>
       <button class="nudge" id="plus" type="button" aria-label="Five minutes more">+5</button>
     </div>
     <button class="sill" id="sill" type="button" aria-label="Your garden"></button>
+    <button class="zen-btn" id="zenBtn" type="button" title="Focus mode: just the timer, full screen (f)" aria-label="Focus mode">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
+    </button>
+    <button class="zen-exit" id="zenExit" type="button" title="Leave focus mode (esc)" aria-label="Leave focus mode">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+    </button>
   </section>
 
 <section class="card plan-card" aria-label="Today's plan">
@@ -230,7 +237,7 @@
   </button>
   <button id="fullBtn" type="button" class="menu-row">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
-    <span class="menu-label">full screen</span>
+    <span class="menu-label">focus mode<small>just the timer, full screen</small></span>
   </button>
 </div>
 

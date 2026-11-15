@@ -62,6 +62,10 @@ const day = n => { const d = new Date(AT); d.setDate(d.getDate() + n);
     document.querySelector('.toast-go').textContent)], ['the AI runs on a free Puter account — connect it once', 'connect']);
   check('Puter is fetched now that you asked', puterFetched, 1);
   await p.click('.toast-go'); await p.clock.runFor(2500);
+  // signing in and both models answering are real requests, which take real time
+  for (let i = 0; i < 30 && !(await p.evaluate(() => document.querySelectorAll('.ai-card-title').length)); i++) {
+    await p.clock.runFor(250); await new Promise(r => setTimeout(r, 100));
+  }
   check('connecting carries straight on with what you asked', await p.evaluate(() =>
     [...document.querySelectorAll('.ai-card-title')].map(n => n.value)), ['Read lab handout', 'Lab report']);
   const parseAsks = (await asked()).filter(a => a.kind === 'parse');
