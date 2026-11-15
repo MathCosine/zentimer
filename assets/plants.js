@@ -14,12 +14,25 @@
 window.Plants = (function () {
   'use strict';
 
-  var KINDS = ['fern', 'monstera', 'tulip', 'sunflower', 'lavender', 'succulent', 'cactus', 'snake', 'daisy', 'pothos'];
-  var TREES = ['oak', 'pine', 'cherry', 'birch', 'maple'];
+  /* Four kinds of rare. Every session starts as something common; the longer
+     it runs, the more chances it has to turn into something rarer. */
+  var TIERS = ['common', 'uncommon', 'rare', 'legendary'];
+  var POOL = {
+    common: ['fern', 'snake', 'pothos', 'succulent', 'cactus', 'daisy', 'lavender'],
+    uncommon: ['tulip', 'sunflower', 'monstera', 'aloe', 'bamboo', 'strawberry'],
+    rare: ['orchid', 'bonsai', 'lily'],
+    legendary: ['moonflower', 'lotus', 'goldfern']
+  };
+  var TREE_POOL = { common: ['oak', 'pine', 'birch', 'maple'], rare: ['cherry', 'willow'], legendary: ['ginkgo'] };
+  var KINDS = POOL.common.concat(POOL.uncommon, POOL.rare, POOL.legendary);
+  var TREES = TREE_POOL.common.concat(TREE_POOL.rare, TREE_POOL.legendary);
+  var OLD_TREES = ['oak', 'pine', 'cherry', 'birch', 'maple'];   // before rarities: what a tree was picked from
   var NAMES = {
     fern: 'fern', monstera: 'monstera', tulip: 'tulip', sunflower: 'sunflower', lavender: 'lavender',
     succulent: 'succulent', cactus: 'cactus', snake: 'snake plant', daisy: 'daisy', pothos: 'pothos',
-    oak: 'oak', pine: 'pine', cherry: 'cherry tree', birch: 'birch', maple: 'maple'
+    aloe: 'aloe', bamboo: 'lucky bamboo', strawberry: 'strawberry', orchid: 'orchid', bonsai: 'bonsai',
+    lily: 'peace lily', moonflower: 'moonflower', lotus: 'lotus', goldfern: 'golden fern',
+    oak: 'oak', pine: 'pine', cherry: 'cherry tree', birch: 'birch', maple: 'maple', willow: 'willow', ginkgo: 'golden ginkgo'
   };
 
   /* ---------- the little bits of maths ---------- */
@@ -140,7 +153,31 @@ window.Plants = (function () {
     { name: 'sky',    body: ['#d7e7f2', '#a9c6db'], rim: '#c5dbe9', line: '#98b8ce' }
   ];
 
+  // some plants come in their own pot
+  var SPECIAL = {
+    moonflower: { name: 'night', body: ['#3b4a78', '#22305a'], rim: '#2c3a66', line: '#d9b85c' },
+    goldfern: { name: 'gilt', body: ['#ffffff', '#ece6d6'], rim: '#e7c96a', line: '#c9a845' }
+  };
+
   /* ---------- the pot ---------- */
+
+  // a wide, shallow tray, for a bonsai
+  function tray(id, style) {
+    return '<ellipse cx="60" cy="141" rx="40" ry="2.6" fill="#1f3a26" opacity="0.1"/>' +
+      '<path d="M24 124L28 137.5Q28.6 139.6 31 139.6L89 139.6Q91.4 139.6 92 137.5L96 124Z" fill="url(#' + id + 'p)"/>' +
+      '<rect x="21" y="116.5" width="78" height="8.5" rx="2.6" fill="' + style.rim + '"/>' +
+      '<rect x="23" y="117.3" width="26" height="1.8" rx="0.9" fill="#ffffff" opacity="0.4"/>' +
+      '<path d="M32 139.6v2.4M88 139.6v2.4" stroke="' + style.line + '" stroke-width="2.4" stroke-linecap="round"/>';
+  }
+
+  // a round bowl of still water, for a lotus
+  function bowl(id) {
+    return '<ellipse cx="60" cy="152" rx="34" ry="3" fill="#1f3a26" opacity="0.1"/>' +
+      '<path d="M22 118C22 138 38 151 60 151C82 151 98 138 98 118Z" fill="url(#' + id + 'p)"/>' +
+      '<ellipse cx="60" cy="118" rx="38" ry="5" fill="#f4f1ea"/>' +
+      '<ellipse cx="60" cy="118.6" rx="35" ry="3.8" fill="url(#' + id + 'wa)"/>' +
+      '<path d="M40 118.4q6 -1 12 0M68 119q6 -1 10 0" stroke="#ffffff" stroke-width="0.7" opacity="0.6" fill="none"/>';
+  }
 
   function pot(id, style) {
     return '<ellipse cx="60" cy="156.5" rx="31" ry="3" fill="#1f3a26" opacity="0.1"/>' +
@@ -182,7 +219,8 @@ window.Plants = (function () {
   var DRAW = {};
 
   // fronds unrolling from the middle, each lined with little leaflets
-  DRAW.fern = function (id, g, r) {
+  DRAW.fern = function (id, g, r, tone) {
+    tone = tone || { a: 'l', b: 'k', stem: '#4c8a52', tip: '#5f9c5c' };
     var out = '', n = 2 + Math.round(ramp(g, 0.1, 0.8) * 8), fronds = [];
     for (var i = 0; i < n; i++) {
       var side = i % 2 ? 1 : -1, spread = (Math.floor((i + 1) / 2) / 5);
@@ -196,8 +234,8 @@ window.Plants = (function () {
       var L = 86 * fr.len * ease(gi), rad = fr.ang * Math.PI / 180;
       var p0 = [60, 118], p2 = [60 + Math.sin(rad) * L * 1.05, 118 - Math.cos(rad) * L * 0.92 + Math.abs(fr.ang) * L * 0.004];
       var p1 = [60 + Math.sin(rad) * L * 0.35, 118 - L * 0.95];
-      var deep = Math.abs(fr.ang) > 40 ? 'k' : 'l';
-      out += curve(p0, p1, p2, '#4c8a52', 1 + gi * 0.5);
+      var deep = Math.abs(fr.ang) > 40 ? tone.b : tone.a;
+      out += curve(p0, p1, p2, tone.stem, 1 + gi * 0.5);
       var m = Math.max(2, Math.floor(L / 3.4));
       for (var k = 1; k < m; k++) {
         var s = k / m, pt = along(p0, p1, p2, s);
@@ -208,7 +246,7 @@ window.Plants = (function () {
       // still uncurling at the tip
       if (gi < 1) {
         var tip = along(p0, p1, p2, 1), c = 1.6 + (1 - gi) * 2.2;
-        out += '<circle cx="' + f(tip.x) + '" cy="' + f(tip.y) + '" r="' + f(c) + '" fill="none" stroke="#5f9c5c" stroke-width="1.1"/>';
+        out += '<circle cx="' + f(tip.x) + '" cy="' + f(tip.y) + '" r="' + f(c) + '" fill="none" stroke="' + tone.tip + '" stroke-width="1.1"/>';
       }
     });
     return out;
@@ -495,6 +533,267 @@ window.Plants = (function () {
     return out;
   };
 
+  /* ---------- the uncommon ones ---------- */
+
+  // thick, toothed, speckled spears, and a stalk of coral flowers late on
+  DRAW.aloe = function (id, g, r) {
+    var out = '', n = 3 + Math.round(ramp(g, 0.1, 0.8) * 7), leaves = [];
+    for (var i = 0; i < n; i++) {
+      var side = i % 2 ? 1 : -1, k = Math.floor((i + 1) / 2);
+      leaves.push({ ang: side * (5 + k * 12) + between(r, -4, 4), t: 0.08 + i * 0.06, len: 1 - k * 0.1 });
+    }
+    leaves.sort(function (a, b) { return Math.abs(b.ang) - Math.abs(a.ang); });
+    leaves.forEach(function (lf, j) {
+      var gi = ramp(g, lf.t, lf.t + 0.4);
+      if (gi <= 0) return;
+      var L = 60 * lf.len * ease(gi), W = 9 * (0.55 + 0.45 * gi);
+      var s = '<g transform="translate(60 118) rotate(' + f(lf.ang) + ')"><path d="M' + f(-W / 2) + ' 0C' + f(-W / 2) + ' ' + f(-L * 0.5) + ' ' + f(-W * 0.25) + ' ' + f(-L * 0.85) +
+        ' 0 ' + f(-L) + 'C' + f(W * 0.25) + ' ' + f(-L * 0.85) + ' ' + f(W / 2) + ' ' + f(-L * 0.5) + ' ' + f(W / 2) + ' 0Z" fill="url(#' + id + (j % 2 ? 'aa' : 'ab') + ')"/>';
+      for (var y = -5; y > -L * 0.8; y -= 5.5) {
+        var half = (W / 2) * Math.pow(1 - (-y / L), 0.8);
+        s += '<path d="M' + f(half) + ' ' + f(y) + 'l1.3 -0.9l-1.1 -0.9M' + f(-half) + ' ' + f(y) + 'l-1.3 -0.9l1.1 -0.9" fill="#d9ebd6"/>' +
+          '<ellipse cx="' + f(between(r, -half * 0.5, half * 0.5)) + '" cy="' + f(y - 2) + '" rx="0.7" ry="0.45" fill="#e3f1e1" opacity="0.8"/>';
+      }
+      out += s + '</g>';
+    });
+    var st = ramp(g, 0.7, 0.95);
+    if (st > 0) {
+      var p0 = [62, 112], p1 = [66, 112 - 50 * st], p2 = [70, 112 - 76 * st];
+      out += curve(p0, p1, p2, '#8fa572', 1.2);
+      for (var b = 0; b < 7; b++) {
+        var pt = along(p0, p1, p2, 0.7 + b * 0.045);
+        out += leaf(pt.x, pt.y, 4.5 * st, 1.8, 150 + (b % 2 ? 20 : -20), b % 2 ? '#f08a5d' : '#f6a66f');
+      }
+    }
+    return out;
+  };
+
+  // lucky bamboo: jointed stalks, a few leaves up top, a gold ribbon
+  DRAW.bamboo = function (id, g, r) {
+    var out = '', stalks = [{ x: -8, h: 1 }, { x: 3, h: 0.8 }, { x: 11, h: 0.62 }, { x: -1, h: 0.5 }];
+    var n = 2 + Math.round(ramp(g, 0.2, 0.7) * 2);
+    for (var i = 0; i < n; i++) {
+      var gi = ramp(g, 0.06 + i * 0.08, 0.7 + i * 0.06);
+      if (gi <= 0) continue;
+      var H = 90 * stalks[i].h * ease(gi), x = 60 + stalks[i].x;
+      out += '<rect x="' + f(x - 2.7) + '" y="' + f(118 - H) + '" width="5.4" height="' + f(H) + '" rx="2.6" fill="url(#' + id + 'bb)"/>';
+      for (var y = 118 - 14; y > 118 - H + 4; y -= 14) {
+        out += '<path d="M' + f(x - 2.9) + ' ' + f(y) + 'h5.8" stroke="#6c9a52" stroke-width="1.3" stroke-linecap="round"/>';
+      }
+      var top = 118 - H;
+      out += leaf(x, top + 4, 8 + 7 * gi, 3.4, -46 + between(r, -8, 8), 'url(#' + id + 'l)', '#a9d6ae') +
+        leaf(x, top + 6, 7 + 6 * gi, 3.2, 52 + between(r, -8, 8), 'url(#' + id + 'k)', '#a9d6ae');
+      if (gi > 0.6) out += leaf(x + 2, top + 22, 6 * ramp(gi, 0.6, 1), 2.8, 70, 'url(#' + id + 'l)');
+    }
+    var tie = ramp(g, 0.4, 0.6);
+    if (tie > 0) {
+      out += '<rect x="48" y="101" width="26" height="3.2" rx="1.2" fill="#e6b84a" opacity="' + f(tie) + '"/>' +
+        '<path d="M60 102.6l-5 -3.4v6.8zM60 102.6l5 -3.4v6.8z" fill="#d9a536" opacity="' + f(tie) + '"/>';
+    }
+    return out;
+  };
+
+  // three-leaved clumps, white flowers, then berries hanging over the rim
+  DRAW.strawberry = function (id, g, r) {
+    var out = '', n = 3 + Math.round(ramp(g, 0.1, 0.8) * 5), ends = [];
+    for (var i = 0; i < n; i++) {
+      var gi = ramp(g, 0.06 + i * 0.07, 0.45 + i * 0.07);
+      if (gi <= 0) continue;
+      var ang = (i % 2 ? 1 : -1) * (10 + Math.floor((i + 1) / 2) * 16) + between(r, -6, 6), rad = ang * Math.PI / 180, L = between(r, 22, 36) * ease(gi);
+      var tip = [60 + Math.sin(rad) * L, 118 - Math.cos(rad) * L];
+      out += curve([60, 118], [60 + Math.sin(rad) * L * 0.3, 118 - L * 0.8], tip, '#6b9e5a', 0.9);
+      var size = 7 + 4 * gi, fill = 'url(#' + id + (i % 2 ? 'k' : 'l') + ')';
+      out += leaf(tip[0], tip[1], size, size * 0.8, ang - 42, fill, '#a9d6ae', true) +
+        leaf(tip[0], tip[1], size, size * 0.8, ang + 42, fill, '#a9d6ae', true) +
+        leaf(tip[0], tip[1], size * 1.08, size * 0.85, ang, fill, '#a9d6ae', true);
+      ends.push(tip);
+    }
+    var bloom = ramp(g, 0.35, 0.6), fade = 1 - ramp(g, 0.7, 0.85);
+    if (bloom > 0 && fade > 0) {
+      [[48, 104], [72, 101]].forEach(function (p) {
+        for (var k = 0; k < 5; k++) out += '<circle cx="' + f(p[0] + Math.cos(k * 1.2566) * 2.4 * bloom) + '" cy="' + f(p[1] + Math.sin(k * 1.2566) * 2.4 * bloom) + '" r="' + f(1.8 * bloom) + '" fill="#ffffff" stroke="#e6e1d3" stroke-width="0.3" opacity="' + f(fade) + '"/>';
+        out += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + f(1.1 * bloom) + '" fill="#f2c94c" opacity="' + f(fade) + '"/>';
+      });
+    }
+    var fruit = ramp(g, 0.62, 0.95);
+    if (fruit > 0) {
+      [[34, 128, -1], [86, 126, 1], [44, 132, -1]].slice(0, 1 + Math.round(fruit * 2)).forEach(function (b) {
+        var x = b[0], y = b[1], s = 3 + fruit * 2.5, ripe = mix('#b9d77e', '#e5484d', ramp(fruit, 0.2, 0.8));
+        out += curve([60 + b[2] * 8, 112], [x + b[2] * 2, 112], [x, y - s], '#6b9e5a', 0.8) +
+          '<path d="M' + f(x) + ' ' + f(y + s * 1.2) + 'C' + f(x - s * 1.3) + ' ' + f(y + s * 0.2) + ' ' + f(x - s) + ' ' + f(y - s) + ' ' + f(x) + ' ' + f(y - s * 0.9) +
+          'C' + f(x + s) + ' ' + f(y - s) + ' ' + f(x + s * 1.3) + ' ' + f(y + s * 0.2) + ' ' + f(x) + ' ' + f(y + s * 1.2) + 'Z" fill="' + ripe + '"/>';
+        for (var d = 0; d < 5; d++) out += '<circle cx="' + f(x + (d % 3 - 1) * s * 0.45) + '" cy="' + f(y + (d < 3 ? -0.1 : 0.55) * s) + '" r="0.35" fill="#f7e38a"/>';
+        out += '<path d="M' + f(x - s * 0.7) + ' ' + f(y - s * 0.8) + 'L' + f(x) + ' ' + f(y - s * 1.3) + 'L' + f(x + s * 0.7) + ' ' + f(y - s * 0.8) + 'L' + f(x) + ' ' + f(y - s * 0.6) + 'Z" fill="#5f9a4f"/>';
+      });
+    }
+    return out;
+  };
+
+  /* ---------- the rare ones ---------- */
+
+  var ORCHID = [{ p: '#ffffff', e: '#f1e6ee', c: '#d6458b' }, { p: '#f6c4dd', e: '#eaa6c8', c: '#b02c6e' }, { p: '#d9bdf0', e: '#c39ee6', c: '#6b2fa0' }];
+
+  // broad leaves low down, and a staked spike arching with blooms
+  DRAW.orchid = function (id, g, r) {
+    var out = '', tone = pickFrom(r, ORCHID), lt = ramp(g, 0.06, 0.45);
+    out += leaf(60, 117, 30 * ease(lt), 13, -80, 'url(#' + id + 'k)', '#a9d6ae', true) +
+      leaf(60, 117, 27 * ease(lt), 12, 76, 'url(#' + id + 'l)', '#a9d6ae', true) +
+      leaf(60, 117, 22 * ease(ramp(g, 0.2, 0.55)), 11, -42, 'url(#' + id + 'l)', '#a9d6ae', true);
+    var st = ramp(g, 0.25, 0.75);
+    if (st <= 0) return out;
+    out += '<path d="M63 118L63 ' + f(118 - 72 * st) + '" stroke="#c4a979" stroke-width="1.1" stroke-linecap="round"/>';
+    var arc = ramp(g, 0.5, 0.85);
+    var p0 = [62, 116], p1 = [61, 118 - 98 * st], p2 = [62 + 34 * arc, 118 - 74 * st - 6 * (1 - arc)];
+    out += curve(p0, p1, p2, '#6a8a4f', 1);
+    var blooms = Math.round(ramp(g, 0.55, 0.95) * 5);
+    for (var i = 0; i < blooms; i++) {
+      var pt = along(p0, p1, p2, 0.52 + i * 0.1), s = 6.8 - i * 0.45;
+      out += '<g transform="translate(' + f(pt.x) + ' ' + f(pt.y + 2) + ')">' +
+        leaf(0, 0, s * 1.2, s * 0.7, 0, tone.e) + leaf(0, 0, s * 1.1, s * 0.6, 125, tone.e) + leaf(0, 0, s * 1.1, s * 0.6, -125, tone.e) +
+        '<ellipse cx="' + f(-s * 0.75) + '" cy="' + f(-s * 0.1) + '" rx="' + f(s * 0.85) + '" ry="' + f(s * 0.7) + '" fill="' + tone.p + '"/>' +
+        '<ellipse cx="' + f(s * 0.75) + '" cy="' + f(-s * 0.1) + '" rx="' + f(s * 0.85) + '" ry="' + f(s * 0.7) + '" fill="' + tone.p + '"/>' +
+        '<path d="M0 ' + f(-s * 0.15) + 'c' + f(-s * 0.5) + ' ' + f(s * 0.2) + ' ' + f(-s * 0.4) + ' ' + f(s * 0.9) + ' 0 ' + f(s * 0.95) + 'c' + f(s * 0.4) + ' ' + f(-s * 0.05) + ' ' + f(s * 0.5) + ' ' + f(-s * 0.75) + ' 0 ' + f(-s * 0.95) + 'z" fill="' + tone.c + '"/>' +
+        '<circle cx="0" cy="' + f(-s * 0.35) + '" r="' + f(s * 0.16) + '" fill="#f7d25c"/></g>';
+    }
+    if (arc > 0 && blooms < 5) {
+      for (var k = blooms; k < Math.min(blooms + 2, 6); k++) {
+        var bp = along(p0, p1, p2, 0.52 + k * 0.1);
+        out += '<ellipse cx="' + f(bp.x) + '" cy="' + f(bp.y + 1.5) + '" rx="1.7" ry="2.2" fill="' + mix('#9cbf7a', tone.e, 0.5) + '"/>';
+      }
+    }
+    return out;
+  };
+
+  // a twisting trunk with clouds of foliage, in a shallow tray
+  DRAW.bonsai = function (id, g, r) {
+    var out = '', t = ramp(g, 0.05, 0.9), lean = between(r, 8, 14) * (r() < 0.5 ? -1 : 1);
+    if (t <= 0) return '';
+    var H = 18 + 46 * ease(t), p0 = [60, 118], p1 = [60 - lean * 1.4, 118 - H * 0.5], p2 = [60 + lean * 0.6, 118 - H];
+    var left = [], right = [];
+    for (var i = 0; i <= 12; i++) {
+      var s = i / 12, pt = along(p0, p1, p2, s), w = (5.5 * (1 - s) + 1.4) * (0.45 + 0.55 * t), a = (pt.a + 90) * Math.PI / 180;
+      left.push(f(pt.x - Math.sin(a) * w) + ' ' + f(pt.y + Math.cos(a) * w));
+      right.unshift(f(pt.x + Math.sin(a) * w) + ' ' + f(pt.y - Math.cos(a) * w));
+    }
+    out += '<path d="M' + left.join('L') + 'L' + right.join('L') + 'Z" fill="url(#' + id + 'tb)"/>';
+    var pads = [];
+    var b1 = ramp(g, 0.3, 0.6), b2 = ramp(g, 0.45, 0.75);
+    if (b1 > 0) { var q = along(p0, p1, p2, 0.45); pads.push([q.x - lean * 1.6 * b1 - 10 * b1, q.y - 6 * b1, 9 + 4 * b1]); out += curve([q.x, q.y], [q.x - 6, q.y - 2], [q.x - lean * 1.6 * b1 - 10 * b1, q.y - 4 * b1], '#7a5a44', 2); }
+    if (b2 > 0) { var q2 = along(p0, p1, p2, 0.7); pads.push([q2.x + 12 * b2 + lean * 0.6, q2.y - 4 * b2, 8 + 4 * b2]); out += curve([q2.x, q2.y], [q2.x + 5, q2.y - 2], [q2.x + 12 * b2 + lean * 0.6, q2.y - 3 * b2], '#7a5a44', 1.8); }
+    pads.push([p2[0], p2[1] - 2, 9 + 7 * t]);
+    pads.forEach(function (pd) {
+      out += blob(pd[0], pd[1], pd[2], ['#2f6b45', '#3d7d52', '#4d8f5f'], 7, r, 0.7) + blob(pd[0] - pd[2] * 0.2, pd[1] - pd[2] * 0.25, pd[2] * 0.6, '#6aa874', 3, r, 0.6);
+    });
+    out += '<circle cx="50" cy="117.6" r="1.2" fill="#6aa874"/><circle cx="68" cy="117.8" r="1" fill="#5a9a63"/>';
+    return out;
+  };
+
+  // glossy leaves, and white hoods with a cream spike, on tall stalks
+  DRAW.lily = function (id, g, r) {
+    var out = '', n = 4 + Math.round(ramp(g, 0.1, 0.8) * 6), leaves = [];
+    for (var i = 0; i < n; i++) leaves.push({ ang: (i % 2 ? 1 : -1) * (6 + Math.floor((i + 1) / 2) * 12) + between(r, -5, 5), t: 0.06 + i * 0.05 });
+    leaves.sort(function (a, b) { return Math.abs(b.ang) - Math.abs(a.ang); });
+    leaves.forEach(function (lf, j) {
+      var gi = ramp(g, lf.t, lf.t + 0.4);
+      if (gi <= 0) return;
+      var rad = lf.ang * Math.PI / 180, L = between(r, 22, 34) * ease(gi), tip = [60 + Math.sin(rad) * L, 118 - Math.cos(rad) * L];
+      out += curve([60, 118], [60 + Math.sin(rad) * L * 0.4, 118 - L * 0.9], tip, '#3f7a4d', 1) +
+        leaf(tip[0], tip[1], (18 + 6 * gi) * ease(gi), 8.5, lf.ang * 1.6, 'url(#' + id + (j % 2 ? 'k' : 'l') + ')', '#9fcfa6');
+    });
+    var flowers = Math.round(ramp(g, 0.5, 0.9) * 3);
+    for (var k = 0; k < flowers; k++) {
+      var fg = ramp(g, 0.5 + k * 0.12, 0.75 + k * 0.1), ang = [-6, 18, -24][k], rad2 = ang * Math.PI / 180, L2 = 70 - k * 10;
+      var top = [60 + Math.sin(rad2) * L2, 118 - Math.cos(rad2) * L2];
+      out += curve([60, 118], [60 + Math.sin(rad2) * L2 * 0.2, 118 - L2 * 0.6], top, '#4f8a55', 1.1) +
+        '<g transform="translate(' + f(top[0]) + ' ' + f(top[1] + 2) + ') rotate(' + f(ang * 0.6) + ')"><path d="M0 0C' + f(10 * fg) + ' -3 ' + f(10 * fg) + ' ' + f(-17 * fg) + ' 0 ' + f(-27 * fg) +
+        'C' + f(-10 * fg) + ' ' + f(-17 * fg) + ' ' + f(-10 * fg) + ' -3 0 0Z" fill="url(#' + id + 'ws)" stroke="#e3ecdf" stroke-width="0.4"/>' +
+        '<path d="M0 ' + f(-2 * fg) + 'L0 ' + f(-24 * fg) + '" stroke="#e6efe2" stroke-width="0.5"/>' +
+        '<ellipse cx="' + f(0.8) + '" cy="' + f(-8 * fg) + '" rx="' + f(1.6 * fg + 0.3) + '" ry="' + f(5.5 * fg) + '" fill="#efe3a8"/></g>';
+    }
+    return out;
+  };
+
+  /* ---------- the legendary ones ---------- */
+
+  function sparkles(r, n, area, colours) {
+    var out = '';
+    for (var i = 0; i < n; i++) {
+      var x = between(r, area[0], area[2]), y = between(r, area[1], area[3]), s = between(r, 1.2, 2.6);
+      out += '<path class="plant-sparkle" d="M' + f(x) + ' ' + f(y - s) + 'Q' + f(x) + ' ' + f(y) + ' ' + f(x + s) + ' ' + f(y) + 'Q' + f(x) + ' ' + f(y) + ' ' + f(x) + ' ' + f(y + s) +
+        'Q' + f(x) + ' ' + f(y) + ' ' + f(x - s) + ' ' + f(y) + 'Q' + f(x) + ' ' + f(y) + ' ' + f(x) + ' ' + f(y - s) + 'Z" fill="' + colours[i % colours.length] + '" style="animation-delay:' + f(i * 0.37) + 's"/>';
+    }
+    return out;
+  }
+
+  // a vine on a hoop, with luminous moon-white trumpets that glow
+  DRAW.moonflower = function (id, g, r) {
+    var out = '', t = ramp(g, 0.06, 0.8);
+    if (t <= 0) return '';
+    var hoop = ramp(g, 0.1, 0.35);
+    out += '<path d="M44 118C40 ' + f(118 - 70 * hoop) + ' 80 ' + f(118 - 70 * hoop) + ' 76 118" fill="none" stroke="#b9a77c" stroke-width="1.2" opacity="' + f(hoop) + '"/>';
+    [[-1, 0], [1, 0.08]].forEach(function (v) {
+      var vt = ramp(g, 0.06 + v[1], 0.8 + v[1]);
+      if (vt <= 0) return;
+      var p0 = [60 + v[0] * 3, 118], p1 = [60 + v[0] * 26, 118 - 40 * vt], p2 = [60 - v[0] * 6, 118 - 74 * ease(vt)];
+      out += curve(p0, p1, p2, '#3d6e5a', 1.1);
+      var m = 2 + Math.floor(vt * 5);
+      for (var k = 1; k <= m; k++) {
+        var pt = along(p0, p1, p2, k / (m + 0.5));
+        out += heart(pt.x, pt.y, (5 + 4 * (1 - k / m)) * ramp(vt, k / m * 0.6, k / m * 0.6 + 0.3), pt.a + (k % 2 ? 75 : -75), 'url(#' + id + 'tk)', '#8fc2b4');
+      }
+    });
+    var bloom = Math.round(ramp(g, 0.5, 0.9) * 3);
+    [[45, 66], [74, 54], [58, 40]].slice(0, bloom).forEach(function (pos, i) {
+      var open = ramp(g, 0.5 + i * 0.12, 0.8 + i * 0.07), R = 4 + 5 * open;
+      out += '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="' + f(R * 1.7) + '" fill="url(#' + id + 'glow)" class="plant-glow"/>';
+      out += '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="' + f(R) + '" fill="#f7faff" stroke="#dce9ff" stroke-width="0.6"/>';
+      for (var p = 0; p < 5; p++) {
+        var a = (p * 72 - 90) * Math.PI / 180;
+        out += '<path d="M' + pos[0] + ' ' + pos[1] + 'L' + f(pos[0] + Math.cos(a) * R * 0.95) + ' ' + f(pos[1] + Math.sin(a) * R * 0.95) + '" stroke="#c9dcfb" stroke-width="0.8" stroke-linecap="round"/>';
+      }
+      out += '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="' + f(R * 0.32) + '" fill="#dbe8ff"/>' +
+        '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="' + f(R * 0.14) + '" fill="#f5e8a6"/>';
+    });
+    if (bloom) out += sparkles(r, 4 + bloom * 2, [34, 24, 88, 96], ['#fff3b8', '#d8e8ff', '#ffffff']);
+    return out;
+  };
+
+  // pads on still water, a stem, and a pink lotus that opens in layers
+  DRAW.lotus = function (id, g, r) {
+    var out = '', pads = Math.round(ramp(g, 0.06, 0.5) * 3);
+    [[42, 119.5, 9], [78, 120, 8], [64, 121.2, 6]].slice(0, pads).forEach(function (p, i) {
+      var s = p[2] * ramp(g, 0.06 + i * 0.1, 0.4 + i * 0.1);
+      if (s < 0.5) return;
+      out += '<ellipse cx="' + f(p[0]) + '" cy="' + f(p[1]) + '" rx="' + f(s) + '" ry="' + f(s * 0.34) + '" fill="url(#' + id + 'l)"/>' +
+        '<path d="M' + f(p[0]) + ' ' + f(p[1]) + 'L' + f(p[0] + s * 1.02) + ' ' + f(p[1] - s * 0.12) + 'L' + f(p[0] + s * 1.02) + ' ' + f(p[1] + s * 0.08) + 'Z" fill="#9fcbd3"/>' +
+        '<path d="M' + f(p[0] - s * 0.6) + ' ' + f(p[1] - s * 0.05) + 'L' + f(p[0]) + ' ' + f(p[1]) + '" stroke="#bfe0c2" stroke-width="0.5"/>';
+    });
+    var st = ramp(g, 0.2, 0.6), H = 38 * ease(st);
+    if (st <= 0) return out;
+    var c = [60, 118 - H];
+    out += curve([60, 119], [61, 119 - H * 0.5], c, '#4f8a55', 1.6);
+    var open = ramp(g, 0.6, 0.95), bud = ramp(g, 0.42, 0.6);
+    if (open > 0) out += '<circle cx="' + c[0] + '" cy="' + f(c[1] - 8) + '" r="' + f(26 * open) + '" fill="url(#' + id + 'pglow)" class="plant-glow"/>';
+    if (bud > 0) {
+      var rows = [[5, 64 * open + 8, 23, 'url(#' + id + 'lo)'], [4, 34 * open + 6, 26, 'url(#' + id + 'lp)'], [3, 12 * open + 2, 19, 'url(#' + id + 'lo)']];
+      rows.forEach(function (row) {
+        for (var p = 0; p < row[0]; p++) {
+          var a = row[0] === 1 ? 0 : -row[1] + (2 * row[1]) * p / (row[0] - 1);
+          out += leaf(c[0], c[1], (row[2] * (0.5 + 0.5 * bud)), row[2] * 0.5, a, row[3]);
+        }
+      });
+      if (open > 0.3) out += '<ellipse cx="' + c[0] + '" cy="' + f(c[1] - 5) + '" rx="' + f(4.4 * open) + '" ry="' + f(2.2 * open) + '" fill="#f4d35e"/>';
+    }
+    if (open > 0.3) out += sparkles(r, 5, [40, 60, 82, 108], ['#ffe6f0', '#fff3b8']);
+    return out;
+  };
+
+  // a fern grown in gold, glinting
+  DRAW.goldfern = function (id, g, r) {
+    return DRAW.fern(id, g, r, { a: 'ga', b: 'gb', stem: '#b98f2e', tip: '#d4af45' }) +
+      (g > 0.4 ? sparkles(r, 3 + Math.round(g * 5), [26, 20, 94, 104], ['#fff1b3', '#ffe082', '#ffffff']) : '');
+  };
+
   /* ---------- colour arithmetic, for buds turning ---------- */
 
   function rgb(hex) {
@@ -507,6 +806,23 @@ window.Plants = (function () {
 
   /* ---------- putting it together ---------- */
 
+  // the gradients only some plants need
+  function extras(id, kind) {
+    var out = '';
+    if (kind === 'aloe') out += grad(id + 'aa', [[0, '#6f9f80'], [1, '#a8cdb0']]) + grad(id + 'ab', [[0, '#5e8f72'], [1, '#93bf9d']]);
+    if (kind === 'bamboo') out += grad(id + 'bb', [[0, '#8fc06a'], [0.5, '#b7dc8c'], [1, '#86b862']], true);
+    if (kind === 'bonsai') out += grad(id + 'tb', [[0, '#6b4b36'], [1, '#9a7457']], true);
+    if (kind === 'lily') out += grad(id + 'ws', [[0, '#dfeedd'], [0.35, '#ffffff'], [1, '#fbfdf8']]);
+    if (kind === 'moonflower') out += grad(id + 'tk', [[0, '#2f5e57'], [1, '#5f9c8c']]) + radial(id + 'glow', [[0, 'rgba(206,226,255,0.7)'], [1, 'rgba(206,226,255,0)']]);
+    if (kind === 'lotus') {
+      out += grad(id + 'lp', [[0, '#ee86ab'], [1, '#fde3ee']]) + grad(id + 'lo', [[0, '#f4a2c1'], [1, '#fff4f8']]) +
+        radial(id + 'pglow', [[0, 'rgba(255,214,230,0.75)'], [1, 'rgba(255,214,230,0)']]) +
+        grad(id + 'wa', [[0, '#7fb6c4'], [1, '#b9dde4']]);
+    }
+    if (kind === 'goldfern') out += grad(id + 'ga', [[0, '#c9952a'], [1, '#f6d873']]) + grad(id + 'gb', [[0, '#a87a1f'], [1, '#e8c25a']]);
+    return out;
+  }
+
   var made = 0;
 
   function svg(o) {
@@ -515,17 +831,20 @@ window.Plants = (function () {
     var g = clamp(Number(o.g) || 0, 0, 1);
     var r = random(String(o.seed || kind) + kind);
     var id = 'pl' + (++made) + '_';
-    var style = POTS[hash(String(o.seed || kind) + 'pot') % POTS.length];
+    var style = SPECIAL[kind] || (kind === 'bonsai' ? { body: ['#4d5b66', '#323d46'], rim: '#56646f', line: '#3a464f' }
+      : kind === 'lotus' ? { body: ['#f2efe7', '#d9d3c4'], rim: '#efebe2', line: '#cfc8b8' }
+      : POTS[hash(String(o.seed || kind) + 'pot') % POTS.length]);
     var defs = palette(id,
       grad(id + 'p', [[0, style.body[0]], [1, style.body[1]]], true) +
       grad(id + 'c', [[0, '#4f9161'], [0.5, '#6fb27c'], [1, '#4c8b5d']], true) +
       grad(id + 'sa', [[0, '#7aa898'], [0.75, '#a9cdbf'], [1, '#e9a3a6']]) +
-      grad(id + 'sb', [[0, '#8fb8a7'], [0.8, '#bfdccf'], [1, '#f0b2b2']]));
+      grad(id + 'sb', [[0, '#8fb8a7'], [0.8, '#bfdccf'], [1, '#f0b2b2']]) +
+      extras(id, kind));
     var plant = sprout(id, g) + (g > 0.06 ? DRAW[kind](id, g, r) : '');
-    var trailing = kind === 'pothos';
-    var body = pot(id, style) + soil();
+    var trailing = kind === 'pothos' || kind === 'strawberry' || kind === 'lotus';
+    var body = kind === 'bonsai' ? tray(id, style) + soil() : kind === 'lotus' ? bowl(id) : pot(id, style) + soil();
     var label = o.label ? ' role="img" aria-label="' + o.label + '"' : ' aria-hidden="true"';
-    return '<svg class="plant-svg" viewBox="0 0 120 160"' + label + ' data-kind="' + kind + '" data-g="' + f(g) + '">' +
+    return '<svg class="plant-svg is-' + tierOf(kind) + '" viewBox="0 0 120 160"' + label + ' data-kind="' + kind + '" data-g="' + f(g) + '">' +
       '<defs>' + defs + '</defs>' +
       (trailing ? body + '<g class="plant-sway">' + plant + '</g>' : '<g class="plant-sway">' + plant + '</g>' + body) + '</svg>';
   }
@@ -601,6 +920,36 @@ window.Plants = (function () {
     return out;
   };
 
+  // rare: a dome of green with long strands hanging like a curtain
+  TREE.willow = function (id, g, r) {
+    var H = 34 + 60 * g, R = 16 + 22 * g, top = 150 - H, out = trunk(id, 60, 150, H * 0.7, 3 + g * 3.5, '#7b6248');
+    out += blob(60, top + R * 0.5, R, ['#8fc27a', '#a3cf8a', '#7db56c'], 11, r, 0.7);
+    for (var i = 0; i < 16; i++) {
+      var x = 60 - R * 1.05 + (2.1 * R) * (i / 15) + between(r, -2, 2), y = top + R * (0.55 + 0.35 * Math.sin(i / 15 * Math.PI)), L = between(r, 18, 34) * (0.5 + 0.5 * g);
+      out += curve([x, y], [x + between(r, -3, 3), y + L * 0.5], [x + between(r, -4, 4), y + L], i % 2 ? '#86bd70' : '#9ccb84', 1.3);
+    }
+    return out + blob(56, top + R * 0.3, R * 0.5, '#b9dd9e', 4, r);
+  };
+
+  // legendary: a ginkgo turned gold, little fans drifting down
+  TREE.ginkgo = function (id, g, r) {
+    var H = 34 + 66 * g, R = 16 + 24 * g, top = 150 - H, out = trunk(id, 60, 150, H * 0.62, 3 + g * 3.5, '#7a5a42');
+    out += curve([60, 150 - H * 0.44], [50, 150 - H * 0.6], [44, top + R * 0.55], '#7a5a42', 1.4 + g) +
+      curve([60, 150 - H * 0.5], [70, 150 - H * 0.64], [76, top + R * 0.5], '#7a5a42', 1.3 + g);
+    out += '<circle cx="60" cy="' + f(top + R * 0.55) + '" r="' + f(R * 1.05) + '" fill="url(#' + id + 'gglow)" class="plant-glow"/>';
+    var fans = ['#f2c84b', '#e8b13a', '#f7d76b', '#efbe3f'];
+    for (var i = 0; i < 46; i++) {
+      var a = r() * Math.PI * 2, d = Math.sqrt(r()) * R * 0.95, x = 60 + Math.cos(a) * d, y = top + R * 0.55 + Math.sin(a) * d * 0.8, s = between(r, 2.4, 3.6);
+      out += '<path d="M' + f(x) + ' ' + f(y) + 'L' + f(x - s) + ' ' + f(y - s * 1.1) + 'A' + f(s * 1.3) + ' ' + f(s * 1.3) + ' 0 0 1 ' + f(x + s) + ' ' + f(y - s * 1.1) + 'Z" fill="' + fans[i % 4] +
+        '" transform="rotate(' + f(between(r, -50, 50)) + ' ' + f(x) + ' ' + f(y) + ')"/>';
+    }
+    for (var k = 0; k < 5; k++) {
+      var fx = between(r, 60 - R * 1.2, 60 + R * 1.2), fy = between(r, top + R * 1.5, 146);
+      out += '<path d="M' + f(fx) + ' ' + f(fy) + 'l-2 -2.2a2.8 2.8 0 0 1 4 0z" fill="#f2c84b" transform="rotate(' + f(between(r, -60, 60)) + ' ' + f(fx) + ' ' + f(fy) + ')"/>';
+    }
+    return out + sparkles(r, 4, [60 - R, top, 60 + R, top + R * 1.4], ['#fff3b8', '#ffffff']);
+  };
+
   function tree(o) {
     o = o || {};
     var kind = TREES.indexOf(o.kind) === -1 ? pickTree(o.seed || 'x') : o.kind;
@@ -608,7 +957,8 @@ window.Plants = (function () {
     var r = random(String(o.seed || kind) + kind);
     var id = 'tr' + (++made) + '_';
     var label = o.label ? ' role="img" aria-label="' + o.label + '"' : ' aria-hidden="true"';
-    return '<svg class="tree-svg" viewBox="0 0 120 160"' + label + ' data-kind="' + kind + '">' +
+    var defs = kind === 'ginkgo' ? '<defs>' + radial(id + 'gglow', [[0, 'rgba(255,226,140,0.4)'], [1, 'rgba(255,226,140,0)']]) + '</defs>' : '';
+    return '<svg class="tree-svg is-' + treeTier(kind) + '" viewBox="0 0 120 160"' + label + ' data-kind="' + kind + '">' + defs +
       '<ellipse cx="60" cy="151" rx="' + f(20 + g * 18) + '" ry="3.4" fill="#1f3a26" opacity="0.1"/>' +
       '<g class="plant-sway">' + TREE[kind](id, g, r) + '</g>' +
       '<path d="M' + f(44 - g * 10) + ' 150.5Q60 147.5 ' + f(76 + g * 10) + ' 150.5" stroke="#8cbf87" stroke-width="2" fill="none" stroke-linecap="round"/></svg>';
@@ -624,13 +974,66 @@ window.Plants = (function () {
     return clamp(Math.sqrt(Math.max(0, minutes) / FULL), 0, 1);
   }
 
-  function pick(seed) { return KINDS[hash(String(seed) + 'kind') % KINDS.length]; }
-  function pickTree(seed) { return TREES[hash(String(seed) + 'tree') % TREES.length]; }
+  /* ---------- how rare ---------- */
+
+  /* Every fifteen minutes of focus -- at 15, 30, 45, an hour, and on -- the
+     session rolls once to turn rarer. The rolls come from the seed, so the
+     same session always turns out the same way, on every device. Luck (from
+     how much you have studied this week, 1 to 1.6) makes the rare and
+     legendary chances bigger; it never makes a short session long. */
+  var ROLLS = [15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240];
+  var ODDS = { legendary: 0.012, rare: 0.06, uncommon: 0.26 };
+
+  function tierFor(seed, minutes, luck) {
+    var r = random(String(seed) + 'rolls'), tier = 0, l = clamp(Number(luck) || 1, 1, 1.6);
+    for (var i = 0; i < ROLLS.length && minutes >= ROLLS[i]; i++) {
+      var x = r();
+      var t = x < ODDS.legendary * l ? 3 : x < (ODDS.legendary + ODDS.rare) * l ? 2 : x < (ODDS.legendary + ODDS.rare) * l + ODDS.uncommon ? 1 : 0;
+      if (t > tier) tier = t;
+    }
+    return tier;
+  }
+
+  // what a session has grown into, so far
+  function kindFor(seed, minutes, luck) {
+    var tier = TIERS[tierFor(seed, minutes || 0, luck)], pool = POOL[tier];
+    return pool[hash(String(seed) + 'kind' + tier) % pool.length];
+  }
+
+  function pick(seed) { return kindFor(seed, 0, 1); }
+
+  function tierOf(kind) {
+    for (var i = TIERS.length - 1; i >= 0; i--) if (POOL[TIERS[i]].indexOf(kind) !== -1) return TIERS[i];
+    return 'common';
+  }
+
+  function treeTier(kind) {
+    return TREE_POOL.legendary.indexOf(kind) !== -1 ? 'legendary' : TREE_POOL.rare.indexOf(kind) !== -1 ? 'rare' : 'common';
+  }
+
+  /* A week's five plants make a tree as rare as the rarest of them -- an
+     uncommon one does not count, a rare one does -- and five long sessions
+     (six hours between them) make at least a rare one on their own. */
+  function treeFor(seed, plants) {
+    var best = 0, mins = 0;
+    (plants || []).forEach(function (p) { best = Math.max(best, TIERS.indexOf(tierOf(p.kind))); mins += p.mins || 0; });
+    var tier = best >= 3 ? 'legendary' : best >= 2 || mins >= 360 ? 'rare' : 'common';
+    if (tier === 'common') return pickTree(seed);
+    var pool = TREE_POOL[tier];
+    return pool[hash(String(seed) + 'tree' + tier) % pool.length];
+  }
+
+  // a common tree; as it always was, so the trees grown before rarities stay the trees they were
+  function pickTree(seed) {
+    var kind = OLD_TREES[hash(String(seed) + 'tree') % OLD_TREES.length];
+    return TREE_POOL.common.indexOf(kind) === -1 ? TREE_POOL.common[hash(String(seed) + 'tree') % TREE_POOL.common.length] : kind;
+  }
 
   return {
-    KINDS: KINDS, TREES: TREES,
+    KINDS: KINDS, TREES: TREES, TIERS: TIERS, POOL: POOL, TREE_POOL: TREE_POOL, ROLLS: ROLLS,
     svg: svg, tree: tree,
     growthFor: growthFor, pick: pick, pickTree: pickTree,
+    kindFor: kindFor, tierFor: tierFor, tierOf: tierOf, treeTier: treeTier, treeFor: treeFor,
     name: function (kind) { return NAMES[kind] || 'plant'; }
   };
 })();

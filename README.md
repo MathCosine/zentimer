@@ -121,10 +121,30 @@ Starting a session plants a seed in the pot beside the timer, and it grows while
 a sprout, then leaves, then buds, then flowers — the longer the session, the further it gets
 (about two hours grows one all the way). When the session ends, the plant goes into your
 garden; a session stopped early keeps what it grew, and anything under five minutes grows
-nothing. There are ten kinds (fern, monstera, tulip, sunflower, lavender, succulent, cactus,
-snake plant, daisy, pothos), each drawn from the session's own seed, so no two are quite
-alike. Five plants in a week grow into a tree (oak, pine, cherry, birch or maple), as big as
-those five sessions were long, and every tree stays in your grove.
+nothing. Each is drawn from the session's own seed, so no two are quite alike.
+
+Some plants are rarer than others. There are nineteen kinds in four rarities:
+
+| rarity | plants |
+| --- | --- |
+| common | fern, snake plant, pothos, succulent, cactus, daisy, lavender |
+| uncommon | tulip, sunflower, monstera, aloe, lucky bamboo, strawberry |
+| rare | orchid, bonsai, peace lily |
+| legendary | moonflower, lotus, golden fern |
+
+Every fifteen minutes of a session is a roll for something rarer, so the plant can turn into
+a rarer one while you watch (it says so). A 25-minute session is about a one-in-three chance
+of better than common and about one in seventy of legendary; a two-hour one is better than
+common almost every time, and rare or legendary nearly half the time. Studying more in a week
+adds luck — up to +60% at twenty hours in the last seven days.
+
+Five plants in a week grow into a tree, as big as those five sessions were long, and every
+tree stays in your grove. Most are oaks, pines, birches and maples; a rare plant among the
+five (or six hours of sessions in them) grows a cherry tree or a willow, and a legendary one
+the golden ginkgo.
+
+The **collection** tab in the garden shows every kind: the ones you have found, full grown,
+with how many; the rest only as shapes, waiting.
 
 This week's plants sit in a row under the timer; the pot, that row, or `g` opens the whole
 garden. It is kept in the browser and, signed in, with your account, so every device grows

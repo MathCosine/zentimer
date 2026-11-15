@@ -1750,6 +1750,79 @@ body.garden-open .settings-card { display: none; }
   background: var(--track);
 }
 
+/* how rare a plant is, said with a colour: quiet for the everyday ones */
+.garden-card, .pot, .toasts {
+  --t-common: #8fa294;
+  --t-uncommon: #4f9a63;
+  --t-rare: #4f86c6;
+  --t-legendary: #c9971c;
+}
+.is-common { --tier: var(--t-common); }
+.is-uncommon { --tier: var(--t-uncommon); }
+.is-rare { --tier: var(--t-rare); }
+.is-legendary { --tier: var(--t-legendary); }
+
+.g-dot { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--tier); vertical-align: 1px; }
+.g-plant.is-rare .g-name, .g-plant.is-legendary .g-name,
+.g-tree.is-rare .g-name, .g-tree.is-legendary .g-name,
+.g-kind.is-rare:not(.is-unknown) .g-name, .g-kind.is-legendary:not(.is-unknown) .g-name { color: var(--tier); font-weight: 600; }
+
+/* garden | collection */
+.g-tabs {
+  justify-self: start;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--well);
+}
+.g-tab {
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 13px;
+  cursor: pointer;
+  transition: background 180ms var(--ease), color 180ms var(--ease);
+}
+.g-tab:hover { color: var(--ink); }
+.g-tab.is-on { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+
+.g-odds { margin: -4px 0 0; font-size: 0.72rem; color: var(--muted); max-width: 52ch; }
+.g-tier-head h3 { color: var(--tier); }
+
+/* the collection: every kind, found or still a shape */
+.g-dex {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px 4px;
+  padding: 10px 8px 8px;
+  border-radius: 18px;
+  background: var(--well);
+}
+.g-dex.is-trees { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+.g-kind { display: grid; justify-items: center; gap: 1px; min-width: 0; }
+.g-kind svg { display: block; width: 62px; height: 83px; overflow: visible; }
+.g-kind.is-tree svg { width: 72px; height: 96px; }
+.g-kind.is-unknown svg { filter: brightness(0); opacity: 0.09; }
+.g-kind.is-unknown .plant-glow, .g-kind.is-unknown .plant-sparkle { display: none; }
+.g-kind.is-unknown .g-name { color: var(--muted); }
+.g-kind.is-unknown .g-mins { text-transform: none; color: color-mix(in srgb, var(--tier) 70%, var(--muted)); }
+:root[data-theme="dark"] .g-kind.is-unknown svg { filter: brightness(0) invert(1); opacity: 0.1; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .g-kind.is-unknown svg { filter: brightness(0) invert(1); opacity: 0.1; }
+}
+
+/* the rare ones glint now and then */
+.plant-sparkle { transform-box: fill-box; transform-origin: center; animation: twinkle 2.6s ease-in-out infinite; }
+@keyframes twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.6); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
 .g-empty { display: grid; justify-items: center; gap: 4px; padding: 18px 10px; text-align: center; }
 .g-empty svg { width: 110px; height: 146px; }
 .g-lede { margin: 6px 0 0; font-size: 0.86rem; color: var(--ink); max-width: 30ch; }
@@ -1823,7 +1896,7 @@ body.garden-open .settings-card { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .app, .app > *, .alarm, .alarm.is-ringing, .alarm.is-ringing .alarm-when, .now-dot,
   .ring-overlay, .ring-card, .ring-clock, .menu, .pop, .plant-sway, .tool.is-ringing,
-  .task.is-editing, .toast, .tag-tile, body.zen .bar { animation: none !important; }
+  .task.is-editing, .toast, .tag-tile, body.zen .bar, .plant-sparkle { animation: none !important; }
   * { transition-duration: 1ms !important; }
 }
 

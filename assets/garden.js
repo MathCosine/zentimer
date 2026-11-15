@@ -7,11 +7,19 @@
    same garden. Trees are never stored: they are the week's plants, five at a
    time, so they can never disagree with them.
 
-   Garden.add({ seed, mins, task })  a finished session; returns { plant, tree }
+   Some plants are rarer than others. Every fifteen minutes of a session is
+   a roll for something rarer (Plants.kindFor), so long sessions find them
+   more often -- and so does a week of study, which brings luck. Everything
+   ever grown is kept, and the collection shows what has been found and the
+   shapes of what has not.
+
+   Garden.add({ seed, mins, kind, task })  a finished session; returns { plant, tree }
    Garden.last()                     the newest plant
    Garden.weeks()                    each week: its trees, and plants not yet in one
+   Garden.luck()                     1 to 1.6: what the last seven days of study add to the odds
+   Garden.collection()               every kind, and how many of each have grown
    Garden.paintSill(el)              this week's plants, small, under the timer
-   Garden.open() / close()           the garden itself                         */
+   Garden.open(tab) / close()        the garden itself ('garden' or 'collection') */
 window.Garden = (function () {
   'use strict';
 
@@ -19,6 +27,8 @@ window.Garden = (function () {
   var PER_TREE = 5;          // plants in a week that grow into a tree
   var LEAST = 5;             // minutes: less than this is not a session, it is a false start
   var TREE_FULL = 600;       // minutes in a tree's five plants for it to be fully grown
+  var LUCK_HOURS = 20;       // hours of study in seven days that would bring the most luck (capped at +60%)
+  var TAB_KEY = 'pip.garden.tab';
 
   var plants = read();
   var listeners = [];
@@ -78,7 +88,7 @@ window.Garden = (function () {
   function treeOf(week, group, index) {
     var mins = group.reduce(function (sum, p) { return sum + p.mins; }, 0);
     var seed = week + ':' + index + ':' + group[0].id;
-    return { seed: seed, kind: Plants.pickTree(seed), g: clamp(Math.sqrt(mins / TREE_FULL), 0.3, 1),
+    return { seed: seed, kind: Plants.treeFor(seed, group), g: clamp(Math.sqrt(mins / TREE_FULL), 0.3, 1),
       mins: mins, plants: group, week: week, at: group[group.length - 1].at };
   }
 
@@ -87,7 +97,7 @@ window.Garden = (function () {
     if (!o || !o.seed || mins < LEAST) return null;
     if (plants.some(function (p) { return p.id === o.seed; })) return null;
     var plant = { id: String(o.seed), at: Date.now(), day: Store.dayKey(), mins: Math.min(mins, 720),
-      kind: Plants.pick(o.seed), task: o.task ? String(o.task).slice(0, 80) : '' };
+      kind: Plants.KINDS.indexOf(o.kind) === -1 ? Plants.pick(o.seed) : o.kind, task: o.task ? String(o.task).slice(0, 80) : '' };
     plants.push(plant);
     keep(true);
     var week = weekOf(plant.day);
@@ -107,6 +117,27 @@ window.Garden = (function () {
       return { week: week, plants: list, trees: trees, loose: list.slice(trees.length * PER_TREE),
         mins: list.reduce(function (sum, p) { return sum + p.mins; }, 0) };
     });
+  }
+
+  /* Luck: a week of study makes rare plants likelier -- up to half as likely
+     again, and a little more, at twenty hours in the last seven days. */
+  function luck(now) {
+    var since = (now || Date.now()) - 7 * 24 * 60 * 60 * 1000;
+    var mins = plants.reduce(function (sum, p) { return (p.at || 0) >= since ? sum + p.mins : sum; }, 0);
+    return Math.round((1 + Math.min(0.6, mins / 60 / LUCK_HOURS * 0.6)) * 100) / 100;
+  }
+
+  /* Every kind there is, each with how many have grown -- plants and trees. */
+  function collection() {
+    var counts = {}, trees = {};
+    plants.forEach(function (p) { counts[p.kind] = (counts[p.kind] || 0) + 1; });
+    weeks().forEach(function (w) { w.trees.forEach(function (t) { trees[t.kind] = (trees[t.kind] || 0) + 1; }); });
+    function each(kinds, tierOf, have) {
+      return kinds.map(function (kind) { return { kind: kind, tier: tierOf(kind), count: have[kind] || 0 }; });
+    }
+    var list = each(Plants.KINDS, Plants.tierOf, counts), grove = each(Plants.TREES, Plants.treeTier, trees);
+    var found = function (l) { return l.filter(function (k) { return k.count; }).length; };
+    return { plants: list, trees: grove, found: found(list) + found(grove), of: list.length + grove.length };
   }
 
   function thisWeek() {
@@ -145,23 +176,56 @@ window.Garden = (function () {
     return n;
   }
 
+  // 'a rare orchid', 'a fern': the rarity said only when there is one worth saying
+  function called(kind, tier) {
+    return aOrAn((tier && tier !== 'common' ? tier + ' ' : '') + Plants.name(kind));
+  }
+
+  function nameRow(kind, tier) {
+    var name = node('span', 'g-name', Plants.name(kind));
+    if (tier !== 'common') { name.insertBefore(node('i', 'g-dot'), name.firstChild); name.title = tier; }
+    return name;
+  }
+
   function plantTile(p, small) {
-    var tile = node('div', 'g-plant' + (small ? ' is-small' : ''));
-    tile.innerHTML = Plants.svg({ kind: p.kind, seed: p.id, g: Plants.growthFor(p.mins), label: aOrAn(Plants.name(p.kind)) });
-    tile.title = Plants.name(p.kind) + ' · ' + span(p.mins) + ' · ' + dayName(p.day) + (p.task ? ' · ' + p.task : '');
+    var tier = Plants.tierOf(p.kind);
+    var tile = node('div', 'g-plant is-' + tier + (small ? ' is-small' : ''));
+    tile.innerHTML = Plants.svg({ kind: p.kind, seed: p.id, g: Plants.growthFor(p.mins), label: called(p.kind, tier) });
+    tile.title = Plants.name(p.kind) + (tier !== 'common' ? ' (' + tier + ')' : '') + ' · ' + span(p.mins) + ' · ' + dayName(p.day) + (p.task ? ' · ' + p.task : '');
     if (!small) {
-      tile.appendChild(node('span', 'g-name', Plants.name(p.kind)));
+      tile.appendChild(nameRow(p.kind, tier));
       tile.appendChild(node('span', 'g-mins', span(p.mins)));
     }
     return tile;
   }
 
   function treeTile(t) {
-    var tile = node('div', 'g-tree');
-    tile.innerHTML = Plants.tree({ kind: t.kind, seed: t.seed, g: t.g, label: aOrAn(Plants.name(t.kind)) });
-    tile.title = Plants.name(t.kind) + ' · five sessions, ' + span(t.mins) + ' · ' + weekName(t.week);
-    tile.appendChild(node('span', 'g-name', Plants.name(t.kind)));
+    var tier = Plants.treeTier(t.kind);
+    var tile = node('div', 'g-tree is-' + tier);
+    tile.innerHTML = Plants.tree({ kind: t.kind, seed: t.seed, g: t.g, label: called(t.kind, tier) });
+    tile.title = Plants.name(t.kind) + (tier !== 'common' ? ' (' + tier + ')' : '') + ' · five sessions, ' + span(t.mins) + ' · ' + weekName(t.week);
+    tile.appendChild(nameRow(t.kind, tier));
     tile.appendChild(node('span', 'g-mins', span(t.mins)));
+    return tile;
+  }
+
+  /* In the collection: a kind, full grown, with how many have grown -- or,
+     not found yet, only its shape. */
+  function kindTile(k, isTree) {
+    var known = k.count > 0;
+    var tile = node('div', 'g-kind is-' + k.tier + (known ? '' : ' is-unknown') + (isTree ? ' is-tree' : ''));
+    var o = { kind: k.kind, seed: 'collection:' + k.kind, g: 1, label: known ? called(k.kind, k.tier) : 'not found yet' };
+    tile.innerHTML = isTree ? Plants.tree(o) : Plants.svg(o);
+    tile.dataset.kind = k.kind;
+    if (known) {
+      tile.appendChild(nameRow(k.kind, k.tier));
+      tile.appendChild(node('span', 'g-mins', '×' + k.count));
+      tile.title = Plants.name(k.kind) + ' · ' + k.tier + ' · grown ' + (k.count === 1 ? 'once' : k.count + ' times');
+    } else {
+      tile.appendChild(node('span', 'g-name', '?'));
+      tile.appendChild(node('span', 'g-mins', k.tier));
+      tile.title = 'not found yet · ' + k.tier;
+    }
     return tile;
   }
 
@@ -192,10 +256,37 @@ window.Garden = (function () {
     box.title = 'Your garden';
   }
 
+  var tab = 'garden';
+  try { if (localStorage.getItem(TAB_KEY) === 'collection') tab = 'collection'; } catch (e) {}
+
+  function tabs(body) {
+    var bar = node('div', 'g-tabs');
+    bar.setAttribute('role', 'tablist');
+    [['garden', 'garden'], ['collection', 'collection']].forEach(function (t) {
+      var b = node('button', 'g-tab' + (tab === t[0] ? ' is-on' : ''), t[1]);
+      b.type = 'button';
+      b.dataset.tab = t[0];
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', tab === t[0] ? 'true' : 'false');
+      b.addEventListener('click', function () { show(t[0]); });
+      bar.appendChild(b);
+    });
+    body.appendChild(bar);
+  }
+
+  function show(which) {
+    tab = which === 'collection' ? 'collection' : 'garden';
+    try { localStorage.setItem(TAB_KEY, tab); } catch (e) {}
+    render();
+    if (el.body) el.body.scrollTop = 0;
+  }
+
   function render() {
     if (!el.body) return;
     var body = el.body;
     body.textContent = '';
+    tabs(body);
+    if (tab === 'collection') { renderCollection(body); return; }
     var all = weeks();
     var total = plants.reduce(function (sum, p) { return sum + p.mins; }, 0);
     var trees = all.reduce(function (sum, w) { return sum + w.trees.length; }, 0);
@@ -204,7 +295,7 @@ window.Garden = (function () {
       var empty = node('div', 'g-empty');
       empty.innerHTML = Plants.svg({ kind: 'fern', seed: 'first', g: 0 });
       empty.appendChild(node('p', 'g-lede', 'every study session grows a plant — the longer you go, the taller it gets'));
-      empty.appendChild(node('p', 'g-note', 'five plants in a week grow into a tree'));
+      empty.appendChild(node('p', 'g-note', 'five plants in a week grow into a tree — and long sessions find rarer ones'));
       body.appendChild(empty);
       return;
     }
@@ -250,8 +341,47 @@ window.Garden = (function () {
     });
   }
 
-  function open() {
+  var TIER_WORDS = {
+    common: 'the everyday ones',
+    uncommon: 'a little luck',
+    rare: 'long sessions find these',
+    legendary: 'hardly ever'
+  };
+
+  function renderCollection(body) {
+    var c = collection(), l = luck();
+    body.appendChild(node('p', 'g-sum', c.found + ' of ' + c.of + ' found'));
+    var odds = node('p', 'g-odds');
+    odds.textContent = 'every 15 minutes of a session is a roll for something rarer' +
+      (l > 1 ? ' — and this week’s study adds ' + Math.round((l - 1) * 100) + '% luck' : ' — studying more this week adds luck');
+    body.appendChild(odds);
+    Plants.TIERS.slice().reverse().forEach(function (tier) {
+      var kinds = c.plants.filter(function (k) { return k.tier === tier; });
+      if (!kinds.length) return;
+      var found = kinds.filter(function (k) { return k.count; }).length;
+      var head = node('div', 'g-head g-tier-head is-' + tier);
+      var h = node('h3', null, tier);
+      h.insertBefore(node('i', 'g-dot'), h.firstChild);
+      head.appendChild(h);
+      head.appendChild(node('span', 'g-note', TIER_WORDS[tier] + ' · ' + found + ' of ' + kinds.length));
+      body.appendChild(head);
+      var grid = node('div', 'g-dex');
+      kinds.forEach(function (k) { grid.appendChild(kindTile(k)); });
+      body.appendChild(grid);
+    });
+    var trees = c.trees, grown = trees.filter(function (k) { return k.count; }).length;
+    var th = node('div', 'g-head');
+    th.appendChild(node('h3', null, 'trees'));
+    th.appendChild(node('span', 'g-note', 'rare plants grow rarer trees · ' + grown + ' of ' + trees.length));
+    body.appendChild(th);
+    var grove = node('div', 'g-dex is-trees');
+    trees.forEach(function (k) { grove.appendChild(kindTile(k, true)); });
+    body.appendChild(grove);
+  }
+
+  function open(which) {
     if (!el.card) return;
+    if (which === 'garden' || which === 'collection') tab = which;
     if (window.Panel && Panel.show) Panel.show(false);
     render();
     el.card.hidden = false;
@@ -280,7 +410,7 @@ window.Garden = (function () {
   }
 
   return {
-    init: init, add: add, weeks: weeks, thisWeek: thisWeek,
+    init: init, add: add, weeks: weeks, thisWeek: thisWeek, luck: luck, collection: collection, show: show, called: called,
     last: function () { return plants[plants.length - 1] || null; },
     count: function () { return plants.length; },
     paintSill: paintSill, open: open, close: close,

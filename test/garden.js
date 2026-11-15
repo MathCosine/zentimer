@@ -2,7 +2,8 @@
    plant goes into the garden when it ends -- a false start grows nothing, a
    session stopped early grows what it grew. Five in a week grow a tree. It
    keeps across a reload, reaches a second device on the same account, and a
-   new week starts a new row. And the pets are gone. */
+   new week starts a new row. And the pets are gone. (Rarer plants, and the
+   collection, are test/rarity.js.) */
 const { chromium } = require('./browser');
 const { start } = require('./fakedb.js');
 const makeClient = require('./fakeclient.js');
@@ -57,15 +58,20 @@ const MIN = 60 * 1000;
   await a.clock.fastForward(12 * MIN); await a.clock.runFor(1500);
   const twentytwo = await pot(a);
   check('it grows as the session goes', [ten.g > 0.2, twentytwo.g > ten.g], [true, true]);
-  check('and it is the same plant all along', [ten.kind, twentytwo.kind], [first.kind, first.kind]);
+  // the same plant, unless a quarter hour's roll turned it rarer
+  check('and it is the same plant all along, or a rarer one', await a.evaluate(k => k.map(x => Plants.TIERS.indexOf(Plants.tierOf(x))), [first.kind, ten.kind, twentytwo.kind])
+    .then(t => ten.kind === first.kind && (twentytwo.kind === ten.kind || t[2] > t[1])), true);
   check('saying what it is growing', await a.evaluate(() => /^growing an? /.test(document.getElementById('timerDoing').textContent)), true);
 
   await a.clock.fastForward(9 * MIN); await a.clock.runFor(2000);
   check('when the session ends, it goes into the garden', await count(a), 1);
   check('as tall as the session was long', await a.evaluate(() => Garden.last().mins), 30);
   check('and says so', /into your garden$/.test(await toast(a)), true);
-  check('the break shows what just grew', await a.evaluate(k => [document.body.dataset.mode, document.querySelector('#potNow svg').dataset.kind], first.kind),
-    ['break', first.kind]);
+  check('the break shows what just grew', await a.evaluate(() => [document.body.dataset.mode, document.querySelector('#potNow svg').dataset.kind]),
+    ['break', await a.evaluate(() => Garden.last().kind)]);
+  // (the half-hour mark is a roll too, so it may have turned rarer once more at the very end)
+  check('which is what it had grown into', await a.evaluate(k => Garden.last().kind === k ||
+    Plants.TIERS.indexOf(Plants.tierOf(Garden.last().kind)) > Plants.TIERS.indexOf(Plants.tierOf(k)), twentytwo.kind), true);
   check('and it sits under the timer with this week’s others', await a.evaluate(() => document.querySelectorAll('#sill .g-plant').length), 1);
 
   console.log('\n--- a false start grows nothing; stopping early grows what it grew ---');

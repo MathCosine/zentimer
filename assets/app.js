@@ -44,7 +44,7 @@
   /* seed: what this session is growing (it decides the plant), and grown: how
      long it has been focused on, which decides how far it gets */
   var timer = { mode: 'focus', duration: settings.focusMs, remaining: settings.focusMs, endAt: null, status: 'idle',
-    seed: null, grown: 0 };
+    seed: null, grown: 0, luck: 1 };
   var stats = { day: dayKey(), sessions: 0, focused: 0 };
   var alarms = [];
 
@@ -76,7 +76,7 @@
       settings: settings, mode: timer.mode,
       duration: timer.duration, remaining: timer.remaining,
       endAt: timer.endAt, status: timer.status, lastAccrual: lastAccrual,
-      seed: timer.seed, grown: timer.grown
+      seed: timer.seed, grown: timer.grown, luck: timer.luck
     });
     write(KEY_STATS, stats);
     write(KEY_ALARMS, alarms);
@@ -275,7 +275,11 @@
       working = assignment();
       if (working) working.since = now;
       // a new seed for a new session; a paused one carries on growing the same plant
-      if (!timer.seed) { timer.seed = 'p' + now.toString(36) + Math.random().toString(36).slice(2, 7); timer.grown = 0; }
+      // (and the luck it grows with is the week's, as it was when it was planted)
+      if (!timer.seed) {
+        timer.seed = 'p' + now.toString(36) + Math.random().toString(36).slice(2, 7); timer.grown = 0;
+        timer.luck = window.Garden && Garden.luck ? Garden.luck(now) : 1;
+      }
     }
     unlockAudio();
     requestWakeLock();
@@ -351,22 +355,47 @@
   /* The session's plant goes into the garden, grown as far as the session
      went -- and if it is the week's fifth, five plants become a tree. */
   function harvest(task, quiet) {
-    var seed = timer.seed, mins = timer.grown / MIN;
+    var seed = timer.seed, mins = timer.grown / MIN, luck = timer.luck;
     timer.seed = null;
     timer.grown = 0;
+    timer.luck = 1;
     if (!seed || !window.Garden || !window.Plants) return null;
-    var got = Garden.add({ seed: seed, mins: mins, task: task });
+    var got = Garden.add({ seed: seed, mins: mins, kind: Plants.kindFor(seed, mins, luck), task: task });
     if (!got || quiet || !window.Motion) return got;
-    var name = Plants.name(got.plant.kind);
+    var tier = Plants.tierOf(got.plant.kind);
     if (got.tree) {
       Motion.confetti();
-      Motion.toast('five plants grew into ' + (/^[aeiou]/.test(Plants.name(got.tree.kind)) ? 'an ' : 'a ') + Plants.name(got.tree.kind),
-        { label: 'see it', run: function () { Garden.open(); } }, { tone: 'happy', ms: 7000 });
+      Motion.toast('five plants grew into ' + Garden.called(got.tree.kind, Plants.treeTier(got.tree.kind)),
+        { label: 'see it', run: function () { Garden.open('garden'); } }, { tone: 'happy', ms: 7000 });
     } else {
-      Motion.toast((/^[aeiou]/.test(name) ? 'an ' : 'a ') + name + ', ' + humanSpan(got.plant.mins * MIN) + ' tall — into your garden',
-        { label: 'garden', run: function () { Garden.open(); } }, { tone: 'happy', ms: 6000 });
+      if (tier === 'legendary') Motion.confetti();
+      Motion.toast((tier === 'rare' || tier === 'legendary' ? '✨ ' : '') + Garden.called(got.plant.kind, tier) + ', ' +
+        humanSpan(got.plant.mins * MIN) + ' tall — into your garden',
+        { label: 'garden', run: function () { Garden.open('garden'); } }, { tone: 'happy', ms: tier === 'common' ? 6000 : 8000 });
     }
     return got;
+  }
+
+  /* What this session's plant is, so far: every fifteen minutes focused is a
+     roll for something rarer, so it can turn into another plant as it grows. */
+  function focusedNow(now) {
+    return timer.grown + (timer.status === 'running' ? Math.max(0, Math.min(now, timer.endAt || now) - lastAccrual) : 0);
+  }
+  function growingKind(now) {
+    return timer.seed ? Plants.kindFor(timer.seed, focusedNow(now) / MIN, timer.luck) : Plants.pick('next');
+  }
+
+  /* When it turns rarer while you watch: a small burst, and a word. Not on
+     the first look after a reload -- only when it happens. */
+  var seen = { seed: null, tier: 0 };
+  function noticeTurn(kind) {
+    var tier = Plants.TIERS.indexOf(Plants.tierOf(kind));
+    var was = seen.seed === timer.seed ? seen.tier : tier;
+    seen = { seed: timer.seed, tier: tier };
+    if (tier <= was || timer.status !== 'running' || !window.Motion) return;
+    Motion.burst(el.pot, ['#a9c8a6', '#7fb07a', '#7aa3d6', '#e2c25a'][tier]);
+    Motion.toast((tier >= 2 ? '✨ ' : '') + 'it’s turning ' + Plants.tierOf(kind) + ' — ' + Garden.called(kind, 'common'),
+      null, { tone: 'happy', ms: 5000 });
   }
 
   /* ---------- alarms ---------- */
@@ -560,16 +589,17 @@
       label = last ? 'your ' + Plants.name(kind) + ', grown' : 'an empty pot';
     } else {
       seed = timer.seed || 'next';
-      kind = Plants.pick(seed);
-      var focused = timer.grown + (timer.status === 'running' ? Math.max(0, Math.min(now, timer.endAt || now) - lastAccrual) : 0);
-      g = timer.seed ? Plants.growthFor(focused / MIN) : 0;
+      kind = growingKind(now);
+      g = timer.seed ? Plants.growthFor(focusedNow(now) / MIN) : 0;
       label = timer.seed ? Plants.name(kind) + ', growing' : 'a seed, ready to grow';
+      if (timer.seed && window.Garden) noticeTurn(kind);
     }
     var key = seed + ':' + kind + ':' + Math.round(g * 250);
     if (key === potKey) return;
     potKey = key;
     el.pot.innerHTML = Plants.svg({ kind: kind, seed: seed, g: g, label: label });
     el.pot.dataset.kind = kind;
+    el.pot.dataset.tier = Plants.tierOf(kind);
   }
 
   var frame = 0;
@@ -611,7 +641,7 @@
     if (window.Plants) {
       var last = window.Garden && Garden.last();
       growing = timer.mode === 'break' ? (last ? 'your ' + Plants.name(last.kind) + ' is in the garden' : '')
-        : timer.seed ? 'growing ' + (/^[aeiou]/.test(Plants.name(Plants.pick(timer.seed))) ? 'an ' : 'a ') + Plants.name(Plants.pick(timer.seed))
+        : timer.seed ? 'growing ' + (function (k) { return Garden.called(k, Plants.tierOf(k)); })(growingKind(Date.now()))
         : 'a seed, ready to grow';
     }
     paint(el.timerDoing, 'textContent', doing ? doing.title : growing);
@@ -1287,6 +1317,7 @@
       timer.status = stored.status || 'idle';
       timer.seed = typeof stored.seed === 'string' ? stored.seed : null;
       timer.grown = typeof stored.grown === 'number' ? stored.grown : 0;
+      timer.luck = typeof stored.luck === 'number' ? Math.max(1, Math.min(1.6, stored.luck)) : 1;
       lastAccrual = stored.lastAccrual || Date.now();
 
       var now = Date.now();
